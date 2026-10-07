@@ -3,14 +3,16 @@ import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Screen } from '@/components/Screen';
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { useAppearance } from '@/providers/AppearanceProvider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
 export function SectionPlaceholder({ title, description, icon }: { title: string; description: string; icon: IconName }) {
+  const { tokens } = useAppearance();
   return (
     <Screen>
-      <Text style={styles.eyebrow}>UNIFYD</Text>
-      <Text style={styles.title}>{title}</Text>
+      <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>UNIFYD</Text>
+      <Text style={[styles.title, { color: tokens.screenText }]}>{title}</Text>
       <View style={styles.card}>
         <View style={styles.iconWrap}><Ionicons name={icon} size={26} color={colors.brandCyan} /></View>
         <Text style={styles.cardTitle}>{title} is coming soon</Text>

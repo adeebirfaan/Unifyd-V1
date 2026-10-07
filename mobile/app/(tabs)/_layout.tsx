@@ -5,6 +5,8 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius } from '@/constants/theme';
+import { useAppearance } from '@/providers/AppearanceProvider';
+import { useI18n } from '@/providers/LanguageProvider';
 
 type IconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -16,23 +18,25 @@ function tabIcon(outline: IconName, filled: IconName) {
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  const { tokens } = useAppearance();
+  const { t } = useI18n();
   return (
-    <View style={styles.shell}>
+    <View style={[styles.shell, { backgroundColor: tokens.screenBackground }]}>
       <Tabs screenOptions={{
         headerShown: false,
         tabBarShowLabel: false,
         tabBarActiveTintColor: colors.brandCyan,
         tabBarInactiveTintColor: colors.textTertiary,
-        tabBarStyle: { height: 68 + insets.bottom, paddingTop: 10, paddingBottom: insets.bottom + 10, backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: 1 },
+        tabBarStyle: { height: 68 + insets.bottom, paddingTop: 10, paddingBottom: insets.bottom + 10, backgroundColor: tokens.navigationBackground, borderTopColor: tokens.border, borderTopWidth: 1 },
         tabBarItemStyle: { minHeight: 44 },
       }}>
-        <Tabs.Screen name="index" options={{ title: 'Home', tabBarAccessibilityLabel: 'Home', tabBarIcon: tabIcon('home-outline', 'home') }} />
-        <Tabs.Screen name="wallet" options={{ title: 'Wallet', tabBarAccessibilityLabel: 'Wallet', tabBarIcon: tabIcon('wallet-outline', 'wallet') }} />
-        <Tabs.Screen name="planner" options={{ title: 'Planner', tabBarAccessibilityLabel: 'Planner', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
-        <Tabs.Screen name="mind" options={{ title: 'Mind', tabBarAccessibilityLabel: 'Mind', tabBarIcon: tabIcon('heart-outline', 'heart') }} />
-        <Tabs.Screen name="profile" options={{ title: 'Profile', tabBarAccessibilityLabel: 'Profile', tabBarIcon: tabIcon('person-outline', 'person') }} />
+        <Tabs.Screen name="index" options={{ title: t('tab.home'), tabBarAccessibilityLabel: t('tab.home'), tabBarIcon: tabIcon('home-outline', 'home') }} />
+        <Tabs.Screen name="wallet" options={{ title: t('tab.wallet'), tabBarAccessibilityLabel: t('tab.wallet'), tabBarIcon: tabIcon('wallet-outline', 'wallet') }} />
+        <Tabs.Screen name="planner" options={{ title: t('tab.planner'), tabBarAccessibilityLabel: t('tab.planner'), tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
+        <Tabs.Screen name="mind" options={{ title: t('tab.mind'), tabBarAccessibilityLabel: t('tab.mind'), tabBarIcon: tabIcon('heart-outline', 'heart') }} />
+        <Tabs.Screen name="profile" options={{ title: t('tab.profile'), tabBarAccessibilityLabel: t('tab.profile'), tabBarIcon: tabIcon('person-outline', 'person') }} />
       </Tabs>
-      <Pressable accessibilityRole="button" accessibilityLabel="Add" accessibilityState={{ disabled: true }} disabled style={[styles.addButton, { bottom: 80 + insets.bottom }]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={t('tab.add')} accessibilityState={{ disabled: true }} disabled style={[styles.addButton, { bottom: 80 + insets.bottom }]}>
         <Ionicons name="add" size={30} color={colors.white} />
       </Pressable>
     </View>

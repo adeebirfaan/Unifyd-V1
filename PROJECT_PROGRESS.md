@@ -6,10 +6,10 @@
 
 | Item | Current value |
 |---|---|
-| Overall stage | Pre-Phase 0: project baseline audit pending |
-| Current phase | Phase 0 — Project baseline and environment audit |
-| Current task | Inspect the existing Expo project, run it, and record the real baseline |
-| Next milestone | Complete Phase 0 quality gate before connecting Supabase |
+| Overall stage | Phase 1 implementation in progress; live auth flow remains unverified |
+| Current phase | Phase 1 - Supabase foundation, authentication, profile, and RLS |
+| Current task | Verify auth and onboarding against an applied profile migration |
+| Next milestone | Complete end-to-end auth tests with a test account |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
 | Custom ML / prediction | Not in scope |
 
@@ -46,7 +46,7 @@ Unifyd is an AI-assisted mobile application for Malaysian university students. I
 | Phase | Status | Summary | Evidence / notes |
 |---:|---|---|---|
 | 0. Project baseline and environment audit | In progress | Documentation prepared; source-code audit has not started | Need repository location and local run result |
-| 1. Supabase foundation, authentication, profile, and RLS | Not started | Depends on Phase 0 | — |
+| 1. Supabase foundation, authentication, profile, and RLS | In progress | Client, auth screens, profile gate, and onboarding implemented | Live Auth and database flow still needs testing |
 | 2. Financial tracking | Not started | Depends on Phase 1 | — |
 | 3. Budget and spending analysis | Not started | Depends on Phase 2 | — |
 | 4. Academic task management | Not started | Depends on Phase 1 | — |
@@ -68,6 +68,20 @@ Unifyd is an AI-assisted mobile application for Malaysian university students. I
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-10-07 — Phase 1: Auth and onboarding UI
+
+**Requirements implemented in code:** SRS-FR-001 to SRS-FR-007 and SRS-NFR-001 for client-side profile gating. Live verification remains pending.
+
+**Changed files:** `mobile/app/_layout.tsx`, `mobile/app/+not-found.tsx`, `mobile/app/(auth)/`, `mobile/app/onboarding.tsx`, `mobile/app/(tabs)/index.tsx`, `mobile/app/(tabs)/profile.tsx`, `mobile/components/Avatar.tsx`, `mobile/components/auth/`, `mobile/providers/AuthProvider.tsx`, `mobile/lib/authError.ts`, `mobile/package.json`, `mobile/package-lock.json`, and this progress log.
+
+**What changed:** Added Supabase email/password screens, session and profile-based route protection, required profile onboarding with original avatar choices, and Profile sign-out. Existing Home, Wallet, Planner, Mind, and tab navigation remain in place.
+
+**Tests performed:** `npx tsc --noEmit` and `npx expo lint` passed. `npm run web -- --port 19007` bundled and `/login` returned HTTP 200. `npx expo export --platform web` passed. No live account or database test was performed.
+
+**Issue/decision:** The profile migration remains reviewable and was not applied here. Authenticated onboarding requires `public.profiles` and its Auth user trigger to be present in the target Supabase project.
+
+**Next action:** Apply the reviewed migration through the approved database workflow, then test sign-up with and without email confirmation, sign-in, onboarding, route protection, and sign-out using test accounts.
 
 ### 2026-10-07 — PSM 2 planning baseline created
 

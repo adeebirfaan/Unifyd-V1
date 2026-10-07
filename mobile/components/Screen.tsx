@@ -2,11 +2,13 @@ import type { ReactNode } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/constants/theme';
+import { useAppearance } from '@/providers/AppearanceProvider';
 
 export function Screen({ children }: { children: ReactNode }) {
   const insets = useSafeAreaInsets();
+  const { tokens } = useAppearance();
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.space6 }]} showsVerticalScrollIndicator={false}>
+    <ScrollView style={[styles.scroll, { backgroundColor: tokens.screenBackground }]} contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.space6 }]} showsVerticalScrollIndicator={false}>
       <View style={styles.inner}>{children}</View>
     </ScrollView>
   );

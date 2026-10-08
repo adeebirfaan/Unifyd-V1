@@ -160,6 +160,10 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
 
 - The **+** button sits in the middle slot of the bar, not floating over page content, so it never covers cards or text. It uses `brandBlue` with a white icon and is at least 44 × 44 px.
 - Tapping **+** slides up a dark **Quick actions** sheet above the bar (dimmed page behind it) and rotates the + into × (200 ms). Tapping ×, the dimmed area, another tab, or Android back closes it. The default shortcuts are **Add expense, Scan receipt, Add task, and Log mood**, shown as a 2 × 2 grid of tiles with an icon, title, and short hint.
+- An **Edit** text button in the sheet header turns it into a checklist of all seven shortcuts (the four above plus Set budget, Reminders, and My semester).
+  - It shows an "x of 4 selected" count and keeps between one and four shortcuts, explaining in warning colour when a fifth is refused or the last is removed.
+  - It offers **Reset to default**.
+  - **Done** saves the choice on the device for that account. Shortcuts always appear in catalogue order.
 - **Profile** is not a bar destination. It opens from the avatar at the top of Home, which carries a small settings badge, and Profile has a back arrow to Home. This keeps two destinations on each side of the centre action.
 - The active destination uses the Unifyd blue/cyan brand treatment; inactive destinations use `textTertiary`.
 

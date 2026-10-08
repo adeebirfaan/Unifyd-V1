@@ -109,6 +109,24 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Customisable quick-action shortcuts
+
+**Changed files:** `mobile/lib/quickActions.ts` (new), `mobile/components/QuickActions.tsx`, `mobile/app/(tabs)/_layout.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/quickActions.test.mjs` (new), `mobile/e2e/home.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md`, `UNIFYD_SDD.md`, and this file.
+
+**What changed:**
+- **Edit mode.** The quick-actions sheet has an Edit button that switches to a checklist of seven shortcuts: Add expense, Scan receipt, Set budget, Add task, Reminders, My semester, and Log mood.
+- **Rules.** Students keep 1–4 selected, see a live count, and get a translated explanation when a fifth is refused or the last is removed. Reset to default is available.
+- **Saving.** Done saves the choice in device storage per account. A missing, damaged, or out-of-range stored value falls back to the defaults, and a storage failure keeps the choice for the session without blocking.
+- **Navigation.** The new shortcuts open `/set-budget`, `/reminders`, and `/my-semester`.
+- **Scope.** No database change was made. The choice does not follow the student to another device.
+
+**Tests performed:**
+- TypeScript and Expo lint pass.
+- Unit tests 22/22 (3 new: parsing and fallback, ordering, the 1–4 limit).
+- Full Expo Web E2E: 20/20. A new test covers the limit notice, swapping a shortcut, the new shortcut navigating, the choice surviving an app reload, the minimum notice, and reset.
+
+**Next action:** Second-account RLS isolation test, then deployment preparation for user acceptance testing.
+
 ### 2026-10-09 — Centre quick-actions button and balanced navigation
 
 **Changed files:**

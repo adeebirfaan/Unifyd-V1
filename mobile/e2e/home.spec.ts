@@ -220,3 +220,53 @@ test('the centre button opens quick actions, and the avatar opens Profile', asyn
   await page.getByRole('button', { name: 'Go back' }).click();
   await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
 });
+
+test('students can choose up to four quick-action shortcuts, saved for next time', async ({ page }) => {
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  await signIn(page);
+  const sheet = page.getByTestId('quick-actions-sheet');
+  const openSheet = () => page.getByRole('button', { name: 'Open quick actions' }).click();
+
+  await openSheet();
+  await sheet.getByRole('button', { name: 'Edit', exact: true }).click();
+  await expect(sheet.getByText('Choose your shortcuts')).toBeVisible();
+  await expect(sheet.getByText('4 of 4 selected')).toBeVisible();
+  await expect(sheet.getByRole('checkbox')).toHaveCount(7);
+
+  // A fifth shortcut is refused with an explanation.
+  const reminders = sheet.getByRole('checkbox', { name: 'Reminders' });
+  await reminders.click();
+  await expect(sheet.getByText('You can choose up to 4. Remove one to add another.')).toBeVisible();
+  await expect(reminders).toHaveAttribute('aria-checked', 'false');
+
+  // Swap Scan receipt for Reminders.
+  await sheet.getByRole('checkbox', { name: 'Scan receipt' }).click();
+  await expect(sheet.getByText('3 of 4 selected')).toBeVisible();
+  await reminders.click();
+  await expect(reminders).toHaveAttribute('aria-checked', 'true');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  for (const name of ['Add expense', 'Add task', 'Reminders', 'Log mood']) await expect(sheet.getByRole('button', { name })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Scan receipt' })).toHaveCount(0);
+
+  await sheet.getByRole('button', { name: 'Reminders' }).click();
+  await expect(page).toHaveURL(/\/reminders/);
+
+  // The choice survives reopening the app.
+  await page.goto('/');
+  await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
+  await openSheet();
+  await expect(sheet.getByRole('button', { name: 'Reminders' })).toBeVisible();
+  await expect(sheet.getByRole('button', { name: 'Scan receipt' })).toHaveCount(0);
+
+  // At least one shortcut stays selected, and Reset restores the defaults.
+  await sheet.getByRole('button', { name: 'Edit', exact: true }).click();
+  for (const name of ['Add expense', 'Add task', 'Reminders']) await sheet.getByRole('checkbox', { name }).click();
+  await expect(sheet.getByText('1 of 4 selected')).toBeVisible();
+  await sheet.getByRole('checkbox', { name: 'Log mood' }).click();
+  await expect(sheet.getByText('Keep at least one shortcut.')).toBeVisible();
+  await expect(sheet.getByRole('checkbox', { name: 'Log mood' })).toHaveAttribute('aria-checked', 'true');
+  await sheet.getByRole('button', { name: 'Reset to default' }).click();
+  await expect(sheet.getByText('4 of 4 selected')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  for (const name of ['Add expense', 'Scan receipt', 'Add task', 'Log mood']) await expect(sheet.getByRole('button', { name })).toBeVisible();
+});

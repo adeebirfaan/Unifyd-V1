@@ -1,4 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router, Tabs } from 'expo-router';
 import type { ComponentProps } from 'react';
 import { useCallback, useEffect, useState } from 'react';
@@ -6,8 +7,10 @@ import { Animated, BackHandler, Easing, Platform, StyleSheet, View } from 'react
 import type { ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { QuickActionsButton, QuickActionsSheet } from '@/components/QuickActions';
-import type { QuickActionId } from '@/components/QuickActions';
 import { colors } from '@/constants/theme';
+import { DEFAULT_QUICK_ACTIONS, parseQuickActions, quickActionsStorageKey, sortQuickActions } from '@/lib/quickActions';
+import type { QuickActionId } from '@/lib/quickActions';
+import { useAuth } from '@/providers/AuthProvider';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
@@ -28,6 +31,10 @@ export default function TabLayout() {
   // remain on screen for touch, screen readers, or tests.
   const [sheetMounted, setSheetMounted] = useState(false);
   const [progress] = useState(() => new Animated.Value(0));
+  const { session } = useAuth();
+  const userId = session?.user.id;
+  // Each student's shortcut choice is kept on this device; the defaults apply until they change it.
+  const [actions, setActions] = useState<QuickActionId[]>([...DEFAULT_QUICK_ACTIONS]);
   const barHeight = 68 + insets.bottom;
 
   const setQuick = useCallback((next: boolean) => {
@@ -37,6 +44,22 @@ export default function TabLayout() {
       toValue: next ? 1 : 0, duration: 200, easing: Easing.out(Easing.cubic), useNativeDriver: Platform.OS !== 'web',
     }).start(({ finished }) => { if (finished && !next) setSheetMounted(false); });
   }, [progress]);
+
+  useEffect(() => {
+    if (!userId) return;
+    let active = true;
+    AsyncStorage.getItem(quickActionsStorageKey(userId))
+      .then((raw) => { if (active) setActions(parseQuickActions(raw)); })
+      .catch(() => { if (active) setActions([...DEFAULT_QUICK_ACTIONS]); });
+    return () => { active = false; };
+  }, [userId]);
+
+  function saveActions(ids: QuickActionId[]) {
+    const next = sortQuickActions(ids);
+    setActions(next);
+    // A storage failure keeps the choice for this session rather than blocking the student.
+    if (userId) AsyncStorage.setItem(quickActionsStorageKey(userId), JSON.stringify(next)).catch(() => undefined);
+  }
 
   useEffect(() => {
     if (!quickOpen) return;
@@ -49,7 +72,10 @@ export default function TabLayout() {
     setQuick(false);
     if (id === 'addExpense') router.push('/add-expense');
     else if (id === 'scanReceipt') router.push('/scan-receipt');
+    else if (id === 'setBudget') router.push('/set-budget');
     else if (id === 'addTask') router.push('/add-task');
+    else if (id === 'reminders') router.push('/reminders');
+    else if (id === 'mySemester') router.push('/my-semester');
     else router.navigate('/(tabs)/mind');
   }
 
@@ -74,7 +100,7 @@ export default function TabLayout() {
         {/* Profile opens from the Home avatar; hiding it keeps the bar balanced around the centre action. */}
         <Tabs.Screen name="profile" options={{ title: t('tab.profile'), href: null }} />
       </Tabs>
-      {sheetMounted && <QuickActionsSheet open={quickOpen} progress={progress} bottom={barHeight} onClose={() => setQuick(false)} onSelect={selectAction} />}
+      {sheetMounted && <QuickActionsSheet open={quickOpen} progress={progress} bottom={barHeight} actions={actions} onClose={() => setQuick(false)} onSelect={selectAction} onSave={saveActions} />}
     </View>
   );
 }

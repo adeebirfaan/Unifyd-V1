@@ -55,7 +55,7 @@ The mobile application retains Expo Router navigation and uses the following fun
 |---|---|
 | `app/_layout.tsx` | Initial application shell and authentication/session routing |
 | Authentication screens | Welcome, sign-up, login, password-recovery/approved login support, and required profile completion |
-| `app/(tabs)` | Protected primary navigation: Home/Dashboard, Wallet, a centre quick-actions slot, Planner, and Mind. Profile stays in `(tabs)` but is hidden from the bar (`href: null`) and opens from the Home avatar. The centre slot (`quick.tsx`) uses a custom `tabBarButton` that opens the quick-actions sheet; a direct visit redirects to Home. |
+| `app/(tabs)` | Protected primary navigation: Home/Dashboard, Wallet, a centre quick-actions slot, Planner, and Mind. Profile stays in `(tabs)` but is hidden from the bar (`href: null`) and opens from the Home avatar. The centre slot (`quick.tsx`) uses a custom `tabBarButton` that opens the quick-actions sheet; a direct visit redirects to Home. Students choose 1–4 of seven shortcuts. `mobile/lib/quickActions.ts` validates the choice, which is stored in AsyncStorage under `unifyd:quick-actions:<userId>`. It is device-local, not in the database; invalid or missing values fall back to the four defaults. |
 | Wallet screens | Expense history, add/edit expense, budget view, receipt scanning and review |
 | Planner screens | Task list, task detail, add/edit task, reminder history/settings access |
 | Mind screens | Mood entry, mood history, wellness suggestion |

@@ -198,3 +198,85 @@ test('recent trends show only dated owned check-ins and keep notes out of summar
     expect(url.searchParams.getAll('recorded_at')).toEqual(expect.arrayContaining([expect.stringMatching(/^gte\./), expect.stringMatching(/^lt\./)]));
   }
 });
+
+test('a check-in can be edited without changing its recorded time or owner', async ({ page }) => {
+  const seeded = await testClient();
+  let entryId = '';
+  let original: { recorded_at: string; user_id: string } | null = null;
+  try {
+    const inserted = await seeded.client.from('mood_entries')
+      .insert({ user_id: seeded.userId, mood_level: 2, stress_level: 4, note: `${prefix} edit original` })
+      .select('id,recorded_at,user_id').single();
+    expect(inserted.error).toBeNull();
+    entryId = inserted.data!.id;
+    original = { recorded_at: inserted.data!.recorded_at, user_id: inserted.data!.user_id };
+    createdIds.add(entryId);
+  } finally { await seeded.client.auth.signOut(); }
+
+  const patches: string[] = [];
+  page.on('request', (request) => {
+    if (request.url().includes('/rest/v1/mood_entries') && request.method() === 'PATCH') patches.push(request.url());
+  });
+
+  try {
+    await page.goto('/');
+    await page.getByRole('textbox', { name: 'Email' }).fill(email);
+    await page.getByRole('textbox', { name: 'Password' }).fill(password);
+    await page.getByRole('button', { name: 'Sign in' }).click();
+    await page.getByRole('tab', { name: 'Mind' }).click();
+    const row = page.locator(`[data-testid="mind-entry-${entryId}"]`);
+    await expect(row.getByText(`${prefix} edit original`)).toBeVisible();
+
+    // The sheet opens with the saved values; cancelling sends nothing.
+    await row.getByRole('button', { name: 'Edit check-in' }).click();
+    const sheet = page.getByTestId('mind-edit-sheet');
+    await expect(sheet.getByRole('radio', { name: 'Mood: Low' })).toHaveAttribute('aria-checked', 'true');
+    await expect(sheet.getByRole('radio', { name: 'Stress: High' })).toHaveAttribute('aria-checked', 'true');
+    await expect(sheet.getByRole('textbox', { name: 'Private note (optional)' })).toHaveValue(`${prefix} edit original`);
+    await sheet.getByRole('button', { name: 'Cancel' }).click();
+    await expect(sheet).toHaveCount(0);
+    expect(patches).toHaveLength(0);
+
+    // A failed save keeps the sheet and the student's changes.
+    await row.getByRole('button', { name: 'Edit check-in' }).click();
+    await sheet.getByRole('radio', { name: 'Mood: Good' }).click();
+    await sheet.getByRole('radio', { name: 'Stress: Low' }).click();
+    await sheet.getByRole('textbox', { name: 'Private note (optional)' }).fill(`  ${prefix} edit updated  `);
+    const failUpdate = async (route: Route) => {
+      if (route.request().method() === 'PATCH') await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+      else await route.continue();
+    };
+    await page.route('**/rest/v1/mood_entries*', failUpdate);
+    await sheet.getByRole('button', { name: 'Save changes' }).click();
+    await expect(sheet.getByText('We could not update this check-in. Please try again.')).toBeVisible();
+    await expect(sheet.getByRole('radio', { name: 'Mood: Good' })).toHaveAttribute('aria-checked', 'true');
+    await page.unroute('**/rest/v1/mood_entries*', failUpdate);
+
+    await sheet.getByRole('button', { name: 'Save changes' }).click();
+    await expect(page.getByText('Check-in updated.')).toBeVisible();
+    await expect(row.getByText('Mood: Good')).toBeVisible();
+    await expect(row.getByText('Stress: Low')).toBeVisible();
+    await expect(row.getByText(`${prefix} edit updated`)).toBeVisible();
+
+    const check = await testClient();
+    try {
+      const saved = await check.client.from('mood_entries').select('user_id,mood_level,stress_level,note,recorded_at')
+        .eq('id', entryId).eq('user_id', check.userId).single();
+      expect(saved.data).toEqual({ ...original, mood_level: 4, stress_level: 2, note: `${prefix} edit updated` });
+
+      // Clearing the note stores no note rather than an empty string.
+      await row.getByRole('button', { name: 'Edit check-in' }).click();
+      await sheet.getByRole('textbox', { name: 'Private note (optional)' }).fill('   ');
+      await sheet.getByRole('button', { name: 'Save changes' }).click();
+      await expect(row.getByText(`${prefix} edit updated`)).toHaveCount(0);
+      await expect.poll(async () => (await check.client.from('mood_entries').select('note').eq('id', entryId).single()).data?.note).toBeNull();
+    } finally { await check.client.auth.signOut(); }
+
+    for (const url of patches) {
+      const params = new URL(url).searchParams;
+      expect(params.get('id')).toBe(`eq.${entryId}`);
+      expect(params.get('user_id')).toBe(`eq.${original!.user_id}`);
+    }
+    expect(patches.length).toBeGreaterThanOrEqual(2);
+  } finally { await cleanup(); }
+});

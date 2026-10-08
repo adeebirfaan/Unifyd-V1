@@ -109,6 +109,24 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Mood check-in editing (SRS-FR-607)
+
+**Changed files:** `mobile/app/(tabs)/mind.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/mind.spec.ts`, `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and this file.
+
+**What changed:** Each recent check-in now has an Edit action beside Delete. A sheet opens pre-filled with the saved mood, stress, and note; Cancel sends nothing. Save updates only those fields on the owned row and keeps the recorded time. Success shows "Check-in updated." and refreshes history and trends; failure keeps the edits with a translated error. English and Bahasa Melayu text was added. The existing migration already granted these UPDATE columns, so no SQL changed.
+
+**Tests performed:** Mobile TypeScript and Expo lint pass. Mind E2E: 3/3, including a new edit test covering:
+- the pre-filled sheet;
+- Cancel sending no request;
+- a simulated failure keeping the edits;
+- the saved values, with the recorded time and owner unchanged;
+- a cleared note becoming null;
+- ID and owner filters on every update request.
+
+The test account had 0 mood rows afterwards.
+
+**Next action:** Read-only check that the OCR `entry_source` grant and task reminder-offset migrations are applied.
+
 ### 2026-10-09 — Phase 8: integrated dashboard and Groq summaries
 
 **Requirements implemented:** SRS-FR-701 to SRS-FR-710, plus the SRS-FR-608 to SRS-FR-610 low-mood rule and notice on Home.

@@ -109,6 +109,64 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Centre quick-actions button and balanced navigation
+
+**Changed files:**
+- `mobile/app/(tabs)/_layout.tsx`, `mobile/app/(tabs)/quick.tsx` (new placeholder route)
+- `mobile/components/QuickActions.tsx`
+- `mobile/app/(tabs)/index.tsx`, `mobile/app/(tabs)/profile.tsx`
+- `mobile/constants/i18n.ts`
+- `mobile/e2e/home.spec.ts`, `mobile/e2e/unifyd.spec.ts`
+- `UNIFYD_DESIGN_SYSTEM.md`, `UNIFYD_SDD.md`, and this file
+
+**What changed:**
+- **Bar layout.** The disabled floating + overlapped content on every screen. It is now a working button in the centre of the tab bar (`Home · Wallet · [+] · Planner · Mind`).
+- **Quick actions sheet.** Tapping + slides up a sheet with Add expense, Scan receipt, Add task, and Log mood, and rotates the + into ×. The sheet closes with ×, the dimmed area, a tab press, or Android back, and is removed from the screen once closed so its buttons are never present while hidden.
+- **Profile access.** Profile left the bar (still a hidden `(tabs)` route) and opens from the Home avatar, which now has a small settings badge. Profile has a back arrow.
+- **Money panel.** The cramped one-line top-spending text became one row per category.
+- **Language and docs.** English and Bahasa Melayu text was added, and the design system records the approved change.
+
+**Tests performed:**
+- TypeScript and Expo lint pass; unit tests 19/19.
+- Full Expo Web E2E: 19/19, including a new navigation test covering:
+  - 4 bar tabs, with no Profile tab;
+  - the sheet opening and the × closing it;
+  - each action's destination;
+  - a tab press closing the sheet;
+  - the avatar opening Profile, and the back arrow returning to Home.
+- The first full run exposed hidden sheet buttons still present on the page; this was fixed by unmounting the sheet after it closes.
+- An interrupted earlier run had left one test expense and one test budget in the test account. Both were identified by their test-only title and creation time and removed, and the account was confirmed empty afterwards.
+
+**Next action:** Optional shortcut customisation (choose up to 4 actions), then second-account RLS testing.
+
+### 2026-10-09 — Time-of-day greeting on Home
+
+**Changed files:** `mobile/lib/greeting.ts`, `mobile/app/(tabs)/index.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/greeting.test.mjs`, `mobile/e2e/home.spec.ts`, and this file.
+
+**What changed:** The fixed "Good evening" greeting now follows the device's local hour:
+- 05:00 morning
+- 12:00 midday
+- 14:00 afternoon
+- 18:00 evening in English, 19:00 in Malay, because "Selamat petang" lasts until about dusk
+
+The hour is re-read whenever Home is opened. The Malay forms are Selamat pagi, tengah hari, petang, and malam.
+
+**Tests performed:**
+- TypeScript and Expo lint pass.
+- 2 new unit tests (period boundaries and the Malay difference).
+- A new Home E2E test that moves the browser clock from 08:00 to 15:00 to 21:00.
+- A full regression run, all passing: unit tests 19/19, server tests 24/24, Expo Web E2E 18/18.
+
+**Status:** All four small follow-up items are complete:
+- mood editing;
+- the migration check;
+- reminder history;
+- the greeting.
+
+No SRS Must or Should requirement remains unimplemented. Native-device checks and second-account RLS testing remain.
+
+**Next action:** Second-account RLS isolation test, then deployment preparation for user acceptance testing.
+
 ### 2026-10-09 — Reminder history (SRS-FR-507)
 
 **Changed files:**

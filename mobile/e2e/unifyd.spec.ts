@@ -217,7 +217,7 @@ test('authentication validation, sign in, sign out, and sign in again', async ({
   await page.getByRole('textbox', { name: 'Password' }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Profile' }).click();
+  await page.getByRole('button', { name: 'Open profile' }).click();
   await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
   await page.getByRole('button', { name: 'Sign out' }).click();
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible();
@@ -227,7 +227,7 @@ test('authentication validation, sign in, sign out, and sign in again', async ({
 test('profile controls, settings preferences, and legal pages', async ({ page }) => {
   await signIn(page);
   try {
-    await page.getByRole('tab', { name: 'Profile' }).click();
+    await page.getByRole('button', { name: 'Open profile' }).click();
     await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
     await page.getByRole('button', { name: 'Edit profile' }).click();
     await expect(page.getByRole('textbox', { name: 'Full name' })).toBeVisible();

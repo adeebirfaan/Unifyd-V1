@@ -33,6 +33,8 @@ export default function ProfileScreen() {
 
   return (
     <Screen>
+      {/* Profile is reached from the Home avatar, so it offers a direct way back. */}
+      <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => router.navigate('/')} style={styles.back}><Ionicons name="arrow-back" size={22} color={tokens.screenText} /></Pressable>
       <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>UNIFYD</Text>
       <Text style={[styles.title, { color: tokens.screenText }]}>{t('tab.profile')}</Text>
       {profile && <Pressable onPress={() => router.push('/settings')} accessibilityRole="button" accessibilityLabel={t('profile.settings')} style={styles.settingsButton}><Ionicons name="settings-outline" size={22} color={tokens.screenText} /></Pressable>}
@@ -84,6 +86,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  back: { width: 44, height: 44, justifyContent: 'center', marginBottom: spacing.space3 },
   eyebrow: { ...typography.label, color: colors.brandCyan, letterSpacing: 2, marginBottom: spacing.space2 },
   title: { ...typography.screenTitle, color: colors.textPrimary, marginBottom: spacing.space6 },
   settingsButton: { position: 'absolute', top: 0, right: 0, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },

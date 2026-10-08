@@ -75,7 +75,9 @@ test('dashboard shows verified facts, a labelled AI summary, and opens each modu
   const money = page.getByRole('button', { name: 'Open Wallet' });
   await expect(money).toContainText('Expenses this month2');
   await expect(money).toContainText('Budget used30%');
-  await expect(money).toContainText('Food 80% · Transport 20%');
+  await expect(money).toContainText('Top spending');
+  await expect(money).toContainText('Food80%');
+  await expect(money).toContainText('Transport20%');
   const studies = page.getByRole('button', { name: 'Open Planner' });
   await expect(studies).toContainText('Pending2');
   await expect(studies).toContainText('Ongoing1');
@@ -153,4 +155,68 @@ test('dashboard loads the signed-in student’s real records without errors', as
   await expect(page.getByRole('button', { name: 'Open Mind' })).toBeVisible();
   await expect(page.getByText('We could not load your overview.', { exact: false })).toHaveCount(0);
   await expect(page.getByText('Spent this month', { exact: true })).toBeVisible();
+});
+
+test('the greeting follows the local time of day', async ({ page }) => {
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  const today = localDate(new Date());
+  await page.clock.setFixedTime(new Date(`${today}T08:00:00+08:00`));
+  await signIn(page);
+  await expect(page.getByText(/^Good morning, /)).toBeVisible();
+  await page.clock.setFixedTime(new Date(`${today}T15:00:00+08:00`));
+  await page.getByRole('tab', { name: 'Wallet' }).click();
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await expect(page.getByText(/^Good afternoon, /)).toBeVisible();
+  await page.clock.setFixedTime(new Date(`${today}T21:00:00+08:00`));
+  await page.getByRole('tab', { name: 'Wallet' }).click();
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await expect(page.getByText(/^Good evening, /)).toBeVisible();
+});
+
+test('the centre button opens quick actions, and the avatar opens Profile', async ({ page }) => {
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  await signIn(page);
+
+  // Profile is no longer a tab; the bar keeps two tabs either side of the centre action.
+  await expect(page.getByRole('tab', { name: 'Profile' })).toHaveCount(0);
+  const tabs = page.getByRole('tab');
+  await expect(tabs).toHaveCount(4);
+  await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible();
+
+  const sheet = page.getByTestId('quick-actions-sheet');
+  const open = page.getByRole('button', { name: 'Open quick actions' });
+  await open.click();
+  await expect(page.getByRole('button', { name: 'Close quick actions' }).first()).toBeVisible();
+  for (const name of ['Add expense', 'Scan receipt', 'Add task', 'Log mood']) await expect(sheet.getByRole('button', { name })).toBeVisible();
+
+  // The × closes it again.
+  // The first match is the × in the tab bar; the second is the dimmed background.
+  await page.getByRole('button', { name: 'Close quick actions', exact: true }).first().click();
+  await expect(open).toBeVisible();
+
+  const go = async (action: string, url: RegExp) => {
+    await page.getByRole('tab', { name: 'Home' }).click();
+    await page.getByRole('button', { name: 'Open quick actions' }).click();
+    await sheet.getByRole('button', { name: action }).click();
+    await expect(page).toHaveURL(url);
+  };
+  await go('Add expense', /\/add-expense/);
+  await page.getByRole('button', { name: 'Go back' }).first().click();
+  await go('Add task', /\/add-task/);
+  await page.getByRole('button', { name: 'Go back' }).first().click();
+  await go('Scan receipt', /\/scan-receipt/);
+  await page.getByRole('button', { name: 'Go back' }).first().click();
+  await go('Log mood', /\/mind/);
+  await expect(page.getByText('How are you feeling?')).toBeVisible();
+
+  // Switching tabs while the sheet is open closes it.
+  await page.getByRole('button', { name: 'Open quick actions' }).click();
+  await page.getByRole('tab', { name: 'Planner' }).click();
+  await expect(page.getByRole('button', { name: 'Open quick actions' })).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await page.getByRole('button', { name: 'Open profile' }).click();
+  await expect(page.getByRole('button', { name: 'Edit profile' })).toBeVisible();
+  await page.getByRole('button', { name: 'Go back' }).click();
+  await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
 });

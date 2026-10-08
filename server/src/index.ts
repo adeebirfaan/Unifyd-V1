@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 import vision from '@google-cloud/vision';
 
 import { createApp } from './app.js';
+import { loadInsightFacts } from './insight-data.js';
+import { requestGroqSummary } from './insight-summary.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -20,6 +22,9 @@ const supabase = createClient(url, publishableKey, {
 });
 // Application Default Credentials are discovered by the official Google client library.
 const visionClient = new vision.ImageAnnotatorClient();
+// Groq is optional. Without a key, the insights endpoint still returns verified facts with a fallback.
+const groqApiKey = process.env.GROQ_API_KEY?.trim();
+const groqModel = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b';
 
 const app = createApp({
   verifyToken: async (token) => {
@@ -31,8 +36,12 @@ const app = createApp({
     if (result.error) throw new Error('Vision detection failed.');
     return result.fullTextAnnotation?.text ?? result.textAnnotations?.[0]?.description ?? '';
   },
+  insights: {
+    loadFacts: (token, timeZone, now) => loadInsightFacts(url, publishableKey, token, timeZone, now),
+    summarize: groqApiKey ? (messages) => requestGroqSummary(messages, { apiKey: groqApiKey, model: groqModel }) : null,
+  },
 });
 
 app.listen(port, host, () => {
-  console.info(`Unifyd OCR service listening on ${host}:${port}`);
+  console.info(`Unifyd service listening on ${host}:${port} (AI summaries ${groqApiKey ? 'enabled' : 'not configured'})`);
 });

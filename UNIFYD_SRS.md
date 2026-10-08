@@ -161,6 +161,18 @@ The Phase 1 receipt backend implements the protected OCR endpoint and draft extr
 | SRS-FR-709 | The system shall open the detailed module when the student taps an insight panel. | Should | Demonstration |
 | SRS-FR-710 | The system shall provide a refresh action and an appropriate empty state for panels with insufficient data. | Should | Test |
 
+**Module 8 status:** Home shows a gradient overview with current-month spending and budget status, the next deadline, and this week's average mood. Below it, three tappable panels open Wallet, Planner, and Mind (SRS-FR-701, SRS-FR-709):
+
+- **Money:** expense count, percentage of the monthly budget used, and the top three categories (SRS-FR-702).
+- **Studies:** pending, ongoing, overdue, due within 7 days, and completed within 7 days (SRS-FR-703).
+- **Wellbeing:** last-7-day check-ins, average mood and stress, and a comparison with the previous 7 days (SRS-FR-704).
+
+The device calculates these facts from the student's own records, so Home works even when the server is unreachable. The repeated low-mood rule (SRS-FR-608) is met when mood 1–2 is recorded on at least 3 different local days within the last 7 days. It shows a gentle notice with a non-professional-advice statement (SRS-FR-609, SRS-FR-610).
+
+The authenticated server recalculates the same facts from the database and sends Groq only aggregate numbers, with no task titles, subjects, notes, names, or dates (SRS-FR-705). Groq returns a strict JSON schema. The server rejects any summary containing a number not in the facts, or diagnosis, prediction, advice, or link language (SRS-FR-706, SRS-FR-707). Any failure, a missing key, or an invalid reply returns facts with a fallback message (SRS-FR-708).
+
+Pull-to-refresh and a summary refresh button are provided, and each panel has an empty state (SRS-FR-710). The AI text is labelled as AI-written and secondary to the figures.
+
 ## 6. Non-functional requirements
 
 | ID | Requirement | Priority | Verification |
@@ -214,5 +226,5 @@ Budget data rules: a weekly budget's `period_start` is a Monday, and a monthly b
 | SRS-FR-401 to SRS-FR-412 | Task CRUD, statuses, deadline ordering, reminder effects, semester subject selection and task-subject shortcuts |
 | SRS-FR-501 to SRS-FR-507 | Reminder scheduling, preferences, tapping, dismissal, history |
 | SRS-FR-601 to SRS-FR-610 | Private mood/stress check-ins, multiple entries per day, history, future trend rules and disclaimer |
-| SRS-FR-701 to SRS-FR-710 | Dashboard accuracy, AI relevance, invalid-response and service-failure fallback |
+| SRS-FR-701 to SRS-FR-710 | Dashboard accuracy, AI relevance, invalid-response and service-failure fallback, low-mood rule |
 | SRS-NFR-001 to SRS-NFR-010 | Security, secret handling, usability, app operation, maintainability, progress tracking |

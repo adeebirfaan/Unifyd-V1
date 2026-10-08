@@ -21,7 +21,8 @@ export class ReceiptOcrError extends Error {
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
-function ocrBaseUrl(): string | null {
+/** Base URL of the Unifyd server (OCR and dashboard insights). */
+export function ocrBaseUrl(): string | null {
   const configured = process.env.EXPO_PUBLIC_OCR_API_URL?.trim();
   if (!configured) return null;
   const url = new URL(configured);

@@ -67,15 +67,18 @@ export function OverviewCard({ facts }: { facts: DashboardFacts }) {
 }
 
 /** Shared frame for the dark module cards: title, a way back to Overview, and an Open action. */
-function ModuleCard({ title, icon, shade, onOverview, openLabel, onOpen, children }: {
-  title: string; icon: IconName; shade: string; onOverview: () => void; openLabel: string; onOpen: () => void; children: ReactNode;
+function ModuleCard({ title, icon, shade, onOverview, onCustomise, openLabel, onOpen, children }: {
+  title: string; icon: IconName; shade: string; onOverview: () => void; onCustomise: () => void; openLabel: string; onOpen: () => void; children: ReactNode;
 }) {
   const { t } = useI18n();
   return (
-    <View style={[styles.fill, styles.moduleCard, { backgroundColor: shade }]}>
+    <View testID="card-surface" style={[styles.fill, styles.moduleCard, { backgroundColor: shade }]}>
       <View style={styles.header}>
         <View style={styles.iconWrap}><Ionicons name={icon} size={20} color={colors.brandCyan} /></View>
         <Text style={styles.title}>{title}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('home.changeColour', { name: title })} onPress={onCustomise} style={({ pressed }) => [styles.overviewButton, pressed && styles.pressed]}>
+          <Ionicons name="color-palette-outline" size={18} color={colors.textPrimary} />
+        </Pressable>
         <Pressable accessibilityRole="button" accessibilityLabel={t('home.backToOverview')} onPress={onOverview} style={({ pressed }) => [styles.overviewButton, pressed && styles.pressed]}>
           <Ionicons name="grid-outline" size={18} color={colors.textPrimary} />
         </Pressable>
@@ -101,15 +104,15 @@ function Tile({ label, value, tone = 'normal', third = false }: { label: string;
 const Note = ({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted' | 'warning' }) =>
   <Text style={[styles.note, tone === 'warning' && { color: colors.warning }]}>{children}</Text>;
 
-type ModuleProps = { facts: DashboardFacts; shade: string; onOverview: () => void; onOpen: () => void };
+type ModuleProps = { facts: DashboardFacts; shade: string; onOverview: () => void; onCustomise: () => void; onOpen: () => void };
 
-export function MoneyCard({ facts, shade, onOverview, onOpen }: ModuleProps) {
+export function MoneyCard({ facts, shade, onOverview, onCustomise, onOpen }: ModuleProps) {
   const { t } = useFormat();
   const { finance } = facts;
   const over = finance.remainingCents !== null && finance.remainingCents < 0;
   const used = finance.budgetCents ? Math.min(1, finance.spentCents / finance.budgetCents) : null;
   return (
-    <ModuleCard title={t('home.panelMoney')} icon="wallet-outline" shade={shade} onOverview={onOverview} openLabel={t('home.openPanel', { name: t('tab.wallet') })} onOpen={onOpen}>
+    <ModuleCard title={t('home.panelMoney')} icon="wallet-outline" shade={shade} onOverview={onOverview} onCustomise={onCustomise} openLabel={t('home.openPanel', { name: t('tab.wallet') })} onOpen={onOpen}>
       <View>
         <Text style={styles.caption}>{t('home.monthSpent')}</Text>
         <Text style={styles.amount}>{ringgit(finance.spentCents)}</Text>
@@ -119,9 +122,11 @@ export function MoneyCard({ facts, shade, onOverview, onOpen }: ModuleProps) {
         {used !== null && <View style={styles.track}><View style={[styles.bar, { width: `${used * 100}%`, backgroundColor: over ? colors.danger : colors.brandCyan }]} /></View>}
       </View>
       {finance.expenseCount === 0 ? <Note>{t('home.noExpenses')}</Note> : <>
-        <View style={styles.tiles}>
-          <Tile label={t('home.expenseCount')} value={String(finance.expenseCount)} />
-          {finance.percentUsed !== null && <Tile label={t('home.budgetUsed')} value={formatPercentage(finance.percentUsed)} tone={over ? 'danger' : 'normal'} />}
+        {/* One compact line leaves room for all three top categories. */}
+        <View style={styles.inlineStats}>
+          <Text style={[styles.inlineText, styles.flex]} numberOfLines={1}>{finance.expenseCount === 1 ? t('home.expenseShortOne') : t('home.expensesShort', { count: finance.expenseCount })}</Text>
+          {finance.percentUsed !== null && <Text style={[styles.inlineText, styles.flex, styles.inlineDivider, over && styles.danger]} numberOfLines={1}>
+            {t('home.budgetUsedShort', { percent: formatPercentage(finance.percentUsed) })}</Text>}
         </View>
         <View style={styles.rows}>
           <Text style={styles.caption}>{t('home.topCategories')}</Text>
@@ -138,11 +143,11 @@ export function MoneyCard({ facts, shade, onOverview, onOpen }: ModuleProps) {
   );
 }
 
-export function StudiesCard({ facts, shade, onOverview, onOpen }: ModuleProps) {
+export function StudiesCard({ facts, shade, onOverview, onCustomise, onOpen }: ModuleProps) {
   const { language, t } = useFormat();
   const { academic } = facts;
   return (
-    <ModuleCard title={t('home.panelStudies')} icon="calendar-outline" shade={shade} onOverview={onOverview} openLabel={t('home.openPanel', { name: t('tab.planner') })} onOpen={onOpen}>
+    <ModuleCard title={t('home.panelStudies')} icon="calendar-outline" shade={shade} onOverview={onOverview} onCustomise={onCustomise} openLabel={t('home.openPanel', { name: t('tab.planner') })} onOpen={onOpen}>
       {academic.pending + academic.ongoing === 0 ? <Note>{t('home.noTasks')}</Note> : (
         <View style={styles.tiles}>
           <Tile label={t('home.pending')} value={String(academic.pending)} />
@@ -166,11 +171,11 @@ export function StudiesCard({ facts, shade, onOverview, onOpen }: ModuleProps) {
   );
 }
 
-export function WellbeingCard({ facts, shade, onOverview, onOpen }: ModuleProps) {
+export function WellbeingCard({ facts, shade, onOverview, onCustomise, onOpen }: ModuleProps) {
   const { t, outOfFive } = useFormat();
   const { wellness } = facts;
   return (
-    <ModuleCard title={t('home.panelWellbeing')} icon="heart-outline" shade={shade} onOverview={onOverview} openLabel={t('home.openPanel', { name: t('tab.mind') })} onOpen={onOpen}>
+    <ModuleCard title={t('home.panelWellbeing')} icon="heart-outline" shade={shade} onOverview={onOverview} onCustomise={onCustomise} openLabel={t('home.openPanel', { name: t('tab.mind') })} onOpen={onOpen}>
       {wellness.checkIns === 0 ? <Note>{t('home.noMoodData')}</Note> : <>
         <View style={styles.tiles}>
           <Tile third label={t('home.checkIns')} value={String(wellness.checkIns)} />
@@ -193,10 +198,10 @@ const styles = StyleSheet.create({
   fill: { flex: 1, borderRadius: radius.radiusLg },
   flex: { flex: 1 },
   pressed: { opacity: 0.8 },
-  cardBody: { flex: 1, padding: spacing.space6, gap: spacing.space5 },
+  cardBody: { flex: 1, padding: spacing.space5, gap: spacing.space4 },
   overviewLabel: { ...typography.label, color: colors.white, letterSpacing: 1.5, opacity: 0.85 },
   overviewCaption: { ...typography.label, color: colors.white, opacity: 0.85 },
-  overviewAmount: { fontSize: 36, fontWeight: '700', color: colors.white, marginTop: spacing.space1, fontVariant: ['tabular-nums'] },
+  overviewAmount: { fontSize: 32, fontWeight: '700', color: colors.white, marginTop: spacing.space1, fontVariant: ['tabular-nums'] },
   overviewLine: { ...typography.body, color: colors.white, fontWeight: '600', marginTop: spacing.space1 },
   overviewSmall: { ...typography.label, color: colors.white, opacity: 0.85, marginTop: spacing.space1 },
   overviewTrack: { backgroundColor: 'rgba(255,255,255,0.3)' },
@@ -206,23 +211,23 @@ const styles = StyleSheet.create({
   chip: { flex: 1, borderRadius: radius.radiusMd, paddingVertical: spacing.space2, paddingHorizontal: spacing.space3, backgroundColor: 'rgba(255,255,255,0.16)' },
   chipValue: { fontSize: 18, fontWeight: '700', color: colors.white, fontVariant: ['tabular-nums'] },
   chipLabel: { ...typography.label, color: colors.white, opacity: 0.9 },
-  swipeHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, paddingHorizontal: spacing.space6, paddingBottom: spacing.space5 },
-  moduleCard: { padding: spacing.space5, gap: spacing.space4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
+  swipeHint: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, paddingHorizontal: spacing.space5, paddingBottom: spacing.space4 },
+  moduleCard: { padding: spacing.space4, gap: spacing.space3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
   header: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3 },
   iconWrap: { width: 40, height: 40, borderRadius: radius.radiusSm, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
   title: { ...typography.sectionTitle, color: colors.textPrimary, flex: 1 },
   overviewButton: { width: 44, height: 44, borderRadius: radius.radiusFull, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.08)' },
   moduleBody: { flex: 1, gap: spacing.space3, overflow: 'hidden' },
-  openButton: { minHeight: 48, borderRadius: radius.radiusMd, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.space2 },
+  openButton: { minHeight: 44, borderRadius: radius.radiusMd, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: spacing.space2 },
   openText: { ...typography.body, fontWeight: '700', color: colors.textPrimary },
   caption: { ...typography.label, color: colors.textSecondary },
-  amount: { fontSize: 30, fontWeight: '700', color: colors.textPrimary, fontVariant: ['tabular-nums'], marginTop: spacing.space1 },
+  amount: { fontSize: 28, fontWeight: '700', color: colors.textPrimary, fontVariant: ['tabular-nums'], marginTop: spacing.space1 },
   line: { ...typography.body, fontWeight: '600', color: colors.textPrimary, marginTop: spacing.space1 },
   danger: { color: colors.danger },
   track: { height: 6, borderRadius: radius.radiusFull, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden', marginTop: spacing.space3 },
   bar: { height: '100%', borderRadius: radius.radiusFull },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.space2 },
-  tile: { flexGrow: 1, flexBasis: '45%', minHeight: 54, borderRadius: radius.radiusMd, padding: spacing.space3, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', gap: 2 },
+  tile: { flexGrow: 1, flexBasis: '45%', minHeight: 46, borderRadius: radius.radiusMd, paddingHorizontal: spacing.space3, paddingVertical: spacing.space2, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', gap: 2 },
   tileThird: { flexBasis: '30%' },
   tileValue: { fontSize: 20, fontWeight: '700', color: colors.textPrimary, fontVariant: ['tabular-nums'] },
   tileLabel: { ...typography.label, color: colors.textSecondary },
@@ -233,7 +238,10 @@ const styles = StyleSheet.create({
   categoryLabel: { width: 120 },
   rowValue: { ...typography.label, color: colors.textPrimary, fontWeight: '700', minWidth: 48, textAlign: 'right', fontVariant: ['tabular-nums'] },
   statLine: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  deadlineBox: { borderRadius: radius.radiusMd, padding: spacing.space3, backgroundColor: 'rgba(255,255,255,0.06)', gap: 2 },
+  inlineStats: { flexDirection: 'row', alignItems: 'center', borderRadius: radius.radiusMd, paddingVertical: spacing.space2, paddingHorizontal: spacing.space3, backgroundColor: 'rgba(255,255,255,0.06)', gap: spacing.space3 },
+  inlineText: { ...typography.label, color: colors.textPrimary, fontWeight: '600', textAlign: 'center' },
+  inlineDivider: { borderLeftWidth: 1, borderLeftColor: 'rgba(255,255,255,0.12)', paddingLeft: spacing.space3 },
+  deadlineBox: { borderRadius: radius.radiusMd, paddingHorizontal: spacing.space3, paddingVertical: spacing.space2, backgroundColor: 'rgba(255,255,255,0.06)', gap: 2 },
   note: { ...typography.label, color: colors.textSecondary, lineHeight: 18 },
   notice: { flexDirection: 'row', gap: spacing.space2, alignItems: 'flex-start' },
 });

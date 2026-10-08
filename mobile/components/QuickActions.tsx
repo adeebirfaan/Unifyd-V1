@@ -23,15 +23,24 @@ const ACTIONS: Record<QuickActionId, QuickAction> = {
   logMood: { icon: 'heart-outline', title: 'quick.logMood', description: 'quick.logMoodHint' },
 };
 
-/** Centre tab-bar button; the + rotates into × while the sheet is open. */
-export function QuickActionsButton({ open, progress, onPress }: { open: boolean; progress: Animated.Value; onPress: () => void }) {
+export const FAB_SIZE = 62;
+/** How far the elevated centre button rises above the top edge of the tab bar. */
+export const FAB_RISE = 24;
+
+/**
+ * Elevated centre action. It floats over the middle of the tab bar (layered above
+ * the quick-actions sheet, so its × stays usable) and the + rotates into × while
+ * the sheet is open. A ring in the page colour gives the cut-out look.
+ */
+export function QuickActionsButton({ open, progress, barHeight, onPress }: { open: boolean; progress: Animated.Value; barHeight: number; onPress: () => void }) {
+  const { tokens } = useAppearance();
   const { t } = useI18n();
   const rotate = progress.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '45deg'] });
   return (
-    <View style={styles.buttonSlot}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t(open ? 'quick.close' : 'quick.open')} accessibilityState={{ expanded: open }}
-        onPress={onPress} style={({ pressed }) => [styles.button, pressed && styles.pressed]}>
-        <Animated.View style={{ transform: [{ rotate }] }}><Ionicons name="add" size={30} color={colors.white} /></Animated.View>
+    <View pointerEvents="box-none" style={[styles.fabLayer, { bottom: barHeight + FAB_RISE - FAB_SIZE }]}>
+      <Pressable testID="quick-fab" accessibilityRole="button" accessibilityLabel={t(open ? 'quick.close' : 'quick.open')} accessibilityState={{ expanded: open }}
+        onPress={onPress} style={({ pressed }) => [styles.button, { borderColor: tokens.screenBackground }, pressed && styles.pressed]}>
+        <Animated.View style={{ transform: [{ rotate }] }}><Ionicons name="add" size={32} color={colors.white} /></Animated.View>
       </Pressable>
     </View>
   );
@@ -115,17 +124,17 @@ export function QuickActionsSheet({ open, progress, bottom, actions, onClose, on
 }
 
 const styles = StyleSheet.create({
-  buttonSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  fabLayer: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
   button: {
-    width: 52, height: 52, borderRadius: radius.radiusFull, alignItems: 'center', justifyContent: 'center',
-    backgroundColor: colors.brandBlue,
-    shadowColor: colors.brandBlue, shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 6,
+    width: FAB_SIZE, height: FAB_SIZE, borderRadius: radius.radiusFull, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.brandBlue, borderWidth: 5,
+    shadowColor: colors.brandBlue, shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8,
   },
   pressed: { opacity: 0.85 },
   sheet: {
     position: 'absolute', left: 0, right: 0, bottom: 0, width: '100%', maxWidth: 568, maxHeight: '92%', alignSelf: 'center',
     borderTopLeftRadius: radius.radiusLg, borderTopRightRadius: radius.radiusLg, borderWidth: 1, borderBottomWidth: 0,
-    paddingHorizontal: spacing.space5, paddingTop: spacing.space3, paddingBottom: spacing.space6, gap: spacing.space4,
+    paddingHorizontal: spacing.space5, paddingTop: spacing.space3, paddingBottom: FAB_RISE + spacing.space4, gap: spacing.space4,
   },
   handle: { width: 40, height: 4, borderRadius: radius.radiusFull, alignSelf: 'center' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.space3 },

@@ -109,6 +109,63 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Home final adjustments
+
+**What changed:**
+- The greeting is always two lines ("Good evening," then the name) in English and Malay, at 28 px.
+- "YOUR SPACE" sits tighter above the greeting, and the avatar is 52 → 58 px.
+- The wordmark reads `unifyd.`
+- After on-device comparison, the bottom bar returned to its original height and full safe-area spacing; the elevated centre FAB is unchanged.
+- Greeting tests now expect the line break.
+
+**Fit check:** The dots end at 640 px in the web capture, about 687 pt on an iPhone with a 47 pt status inset. The FAB top is at about 718 pt.
+
+**Tests performed:** TypeScript and lint pass; unit tests 25/25; full Expo Web E2E 22/22.
+
+### 2026-10-09 — Compact Home and elevated centre action
+
+**Changed files:**
+- `mobile/app/(tabs)/_layout.tsx`, `mobile/components/QuickActions.tsx`
+- `mobile/components/Screen.tsx` (opt-in `compact` top padding; other screens unchanged)
+- `mobile/app/(tabs)/index.tsx`, `mobile/components/home/CardDeck.tsx`, `mobile/components/home/DeckCards.tsx`
+- `mobile/constants/i18n.ts`, `mobile/e2e/home.spec.ts`
+- `UNIFYD_DESIGN_SYSTEM.md` and this file
+
+**What changed:**
+- **Bottom bar.** About 32 pt shorter on an iPhone with a home indicator (102 → about 70).
+- **Centre action.** The + is now an elevated 62 px FAB with a page-coloured ring, rising above the bar. It sits in an empty centre slot with two tabs on each side, and is layered above the quick-actions sheet so its × stays usable.
+- **Home layout.** Home uses compact top spacing, a smaller logo and greeting, and 404 px cards with tighter padding.
+- **Money card.** It shows "3 expenses | 35% of budget" in one line (singular form included) so all three top categories fit.
+- **Unchanged.** Functionality is the same.
+
+**Fit check:** In a 390 × 844 web capture, the deck's dots end at 636 px. Adding a 47 pt iPhone status inset gives about 683, against the FAB's top edge at about 750. A two-line greeting still fits.
+
+**Tests performed:**
+- TypeScript and Expo lint pass; unit tests 25/25.
+- Full Expo Web E2E: 22/22, with tests updated for the FAB test ID and the Money summary wording.
+- Screenshots were reviewed for every card, including Money with three categories, and for the open sheet.
+
+### 2026-10-09 — Home card colours
+
+**Changed files:**
+- `mobile/lib/cardShades.ts`, `mobile/components/home/ShadePicker.tsx` (new), `mobile/components/home/DeckCards.tsx`
+- `mobile/app/(tabs)/index.tsx`, `mobile/constants/i18n.ts`
+- `mobile/tests/cardShades.test.mjs` (new), `mobile/e2e/home.spec.ts`
+- `UNIFYD_DESIGN_SYSTEM.md` and this file
+
+**What changed:** Each module card (Money, Studies, Wellbeing) has a palette button that opens a sheet of six named dark shades as mini-card swatches.
+- A choice recolours that card immediately.
+- It is stored in AsyncStorage under `unifyd:card-shades:<userId>`. Missing or unknown values fall back per card, and a storage failure keeps the choice for the session.
+- The Overview card keeps the Unifyd gradient and has no colour option.
+- English and Bahasa Melayu names were added. No database change was made.
+
+**Tests performed:**
+- TypeScript and Expo lint pass.
+- Unit tests 25/25 (3 new, including a luminance check that every shade stays dark).
+- Full Expo Web E2E: 22/22. A new test covers the default shade, choosing Ocean, the other cards staying unchanged, persistence after reopening, and Overview having no colour option.
+
+**Next action:** Second-account RLS isolation test, then deployment preparation for user acceptance testing.
+
 ### 2026-10-09 — Home card deck: native swiping
 
 **Issue:** On the project owner's phone, deck swipes stuck. The first version used a JavaScript PanResponder inside the vertical page ScrollView, and the two competed for the same touch. Gesture Handler was considered, but expo-router installs version 3.3.0 while Expo Go for SDK 57 ships 2.32. That native/JS mismatch was not risked.

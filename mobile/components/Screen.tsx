@@ -5,11 +5,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, spacing } from '@/constants/theme';
 import { useAppearance } from '@/providers/AppearanceProvider';
 
-export function Screen({ children, refreshControl }: { children: ReactNode; refreshControl?: ReactElement<RefreshControlProps> }) {
+export function Screen({ children, refreshControl, compact = false }: { children: ReactNode; refreshControl?: ReactElement<RefreshControlProps>; compact?: boolean }) {
   const insets = useSafeAreaInsets();
   const { tokens } = useAppearance();
   return (
-    <ScrollView style={[styles.scroll, { backgroundColor: tokens.screenBackground }]} contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.space6 }]} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
+    <ScrollView style={[styles.scroll, { backgroundColor: tokens.screenBackground }]} contentContainerStyle={[styles.content, { paddingTop: insets.top + (compact ? spacing.space2 : spacing.space6) }]} showsVerticalScrollIndicator={false} refreshControl={refreshControl}>
       <View style={styles.inner}>{children}</View>
     </ScrollView>
   );

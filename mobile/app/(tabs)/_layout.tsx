@@ -93,7 +93,8 @@ export default function TabLayout() {
         <Tabs.Screen name="wallet" options={{ title: t('tab.wallet'), tabBarAccessibilityLabel: t('tab.wallet'), tabBarIcon: tabIcon('wallet-outline', 'wallet') }} />
         <Tabs.Screen name="quick" options={{
           title: t('quick.title'),
-          tabBarButton: () => <QuickActionsButton open={quickOpen} progress={progress} onPress={() => setQuick(!quickOpen)} />,
+          // An empty centre slot keeps two tabs on each side; the elevated button floats over it.
+          tabBarButton: () => <View style={styles.centreSlot} />,
         }} />
         <Tabs.Screen name="planner" options={{ title: t('tab.planner'), tabBarAccessibilityLabel: t('tab.planner'), tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
         <Tabs.Screen name="mind" options={{ title: t('tab.mind'), tabBarAccessibilityLabel: t('tab.mind'), tabBarIcon: tabIcon('heart-outline', 'heart') }} />
@@ -101,10 +102,12 @@ export default function TabLayout() {
         <Tabs.Screen name="profile" options={{ title: t('tab.profile'), href: null }} />
       </Tabs>
       {sheetMounted && <QuickActionsSheet open={quickOpen} progress={progress} bottom={barHeight} actions={actions} onClose={() => setQuick(false)} onSelect={selectAction} onSave={saveActions} />}
+      <QuickActionsButton open={quickOpen} progress={progress} barHeight={barHeight} onPress={() => setQuick(!quickOpen)} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   shell: { flex: 1, backgroundColor: colors.background },
+  centreSlot: { flex: 1 },
 });

@@ -61,6 +61,7 @@ function RootNavigator() {
         <Stack.Screen name="task-detail" />
         <Stack.Screen name="edit-task" />
         <Stack.Screen name="my-semester" />
+        <Stack.Screen name="reminders" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="privacy-policy" />
         <Stack.Screen name="terms-of-use" />

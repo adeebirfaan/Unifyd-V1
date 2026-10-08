@@ -171,10 +171,18 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
 
 ### Home/dashboard
 
-- Greeting row: selected avatar, greeting/name, and notification icon.
-- One large brand-gradient overview card.
-- Compact module cards for Wallet, Planner, and Mind.
-- Keep the first viewport useful: current budget status, nearest deadline, and latest mood state.
+- Greeting row: time-of-day greeting with name, and the selected avatar (opens Profile).
+- **Card deck:** four equal cards (440 px tall) stacked like a deck: **Overview** in front, then **Money**, **Studies**, and **Wellbeing**.
+  - The next two cards peek out 18 px above the front card.
+  - Move with a horizontal swipe (left = next, right = previous; native paging stops at either end), by tapping a peeking edge, or with the four dots below the deck. The front card slides away to the left while the next card is already in place. The dots are buttons with a selected state, so swiping is never the only way.
+  - Only the front card is interactive or visible to screen readers. Deck text is not selectable.
+- **Overview card:** the only card with the blue-to-cyan gradient, so it stays the most prominent.
+  - It shows month spending with budget left and a progress bar, the next deadline, this week's mood, three summary chips (due in 7 days, overdue, check-ins), and a swipe hint.
+- **Module cards:** deep dark shades so they never compete with Overview. Each has its icon and title, a round **back to overview** button (grid icon) in the top-right corner, its figures, and an **Open …** button pinned to the bottom.
+  - **Money:** spending, budget bar, expense count, budget used, and the top 3 categories with bars.
+  - **Studies:** a 2 × 2 tile grid, completed in 7 days, and the next deadline.
+  - **Wellbeing:** three tiles, the comparison, and the gentle low-mood notice.
+- Keep the first viewport useful: budget status, nearest deadline, and latest mood are all on the Overview card.
 
 ### List screens
 

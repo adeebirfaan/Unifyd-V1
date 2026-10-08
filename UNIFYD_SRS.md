@@ -170,7 +170,7 @@ Each item shows the task, subject, reminder time and offset, and deadline, and o
 | SRS-FR-709 | The system shall open the detailed module when the student taps an insight panel. | Should | Demonstration |
 | SRS-FR-710 | The system shall provide a refresh action and an appropriate empty state for panels with insufficient data. | Should | Test |
 
-**Module 8 status:** Home shows a gradient overview with current-month spending and budget status, the next deadline, and this week's average mood. Below it, three tappable panels open Wallet, Planner, and Mind (SRS-FR-701, SRS-FR-709):
+**Module 8 status:** Home shows a gradient overview with current-month spending and budget status, the next deadline, and this week's average mood. Home presents these as a swipeable deck: Overview in front, then Money, Studies, and Wellbeing cards. Each module card has an Open action for Wallet, Planner, or Mind (SRS-FR-701, SRS-FR-709):
 
 - **Money:** expense count, percentage of the monthly budget used, and the top three categories (SRS-FR-702).
 - **Studies:** pending, ongoing, overdue, due within 7 days, and completed within 7 days (SRS-FR-703).

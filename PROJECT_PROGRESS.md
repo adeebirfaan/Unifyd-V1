@@ -109,6 +109,56 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Home card deck: native swiping
+
+**Issue:** On the project owner's phone, deck swipes stuck. The first version used a JavaScript PanResponder inside the vertical page ScrollView, and the two competed for the same touch. Gesture Handler was considered, but expo-router installs version 3.3.0 while Expo Go for SDK 57 ships 2.32. That native/JS mismatch was not risked.
+
+**Fix:** `CardDeck` now uses a native horizontal paging `Animated.ScrollView`.
+- **Native swiping.** The phone's own scrolling handles swipes and nests with the vertical page.
+- **Deck appearance.** Each card's translate, peek offset, scale, and visibility are interpolated from the scroll offset, using the native driver on phones. Waiting cards stay stacked behind the front card, and the front card slides away.
+- **Navigation.** Dots, the back-to-overview button, and peeking-edge taps scroll the pager (`goTo`).
+- **Web.** React Native Web wraps paging children in containers, which broke the stacking order, so the web build uses CSS scroll-snap instead. Transparent page containers pass taps through so peeking edges stay tappable.
+
+**Tests performed:**
+- TypeScript and Expo lint pass; unit tests 22/22.
+- Full Expo Web E2E: 21/21. The deck test now scrolls the pager horizontally (the web equivalent of a swipe) and covers both ends, the dots, the overview button, peek taps, and only the front card exposing controls.
+- Screenshots confirmed correct stacking at rest and mid-swipe.
+- Real-phone swipe feel still needs the project owner's confirmation.
+
+### 2026-10-09 — Home card deck
+
+**Changed files:**
+- `mobile/components/home/CardDeck.tsx` (new), `mobile/components/home/DeckCards.tsx` (new), `mobile/lib/cardShades.ts` (new)
+- `mobile/app/(tabs)/index.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/home.spec.ts`
+- `mobile/components/home/DashboardPanel.tsx` (removed; replaced by the deck cards)
+- `UNIFYD_DESIGN_SYSTEM.md`, `UNIFYD_SRS.md`, and this file
+
+**What changed:**
+- **Layout.** The Overview hero and three stacked panels became one deck of four equal, larger cards: Overview (gradient, front), Money, Studies, and Wellbeing (deep dark default shades).
+- **Navigation.** Students move by horizontal swipe, by tapping the peeking edge of the card behind, or with the dots. Each module card has a back-to-overview button and an Open button for its module.
+- **Overview content.** The card gained summary chips (due in 7 days, overdue, check-ins).
+- **Implementation.** React Native PanResponder and Animated, with no new dependency. Only clearly horizontal drags are claimed, so vertical page scrolling still works. Cards behind the front one are hidden from screen readers and touch, except their peeking edge.
+- **Not changed.** The AI summary card is unchanged below the deck.
+
+**Issues found:**
+- In Expo Web, a mouse drag selected card text, and the next press cleared that selection. React Native Web cancels the active gesture on a selection change, so every second swipe failed. Deck text is now non-selectable.
+- A springy snap-back was replaced by a 180 ms ease.
+
+**Tests performed:**
+- TypeScript and Expo lint pass; unit tests 22/22.
+- Phone-width screenshots of every card were reviewed during development.
+- Full Expo Web E2E: 21/21. The rewritten and new Home tests cover:
+  - each card's figures and empty states;
+  - only the front card exposing controls;
+  - Open actions;
+  - swipe next/previous with bounce at both ends;
+  - a short drag snapping back;
+  - tapping a peeking card;
+  - the dots;
+  - the back-to-overview button.
+
+**Next action:** Step 2, choosing dark shades per module card.
+
 ### 2026-10-09 — Customisable quick-action shortcuts
 
 **Changed files:** `mobile/lib/quickActions.ts` (new), `mobile/components/QuickActions.tsx`, `mobile/app/(tabs)/_layout.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/quickActions.test.mjs` (new), `mobile/e2e/home.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md`, `UNIFYD_SDD.md`, and this file.

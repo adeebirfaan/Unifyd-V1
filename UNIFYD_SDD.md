@@ -116,7 +116,7 @@ Standard user-owned CRUD data may use Supabase directly from the mobile app, pro
 |---|---|---|---|---|
 | `/health` | GET | App/developer | Confirm backend availability | Non-sensitive service status |
 | `/api/ocr/receipt` | POST | Authenticated app | Process a selected receipt image | Editable merchant, date, amount, raw extracted text/status |
-| `/api/insights/generate` | POST | Authenticated app | Generate a validated descriptive summary from verified facts | Module summaries, provider/fallback status |
+| `/api/insights/generate` | POST | Authenticated app | Body `{ language: 'en' or 'ms', timeZone }`; generate a validated descriptive summary from verified facts | `facts`, `summary` (or `null`), `source` (`ai`/`fallback`), `fallbackReason`, `generatedAt` |
 
 ### 5.3 Backend request rules
 
@@ -359,6 +359,14 @@ sequenceDiagram
     Backend-->>App: Facts + AI summary or facts + fallback message
 ```
 
+**Implementation (Module 8):** `server/src/insight-data.ts` creates a per-request Supabase client carrying the caller's access token. Database row-level security therefore still applies; no service-role key exists. It reads the current local month's expenses and monthly budget, all owned tasks, and 14 days of mood check-ins.
+
+`insight-facts.ts` calculates facts in the student's IANA time zone (default `Asia/Kuala_Lumpur`). `mobile/lib/dashboardFacts.ts` applies the same rules on the device; a unit test runs both and requires identical results.
+
+**Low-mood rule:** mood ≤ 2 on at least 3 different local days in the last 7. It is defined by constants in both modules.
+
+`insight-summary.ts` builds the aggregate-only payload and calls Groq's OpenAI-compatible chat completions. It uses model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, a 15-second timeout, and a strict `json_schema` with exactly `finance`, `academic`, and `wellness` strings. Identical facts reuse a summary for 10 minutes per user. The mobile app requests a summary on first view, then at most every 5 minutes, or when the student refreshes. Without `GROQ_API_KEY`, the endpoint still returns facts with `fallbackReason: not_configured`.
+
 ### 7.7 Groq prompt and response controls
 
 The server prompt must constrain Groq to:
@@ -370,6 +378,8 @@ The server prompt must constrain Groq to:
 - return a consistent structured response format.
 
 Before display, the backend validates that required fields are present and rejects malformed responses. If validation or the provider request fails, it returns the calculated facts with a predefined fallback summary.
+
+The validator requires each section to be 1–300 characters. Every number in the text, after removing thousands separators, must equal a supplied value or that value rounded. English and Bahasa Melayu patterns for diagnosis, disorders, therapy, medication, self-harm, prediction, guarantees, investing, links, and email addresses are rejected. Provider errors are never returned to the client.
 
 ## 8. Error-handling design
 

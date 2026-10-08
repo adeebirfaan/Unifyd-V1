@@ -6,10 +6,10 @@
 
 | Item | Current value |
 |---|---|
-| Overall stage | My Semester implemented; Faculty of Computing seed applied |
-| Current phase | Module 7, Phase 2 - Faculty of Computing curation and My Semester |
-| Current task | Device check of My Semester; optional verified credit-hours update |
-| Next milestone | Module 8: integrated dashboard and Groq summaries |
+| Overall stage | Integrated dashboard and Groq summaries implemented locally |
+| Current phase | Phase 8 - Integrated dashboard and Groq summaries |
+| Current task | Add a Groq key and review live AI summaries; device check of Home and My Semester |
+| Next milestone | Phase 9: evaluation, hardening, and thesis evidence |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
 | Custom ML / prediction | Not in scope |
 
@@ -93,7 +93,7 @@ The suite captures and restores the test profile around the run, including tempo
 | 5. Reminder notifications | In progress | Per-task offset migration and local Expo scheduling prepared | Migration review and native-device delivery tests pending |
 | 6. Mood tracking and wellness rules | In progress | Applied mood table (per project owner); private check-ins, history, 7/30-day trends, and local ideas implemented | Authenticated tests and physical-device review pending for Phase 3 |
 | 7. Receipt OCR | Complete per project owner | Protected backend, mobile capture, editable OCR review, and explicit expense save | No OCR retest in this task; prior grant and live-save status were not independently rechecked |
-| 8. Integrated dashboard and Groq summaries | Not started | Depends on Phases 2, 3, 4, and 6 | — |
+| 8. Integrated dashboard and Groq summaries | In progress | Home facts panels, authenticated insights endpoint, Groq summary with validation and fallback | Live Groq output needs a key; tests use fakes |
 | 9. Evaluation, hardening, and thesis evidence | Not started | Depends on all core phases | — |
 
 ## Current phase checklist — Phase 0
@@ -108,6 +108,38 @@ The suite captures and restores the test profile around the run, including tempo
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-10-09 — Phase 8: integrated dashboard and Groq summaries
+
+**Requirements implemented:** SRS-FR-701 to SRS-FR-710, plus the SRS-FR-608 to SRS-FR-610 low-mood rule and notice on Home.
+
+**Changed files:**
+- `server/src/app.ts`, `server/src/index.ts`
+- `server/src/insight-facts.ts`, `server/src/insight-data.ts`, `server/src/insight-summary.ts`, `server/src/insights.test.ts`
+- `server/.env.example`, `server/README.md`
+- `mobile/app/(tabs)/index.tsx`, `mobile/components/home/DashboardPanel.tsx`, `mobile/components/Screen.tsx`
+- `mobile/lib/dashboardFacts.ts`, `mobile/lib/dashboardData.ts`, `mobile/lib/insights.ts`, `mobile/lib/receiptOcr.ts` (base-URL helper exported only)
+- `mobile/constants/i18n.ts`, `mobile/tests/dashboardFacts.test.mjs`, `mobile/e2e/home.spec.ts`
+- `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and this file
+
+**What changed:**
+- **Home layout.** The placeholder hero and module cards were replaced with a live overview (month spending and budget status, next deadline, this week's mood) and three tappable Money, Studies, and Wellbeing panels with empty states. A clearly labelled AI summary card has a fallback message, and pull-to-refresh and a summary refresh button were added.
+- **Facts.** The device calculates the facts. The server recalculates the same facts with the student's own token, so RLS still applies.
+- **Groq.** Groq receives aggregate numbers only (`openai/gpt-oss-20b`, strict JSON schema). The server checks every number and rejects diagnosis, prediction, and advice wording. Missing keys, provider errors, and unsafe replies return facts with a fallback.
+- **Low-mood rule.** Mood ≤ 2 on 3 or more different days in the last 7 shows a gentle, non-clinical notice.
+
+**Tests performed:**
+- Server: typecheck, build, and 22/22 tests (13 new: time zone and month boundaries, task counts, low-mood rule, comparison threshold, payload privacy, validator acceptance and rejection, auth, fallbacks, cache, CORS).
+- Mobile: TypeScript and Expo lint pass; unit tests pass 14/14, including a device/server facts equality check in `Asia/Kuala_Lumpur`.
+- Full authenticated Expo Web E2E: 14/14, including 3 new Home tests (fixture facts and navigation, AI failure, fallback and retry, real-data load).
+- A live call to a locally started server: 401 without a token. Signed in, it returned real database facts with `fallbackReason: not_configured`.
+
+**Issues or decisions:**
+- No Groq key is configured yet, so live AI wording has not been evaluated.
+- Facts are calculated on both device and server; the parity test guards against drift.
+- The Home greeting still always says "Good evening" (pre-existing).
+
+**Next action:** Add `GROQ_API_KEY` to `server/.env`, review several real summaries for accuracy and tone, then check Home on a phone in both themes.
 
 ### 2026-10-08 — Module 7 Phase 2: seed applied and live check
 

@@ -1,6 +1,6 @@
-# Unifyd OCR service
+# Unifyd service
 
-This local Node.js/Express service accepts one signed-in student's receipt image and returns an OCR draft for review. It does not save images, OCR output, or expenses.
+This local Node.js/Express service accepts one signed-in student's receipt image and returns an OCR draft for review. It also produces the Home dashboard's optional AI summary. It does not save images, OCR output, expenses, or summaries.
 
 ## Run locally
 
@@ -20,3 +20,14 @@ For phone testing, start this server with `npm start` from `server/`, then start
 The success response contains only `merchantName`, `purchaseDate`, `totalAmount`, `rawText`, and `warnings`. Missing or uncertain parsed values are `null` with review warnings. No expense is created; a student must review the draft in a later phase. Error responses use safe codes and messages without provider details, receipt contents, or tokens.
 
 Run `npm run typecheck`, `npm test`, and `npm run build` to verify the service. Automated tests inject a fake verifier and OCR result, so they do not use network access or Google credentials.
+
+## Dashboard insights
+
+`POST /api/insights/generate` requires the same bearer token and a JSON body `{ "language": "en" | "ms", "timeZone": "Asia/Kuala_Lumpur" }`.
+
+1. The service reads only that student's records, using their own token, so database row-level security still applies.
+2. It calculates verified finance, task, and wellbeing facts.
+3. It sends Groq only aggregate numbers: no task titles, subjects, notes, names, or dates.
+4. It returns the facts plus a validated summary, or `summary: null` with a `fallbackReason`.
+
+To enable summaries, create a key at console.groq.com and set `GROQ_API_KEY` in the ignored `server/.env`. `GROQ_MODEL` defaults to `openai/gpt-oss-20b`. Without a key, the endpoint returns facts with `fallbackReason: "not_configured"`, and the app shows its fallback message. The startup log states whether AI summaries are enabled. Automated tests use fake data loaders and a fake Groq client; they never call Groq.

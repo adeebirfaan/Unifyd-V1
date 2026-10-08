@@ -154,15 +154,16 @@ Use an 8-point spacing system:
 
 ### Bottom navigation
 
-Use a persistent dark bottom navigation with five destinations:
+Use a persistent dark bottom navigation with four destinations and a centred quick-action button inside the bar:
 
-1. Home
-2. Wallet
-3. Planner
-4. Mind
-5. Profile
+`Home · Wallet · [+] · Planner · Mind`
 
-Add a centred floating **Add** action above the bar. It opens a context-aware action sheet, for example Add Expense, Scan Receipt, Add Task, or Log Mood. The active destination uses the Unifyd blue/cyan brand treatment; inactive destinations use `textTertiary`.
+- The **+** button sits in the middle slot of the bar, not floating over page content, so it never covers cards or text. It uses `brandBlue` with a white icon and is at least 44 × 44 px.
+- Tapping **+** slides up a dark **Quick actions** sheet above the bar (dimmed page behind it) and rotates the + into × (200 ms). Tapping ×, the dimmed area, another tab, or Android back closes it. The default shortcuts are **Add expense, Scan receipt, Add task, and Log mood**, shown as a 2 × 2 grid of tiles with an icon, title, and short hint.
+- **Profile** is not a bar destination. It opens from the avatar at the top of Home, which carries a small settings badge, and Profile has a back arrow to Home. This keeps two destinations on each side of the centre action.
+- The active destination uses the Unifyd blue/cyan brand treatment; inactive destinations use `textTertiary`.
+
+*Approved design change (October 2026):* the original layout had five destinations and a floating Add button above the bar. The placeholder button overlapped page content and had no function, so the centre action moved into the bar and Profile moved to the Home avatar.
 
 ### Home/dashboard
 

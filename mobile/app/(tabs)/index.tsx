@@ -12,6 +12,7 @@ import type { TranslationKey } from '@/constants/i18n';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { formatPercentage } from '@/lib/budgetSummary';
 import { loadDashboardFacts } from '@/lib/dashboardData';
+import { greetingKey } from '@/lib/greeting';
 import type { DashboardFacts, Direction } from '@/lib/dashboardFacts';
 import { formatRinggit } from '@/lib/expenseHistory';
 import { requestInsightSummary } from '@/lib/insights';
@@ -37,6 +38,8 @@ export default function HomeScreen() {
   const [factsState, setFactsState] = useState<FactsState>({ status: 'loading' });
   const [summaryState, setSummaryState] = useState<SummaryState>({ status: 'idle' });
   const [refreshing, setRefreshing] = useState(false);
+  // Re-read on each visit so the greeting stays right if the app stays open across periods.
+  const [hour, setHour] = useState(() => new Date().getHours());
   const factsRequest = useRef(0);
   const summaryRequest = useRef(0);
   const summaryAt = useRef<{ at: number; language: string } | null>(null);
@@ -65,6 +68,7 @@ export default function HomeScreen() {
   }, [userId, language]);
 
   useFocusEffect(useCallback(() => {
+    setHour(new Date().getHours());
     void loadFacts();
     void loadSummary();
   }, [loadFacts, loadSummary]));
@@ -91,11 +95,16 @@ export default function HomeScreen() {
       </View>
       <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>{t('home.space')}</Text>
       <View style={styles.greetingRow}>
-        <Text style={[styles.greeting, { color: tokens.screenText }]}>{t('home.greeting', { name: firstName })}</Text>
-        <View style={styles.avatarFrame}>
-          <Avatar id={profile?.avatar_id ?? DEFAULT_AVATAR_ID} size={52} />
-          <View pointerEvents="none" style={[styles.avatarOutline, { borderColor: tokens.homeAvatarOutline }]} />
-        </View>
+        <Text style={[styles.greeting, { color: tokens.screenText }]}>{t(greetingKey(hour, language), { name: firstName })}</Text>
+        <Pressable accessibilityRole="button" accessibilityLabel={t('home.openProfile')} onPress={() => router.navigate('/(tabs)/profile')} style={({ pressed }) => [styles.avatarButton, pressed && styles.pressed]}>
+          <View style={styles.avatarFrame}>
+            <Avatar id={profile?.avatar_id ?? DEFAULT_AVATAR_ID} size={52} />
+            <View pointerEvents="none" style={[styles.avatarOutline, { borderColor: tokens.homeAvatarOutline }]} />
+          </View>
+          <View style={[styles.avatarBadge, { backgroundColor: tokens.cardBackground, borderColor: tokens.screenBackground }]}>
+            <Ionicons name="settings-outline" size={12} color={tokens.cardText} />
+          </View>
+        </Pressable>
       </View>
       <Text style={[styles.intro, { color: tokens.mutedText }]}>{t('home.intro')}</Text>
 
@@ -135,7 +144,8 @@ export default function HomeScreen() {
             {finance.expenseCount === 0 ? <PanelNote>{t('home.noExpenses')}</PanelNote> : <>
               <StatRow label={t('home.expenseCount')} value={String(finance.expenseCount)} />
               {finance.percentUsed !== null && <StatRow label={t('home.budgetUsed')} value={formatPercentage(finance.percentUsed)} tone={finance.remainingCents !== null && finance.remainingCents < 0 ? 'danger' : 'normal'} />}
-              <StatRow label={t('home.topCategories')} value={finance.topCategories.map(({ category, percent }) => `${t(`expense.category.${category}`)} ${formatPercentage(percent)}`).join(' · ')} />
+              <PanelNote>{t('home.topCategories')}</PanelNote>
+              {finance.topCategories.map(({ category, percent }) => <StatRow key={category} label={t(`expense.category.${category}`)} value={formatPercentage(percent)} />)}
             </>}
           </DashboardPanel>
 
@@ -193,7 +203,9 @@ const styles = StyleSheet.create({
   brandName: { ...typography.sectionTitle, color: colors.textPrimary, letterSpacing: -0.5 },
   eyebrow: { ...typography.label, color: colors.brandCyan, letterSpacing: 2, marginBottom: spacing.space2 },
   greetingRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3 },
+  avatarButton: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' }, pressed: { opacity: 0.8 },
   avatarFrame: { width: 52, height: 52, borderRadius: 26, overflow: 'hidden' },
+  avatarBadge: { position: 'absolute', right: 0, bottom: 0, width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center', justifyContent: 'center' },
   avatarOutline: { ...StyleSheet.absoluteFill, borderRadius: 26, borderWidth: 1.5 },
   greeting: { ...typography.display, color: colors.textPrimary, lineHeight: 38, flex: 1 },
   intro: { ...typography.body, color: colors.textSecondary, marginTop: spacing.space2, marginBottom: spacing.space6 },

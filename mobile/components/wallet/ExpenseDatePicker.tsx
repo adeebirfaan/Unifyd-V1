@@ -7,7 +7,7 @@ import { isValidISODate, localDateISO } from '@/lib/expenseForm';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
-export function ExpenseDatePicker({ value, onChange, error }: { value: string; onChange: (date: string) => void; error?: string }) {
+export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle }: { value: string; onChange: (date: string) => void; error?: string; label?: string; pickerTitle?: string }) {
   const { tokens } = useAppearance();
   const { language, t } = useI18n();
   const initial = isValidISODate(value) ? new Date(`${value}T12:00:00`) : new Date();
@@ -17,7 +17,7 @@ export function ExpenseDatePicker({ value, onChange, error }: { value: string; o
   const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(month);
   const selectedLabel = isValidISODate(value)
     ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(initial)
-    : t('expense.date');
+    : (label ?? t('expense.date'));
   const leading = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const cells = Array.from({ length: leading + days }, (_, index) => index < leading ? null : index - leading + 1);
@@ -28,8 +28,8 @@ export function ExpenseDatePicker({ value, onChange, error }: { value: string; o
   }
 
   return <View style={styles.field}>
-    <Text style={[styles.label, { color: tokens.cardText }]}>{t('expense.date')}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${t('expense.date')}: ${selectedLabel}`} onPress={() => setVisible(true)} style={[styles.control, { backgroundColor: tokens.cardElevated, borderColor: error ? tokens.cardErrorText : tokens.border }]}>
+    <Text style={[styles.label, { color: tokens.cardText }]}>{label ?? t('expense.date')}</Text>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label ?? t('expense.date')}: ${selectedLabel}`} onPress={() => setVisible(true)} style={[styles.control, { backgroundColor: tokens.cardElevated, borderColor: error ? tokens.cardErrorText : tokens.border }]}>
       <Text style={[styles.controlText, { color: tokens.cardText }]}>{selectedLabel}</Text>
       <Ionicons name="calendar-outline" size={21} color={tokens.brandCyan} />
     </Pressable>
@@ -39,7 +39,7 @@ export function ExpenseDatePicker({ value, onChange, error }: { value: string; o
         <Pressable style={[styles.scrim, { backgroundColor: tokens.modalScrim }]} onPress={() => setVisible(false)} accessibilityLabel={t('expense.closeDate')} />
         <View style={[styles.calendar, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
           <View style={styles.header}>
-            <Text style={[styles.heading, { color: tokens.cardText }]}>{t('expense.datePickerTitle')}</Text>
+            <Text style={[styles.heading, { color: tokens.cardText }]}>{pickerTitle ?? t('expense.datePickerTitle')}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel={t('expense.closeDate')} onPress={() => setVisible(false)} style={styles.iconButton}><Ionicons name="close" size={22} color={tokens.cardText} /></Pressable>
           </View>
           <View style={styles.monthRow}>

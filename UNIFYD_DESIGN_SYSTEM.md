@@ -56,6 +56,20 @@ The primary colour pair is sampled from the supplied Unifyd logo.
 - Use semantic colours only for status; never rely on colour alone to convey meaning.
 - Keep the interface predominantly neutral so the Unifyd gradient remains distinctive.
 
+### Approved Dark and Light appearance
+
+- Dark is the default saved appearance and retains the approved colours, component styling, layout, and interactions above.
+- Light uses a cool off-white `screenBackground` (`#F7F8FA`). Text and icons directly on that background use accessible dark `screenText`, `mutedText`, and `pageAccent` values.
+- Cards, input surfaces, selection sheets, and bottom navigation remain dark in both modes. Their current borders, light text, icons, radii, and spacing remain in place.
+- The floating blue Add button and the Unifyd blue-to-cyan gradient remain unchanged in both modes.
+- Use semantic theme tokens such as `screenBackground`, `screenText`, `mutedText`, `cardBackground`, `cardText`, `border`, and `navigationBackground`. System appearance follows the device setting; the user's saved choice takes precedence.
+- The light reference image informs only the page/background feeling. Do not copy its branding, content, or layout.
+- On Light pages, the white Edit Profile button uses a dark ink icon matching its text. The Home greeting avatar has a subtle circular outline; the Dark outline stays low contrast. These refinements do not change the avatar art, dimensions, or layout.
+- Profile Sign out is a filled destructive red button with white icon and text in both appearances. Its existing size, shape, spacing, and action stay the same.
+- English and Bahasa Melayu are the supported interface languages. Onboarding collects the initial choice; Settings is the central place to change it. Fixed interface copy and accessible labels use the central translation catalogue, while personal data and official UMPSA names stay as entered.
+- The dark Settings card presents Appearance and Language as separate compact rows, each showing its saved value and a chevron. Tapping a row reveals radio choices below it; tapping again closes it. A successful choice saves immediately, applies immediately, and collapses the section. A failed save leaves the section open with a translated error. The card stays dark against the Light page background.
+- Settings places a separate Legal card below preferences, with direct Privacy Policy and Terms of Use rows. Each page uses the existing account heading pattern, a readable dark content card, and the same Light or Dark page background. Legal information is available in English and Bahasa Melayu and describes the academic prototype without compliance claims.
+
 ## 5. Typography
 
 Use the platform’s clear sans-serif typeface (for example Inter, if configured) with the following hierarchy:
@@ -195,6 +209,12 @@ Every student has a personal visual identity through an **original illustrated a
 - Use SVG/vector assets where possible for a sharp appearance and small app size.
 
 ## 10. Screen-specific direction
+
+### Native task reminders
+
+- Android uses a 96×96 transparent white Unifyd mark as the small system notification icon, a separate full-colour Unifyd mark as the large icon, and `brandBlue` (`#007AFB`) where Android permits accent colour.
+- Use the single `unifyd-task-reminders` Android channel with a concise translated name and description. Reminder titles and bodies stay brief and contain only the task title and due-time message.
+- Android and iOS control the notification layout. iOS keeps its normal app icon and notification presentation; web does not deliver local reminders. Native icon changes require a newly installed Android build and are not represented by Expo Go.
 
 | Module | Visual focus |
 |---|---|

@@ -79,7 +79,7 @@ test('dashboard deck shows verified facts, a labelled AI summary, and opens each
 
   await showCard(page, 'Money');
   const money = front(page, 'money');
-  for (const text of ['RM 150.00', '2Expenses this month', '30%Budget used', 'Top spending', 'Food80%', 'Transport20%']) await expect(money).toContainText(text);
+  for (const text of ['RM 150.00', '2 expenses', '30% of budget', 'Top spending', 'Food80%', 'Transport20%']) await expect(money).toContainText(text);
   await showCard(page, 'Studies');
   const studies = front(page, 'studies');
   for (const text of ['2Pending', '1Ongoing', '1Overdue', '1Due in 7 days', 'Completed in 7 days1', 'E2E Lab report', 'BCS2233']) await expect(studies).toContainText(text);
@@ -205,15 +205,15 @@ test('the greeting follows the local time of day', async ({ page }) => {
   const today = localDate(new Date());
   await page.clock.setFixedTime(new Date(`${today}T08:00:00+08:00`));
   await signIn(page);
-  await expect(page.getByText(/^Good morning, /)).toBeVisible();
+  await expect(page.getByText(/^Good morning,\s/)).toBeVisible();
   await page.clock.setFixedTime(new Date(`${today}T15:00:00+08:00`));
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('tab', { name: 'Home' }).click();
-  await expect(page.getByText(/^Good afternoon, /)).toBeVisible();
+  await expect(page.getByText(/^Good afternoon,\s/)).toBeVisible();
   await page.clock.setFixedTime(new Date(`${today}T21:00:00+08:00`));
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('tab', { name: 'Home' }).click();
-  await expect(page.getByText(/^Good evening, /)).toBeVisible();
+  await expect(page.getByText(/^Good evening,\s/)).toBeVisible();
 });
 
 test('the centre button opens quick actions, and the avatar opens Profile', async ({ page }) => {
@@ -229,12 +229,12 @@ test('the centre button opens quick actions, and the avatar opens Profile', asyn
   const sheet = page.getByTestId('quick-actions-sheet');
   const open = page.getByRole('button', { name: 'Open quick actions' });
   await open.click();
-  await expect(page.getByRole('button', { name: 'Close quick actions' }).first()).toBeVisible();
+  await expect(page.getByTestId('quick-fab')).toHaveAttribute('aria-label', 'Close quick actions');
   for (const name of ['Add expense', 'Scan receipt', 'Add task', 'Log mood']) await expect(sheet.getByRole('button', { name })).toBeVisible();
 
   // The × closes it again.
-  // The first match is the × in the tab bar; the second is the dimmed background.
-  await page.getByRole('button', { name: 'Close quick actions', exact: true }).first().click();
+  // The × is the raised centre button itself.
+  await page.getByTestId('quick-fab').click();
   await expect(open).toBeVisible();
 
   const go = async (action: string, url: RegExp) => {
@@ -312,4 +312,35 @@ test('students can choose up to four quick-action shortcuts, saved for next time
   await expect(sheet.getByText('4 of 4 selected')).toBeVisible();
   await sheet.getByRole('button', { name: 'Done' }).click();
   for (const name of ['Add expense', 'Scan receipt', 'Add task', 'Log mood']) await expect(sheet.getByRole('button', { name })).toBeVisible();
+});
+
+test('module card colours can be changed and are remembered; Overview keeps its gradient', async ({ page }) => {
+  await mockDashboardData(page, fixtures);
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  await signIn(page);
+  const surface = (key: string) => front(page, key).getByTestId('card-surface');
+  const background = (key: string) => surface(key).evaluate((el) => getComputedStyle(el).backgroundColor);
+
+  // The Overview card has no colour option.
+  await expect(page.getByRole('button', { name: /card colour$/ })).toHaveCount(0);
+
+  await showCard(page, 'Money');
+  expect(await background('money')).toBe('rgb(15, 38, 32)'); // Emerald default
+  await page.getByRole('button', { name: 'Change Money card colour' }).click();
+  const picker = page.getByTestId('shade-picker');
+  await expect(picker.getByText('Money card colour')).toBeVisible();
+  await expect(picker.getByRole('radio')).toHaveCount(6);
+  await expect(picker.getByRole('radio', { name: 'Emerald' })).toHaveAttribute('aria-checked', 'true');
+  await picker.getByRole('radio', { name: 'Ocean' }).click();
+  await expect(picker.getByRole('radio', { name: 'Ocean' })).toHaveAttribute('aria-checked', 'true');
+  await picker.getByRole('button', { name: 'Done' }).click();
+  await expect(picker).toHaveCount(0);
+  await expect.poll(() => background('money')).toBe('rgb(13, 34, 48)'); // Ocean
+  // Other cards keep their own colours.
+  expect(await background('studies')).toBe('rgb(20, 27, 45)'); // Midnight default
+
+  // The choice is remembered when the app is opened again.
+  await page.goto('/');
+  await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
+  await expect.poll(() => background('money')).toBe('rgb(13, 34, 48)');
 });

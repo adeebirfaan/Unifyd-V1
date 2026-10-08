@@ -158,7 +158,9 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
 
 `Home · Wallet · [+] · Planner · Mind`
 
-- The **+** button sits in the middle slot of the bar, not floating over page content, so it never covers cards or text. It uses `brandBlue` with a white icon and is at least 44 × 44 px.
+- The bar keeps the standard iPhone safe-area spacing: 68 px plus the full home-indicator inset (an earlier trimmed version was reverted after on-device comparison with other iPhone apps).
+- The **+** is an elevated, action-focused centre FAB: a 62 px `brandBlue` circle with a 5 px ring in the page colour (a cut-out look) and a soft blue glow, rising 24 px above the bar. An empty centre slot keeps two destinations balanced on each side.
+- The FAB is layered above the quick-actions sheet so its × stays visible and tappable, and the sheet's bottom padding leaves room for it.
 - Tapping **+** slides up a dark **Quick actions** sheet above the bar (dimmed page behind it) and rotates the + into × (200 ms). Tapping ×, the dimmed area, another tab, or Android back closes it. The default shortcuts are **Add expense, Scan receipt, Add task, and Log mood**, shown as a 2 × 2 grid of tiles with an icon, title, and short hint.
 - An **Edit** text button in the sheet header turns it into a checklist of all seven shortcuts (the four above plus Set budget, Reminders, and My semester).
   - It shows an "x of 4 selected" count and keeps between one and four shortcuts, explaining in warning colour when a fifth is refused or the last is removed.
@@ -171,13 +173,26 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
 
 ### Home/dashboard
 
+- Home is tuned to fit above the fold on a typical phone (about 844 pt tall):
+  - compact top padding;
+  - a 30 px logo with the wordmark `unifyd.` (with its dot);
+  - the eyebrow sitting tight above the greeting;
+  - a 28 px greeting always on two lines ("Good evening," then the name);
+  - a 58 px avatar;
+  - a tight intro line;
+  - 404 px cards with a 14 px peek and tighter card padding.
+  The deck's dots end above the raised FAB.
 - Greeting row: time-of-day greeting with name, and the selected avatar (opens Profile).
-- **Card deck:** four equal cards (440 px tall) stacked like a deck: **Overview** in front, then **Money**, **Studies**, and **Wellbeing**.
-  - The next two cards peek out 18 px above the front card.
+- **Card deck:** four equal cards (404 px tall) stacked like a deck: **Overview** in front, then **Money**, **Studies**, and **Wellbeing**.
+  - The next two cards peek out 14 px above the front card.
   - Move with a horizontal swipe (left = next, right = previous; native paging stops at either end), by tapping a peeking edge, or with the four dots below the deck. The front card slides away to the left while the next card is already in place. The dots are buttons with a selected state, so swiping is never the only way.
   - Only the front card is interactive or visible to screen readers. Deck text is not selectable.
 - **Overview card:** the only card with the blue-to-cyan gradient, so it stays the most prominent.
   - It shows month spending with budget left and a progress bar, the next deadline, this week's mood, three summary chips (due in 7 days, overdue, check-ins), and a swipe hint.
+- **Card colours:** students can recolour each module card from six dark shades: Midnight `#141B2D`, Emerald `#0F2620`, Amethyst `#221A31`, Topaz `#2B2113`, Ocean `#0D2230`, and Graphite `#1C1C22`.
+  - Every shade has relative luminance below 0.15, a unit-tested rule, so none can outshine the Overview gradient. Overview is not customisable.
+  - The **palette** button (beside the overview button) opens a sheet of mini-card swatches with names and a tick on the current shade. A choice applies immediately and is saved on the device per account.
+  - Defaults: Money Emerald, Studies Midnight, Wellbeing Amethyst.
 - **Module cards:** deep dark shades so they never compete with Overview. Each has its icon and title, a round **back to overview** button (grid icon) in the top-right corner, its figures, and an **Open …** button pinned to the bottom.
   - **Money:** spending, budget bar, expense count, budget used, and the top 3 categories with bars.
   - **Studies:** a 2 × 2 tile grid, completed in 7 days, and the next deadline.

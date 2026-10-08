@@ -10,8 +10,8 @@ import { useI18n } from '@/providers/LanguageProvider';
 export type DeckControls = { goTo: (index: number) => void };
 export type DeckCard = { key: string; name: string; render: (controls: DeckControls) => ReactNode };
 
-export const DECK_CARD_HEIGHT = 440;
-const PEEK = 18; // visible strip of each card stacked behind the front card
+export const DECK_CARD_HEIGHT = 404;
+const PEEK = 14; // visible strip of each card stacked behind the front card
 const STACK_DEPTH = 2;
 const isWeb = Platform.OS === 'web';
 const useNative = !isWeb;
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   page: { paddingTop: PEEK * STACK_DEPTH },
   card: { height: DECK_CARD_HEIGHT, borderRadius: radius.radiusLg, overflow: 'hidden' },
   peek: { position: 'absolute', left: 0, right: 0, top: 0, height: PEEK + spacing.space2 },
-  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing.space2 },
-  dotTarget: { minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' },
+  dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing.space1 },
+  dotTarget: { minWidth: 28, minHeight: 28, alignItems: 'center', justifyContent: 'center' },
   dot: { height: 8, borderRadius: radius.radiusFull },
 });

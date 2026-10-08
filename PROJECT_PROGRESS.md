@@ -8,7 +8,7 @@
 |---|---|
 | Overall stage | Integrated dashboard and Groq summaries implemented locally |
 | Current phase | Phase 8 - Integrated dashboard and Groq summaries |
-| Current task | Add a Groq key and review live AI summaries; device check of Home and My Semester |
+| Current task | Device check of Home (AI summaries live) and My Semester |
 | Next milestone | Phase 9: evaluation, hardening, and thesis evidence |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
 | Custom ML / prediction | Not in scope |
@@ -93,7 +93,7 @@ The suite captures and restores the test profile around the run, including tempo
 | 5. Reminder notifications | In progress | Per-task offset migration and local Expo scheduling prepared | Migration review and native-device delivery tests pending |
 | 6. Mood tracking and wellness rules | In progress | Applied mood table (per project owner); private check-ins, history, 7/30-day trends, and local ideas implemented | Authenticated tests and physical-device review pending for Phase 3 |
 | 7. Receipt OCR | Complete per project owner | Protected backend, mobile capture, editable OCR review, and explicit expense save | No OCR retest in this task; prior grant and live-save status were not independently rechecked |
-| 8. Integrated dashboard and Groq summaries | In progress | Home facts panels, authenticated insights endpoint, Groq summary with validation and fallback | Live Groq output needs a key; tests use fakes |
+| 8. Integrated dashboard and Groq summaries | In progress | Home facts panels, authenticated insights endpoint, Groq summary with validation and fallback | Live Groq English/Malay summaries verified locally; phone review pending |
 | 9. Evaluation, hardening, and thesis evidence | Not started | Depends on all core phases | — |
 
 ## Current phase checklist — Phase 0
@@ -134,12 +134,20 @@ The suite captures and restores the test profile around the run, including tempo
 - Full authenticated Expo Web E2E: 14/14, including 3 new Home tests (fixture facts and navigation, AI failure, fallback and retry, real-data load).
 - A live call to a locally started server: 401 without a token. Signed in, it returned real database facts with `fallbackReason: not_configured`.
 
+**Live Groq check (same day):** With the project owner's key in the ignored `server/.env`, a local server produced accurate English and Malay summaries from temporary test records, which were then deleted. Every figure matched the facts.
+
+Probing found two Groq behaviours:
+- An occasional `json_validate_failed` reply, about 1 in 6 Malay requests. It is now retried once.
+- The free-tier tokens-per-minute limit, hit during a rapid test burst. Low reasoning effort reduces this; the app's 5-minute request spacing and the server's 10-minute cache keep normal use well below it.
+
+An early Malay reply came back in English, so the prompt now requires Malay and the validator rejects English text for Malay requests. Server tests: 24/24.
+
 **Issues or decisions:**
-- No Groq key is configured yet, so live AI wording has not been evaluated.
+- The Groq key must stay in `server/.env`. It was briefly placed in the ignored `mobile/.env`, which does not bundle it because it lacks the `EXPO_PUBLIC_` prefix, and was moved.
 - Facts are calculated on both device and server; the parity test guards against drift.
 - The Home greeting still always says "Good evening" (pre-existing).
 
-**Next action:** Add `GROQ_API_KEY` to `server/.env`, review several real summaries for accuracy and tone, then check Home on a phone in both themes.
+**Next action:** Review summaries with real student data on a phone in both languages and themes, then collect AI-summary evaluation samples for the thesis.
 
 ### 2026-10-08 — Module 7 Phase 2: seed applied and live check
 

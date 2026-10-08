@@ -365,7 +365,7 @@ sequenceDiagram
 
 **Low-mood rule:** mood ≤ 2 on at least 3 different local days in the last 7. It is defined by constants in both modules.
 
-`insight-summary.ts` builds the aggregate-only payload and calls Groq's OpenAI-compatible chat completions. It uses model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, a 15-second timeout, and a strict `json_schema` with exactly `finance`, `academic`, and `wellness` strings. Identical facts reuse a summary for 10 minutes per user. The mobile app requests a summary on first view, then at most every 5 minutes, or when the student refreshes. Without `GROQ_API_KEY`, the endpoint still returns facts with `fallbackReason: not_configured`.
+`insight-summary.ts` builds the aggregate-only payload and calls Groq's OpenAI-compatible chat completions. It uses model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, a 15-second timeout, and a strict `json_schema` with exactly `finance`, `academic`, and `wellness` strings. For gpt-oss models it sends `reasoning_effort: low` and `include_reasoning: false` to stay within free-tier token limits. A Groq `json_validate_failed` reply is retried once; rate limits and other errors are not retried. Failures log only the HTTP status and Groq error code. Malay requests must be written in Malay; a reply containing several common English words is rejected. Identical facts reuse a summary for 10 minutes per user. The mobile app requests a summary on first view, then at most every 5 minutes, or when the student refreshes. Without `GROQ_API_KEY`, the endpoint still returns facts with `fallbackReason: not_configured`.
 
 ### 7.7 Groq prompt and response controls
 

@@ -98,6 +98,17 @@ test('a factual summary is accepted', () => {
   assert.deepEqual(validateSummary(JSON.stringify(good), payload), good);
 });
 
+test('a Malay request accepts Malay text and rejects an English reply', () => {
+  const malay = {
+    finance: 'Anda telah membelanjakan RM 1,234.50 bulan ini, melebihi bajet RM 500.00 sebanyak RM 734.50.',
+    academic: 'Anda mempunyai 1 tugasan belum mula, dengan 1 tamat dalam 7 hari.',
+    wellness: 'Purata emosi anda ialah 4 dan tekanan 2 daripada 1 catatan.',
+  };
+  assert.deepEqual(validateSummary(JSON.stringify(malay), payload, 'ms'), malay);
+  assert.equal(validateSummary(JSON.stringify(good), payload, 'ms'), null);
+  assert.ok(groqMessages(payload, 'ms')[0]!.content.includes('Bahasa Melayu'));
+});
+
 test('invented numbers, unsafe language, and malformed shapes are rejected', () => {
   const reject = (change: Record<string, unknown>) => assert.equal(validateSummary(JSON.stringify({ ...good, ...change }), payload), null);
   reject({ finance: 'You have spent RM 1,300.00 this month.' });
@@ -185,4 +196,33 @@ test('Expo Web preflight is allowed for the insights endpoint', async () => {
   const response = await request(insightApp().app).options('/api/insights/generate').set('Origin', 'http://localhost:8081')
     .set('Access-Control-Request-Method', 'POST').expect(204);
   assert.equal(response.headers['access-control-allow-origin'], 'http://localhost:8081');
+});
+
+test('Groq requests retry one schema miss, never a rate limit, and use low reasoning', async () => {
+  const { requestGroqSummary, GroqError } = await import('./insight-summary.js');
+  const replies = (statuses: { status: number; code?: string }[]) => {
+    const bodies: Record<string, unknown>[] = [];
+    const fetchImpl = (async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      const next = statuses.shift()!;
+      const body = next.status === 200 ? { choices: [{ message: { content: JSON.stringify(good) } }] } : { error: { code: next.code, failed_generation: 'private facts' } };
+      return new Response(JSON.stringify(body), { status: next.status });
+    }) as typeof fetch;
+    return { fetchImpl, bodies };
+  };
+  const messages = groqMessages(payload, 'en');
+  const retry = replies([{ status: 400, code: 'json_validate_failed' }, { status: 200 }]);
+  assert.equal(await requestGroqSummary(messages, { apiKey: 'k', model: 'openai/gpt-oss-20b', fetchImpl: retry.fetchImpl }), JSON.stringify(good));
+  assert.equal(retry.bodies.length, 2);
+  assert.equal(retry.bodies[0]!.reasoning_effort, 'low');
+  assert.equal(retry.bodies[0]!.include_reasoning, false);
+
+  const limited = replies([{ status: 429, code: 'rate_limit_exceeded' }]);
+  await assert.rejects(requestGroqSummary(messages, { apiKey: 'k', model: 'openai/gpt-oss-20b', fetchImpl: limited.fetchImpl }),
+    (error: unknown) => error instanceof GroqError && error.status === 429 && !error.message.includes('private facts'));
+  assert.equal(limited.bodies.length, 1);
+
+  const other = replies([{ status: 200 }]);
+  await requestGroqSummary(messages, { apiKey: 'k', model: 'llama-3.3-70b-versatile', fetchImpl: other.fetchImpl });
+  assert.equal(other.bodies[0]!.reasoning_effort, undefined);
 });

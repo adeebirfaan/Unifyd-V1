@@ -47,7 +47,9 @@ export function groqPayload(facts: InsightFacts) {
 export function groqMessages(payload: ReturnType<typeof groqPayload>, language: SummaryLanguage) {
   const system = [
     'You write a short, neutral, supportive summary of a university student\'s own recorded data for a personal dashboard.',
-    `Write in ${language === 'ms' ? 'Bahasa Melayu' : 'English'}, addressing the student as "you".`,
+    language === 'ms'
+      ? 'Write every field entirely in Bahasa Melayu (Malaysian Malay), addressing the student as "anda". The data labels are English, but your sentences must not be.'
+      : 'Write every field in English, addressing the student as "you".',
     'Return JSON with exactly three fields: finance, academic, wellness. Each is one or two plain sentences, at most 220 characters.',
     'Rules:',
     '- Describe only the facts provided. Never invent, estimate, round differently, or calculate new numbers; copy numbers exactly as given.',
@@ -57,9 +59,10 @@ export function groqMessages(payload: ReturnType<typeof groqPayload>, language: 
     '- For wellbeing, describe self-reported levels gently and neutrally. If repeatedLowMoodDays is true, acknowledge it kindly without alarm.',
     '- No greetings, emojis, links, or markdown.',
   ].join('\n');
+  const request = language === 'ms' ? 'Tulis ringkasan dalam Bahasa Melayu sahaja. Data:\n' : 'Data:\n';
   return [
     { role: 'system' as const, content: system },
-    { role: 'user' as const, content: JSON.stringify(payload) },
+    { role: 'user' as const, content: request + JSON.stringify(payload) },
   ];
 }
 
@@ -102,8 +105,11 @@ function allowedNumbers(payload: ReturnType<typeof groqPayload>): Set<string> {
   return allowed;
 }
 
+// Common English words that should not appear in a Bahasa Melayu summary.
+const ENGLISH_MARKERS = /\b(you|your|the|and|this|have|over|last|with|tasks?)\b/gi;
+
 /** Returns a safe summary, or null when the response must fall back to facts only. */
-export function validateSummary(raw: string, payload: ReturnType<typeof groqPayload>): InsightSummary | null {
+export function validateSummary(raw: string, payload: ReturnType<typeof groqPayload>, language: SummaryLanguage = 'en'): InsightSummary | null {
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { return null; }
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null;
@@ -118,6 +124,7 @@ export function validateSummary(raw: string, payload: ReturnType<typeof groqPayl
     const trimmed = text.trim().replace(/\s+/g, ' ');
     if (!trimmed || trimmed.length > MAX_SECTION_LENGTH) return null;
     if (BLOCKED.some((pattern) => pattern.test(trimmed))) return null;
+    if (language === 'ms' && (trimmed.match(ENGLISH_MARKERS)?.length ?? 0) >= 2) return null;
     // Thousands separators are removed; every remaining number must be a supplied fact.
     const numbers = trimmed.replace(/(\d),(?=\d{3}\b)/g, '$1').match(/\d+(?:\.\d+)?/g) ?? [];
     if (numbers.some((number) => !allowed.has(number) && !allowed.has(String(Number(number))))) return null;
@@ -128,29 +135,49 @@ export function validateSummary(raw: string, payload: ReturnType<typeof groqPayl
 
 export type GroqConfig = { apiKey: string; model: string; fetchImpl?: typeof fetch; timeoutMs?: number };
 
+/** A provider failure carrying only the HTTP status and Groq error code, never content or keys. */
+export class GroqError extends Error {
+  constructor(public readonly status: number, public readonly code: string) { super(`Groq request failed (${status} ${code}).`); }
+}
+
 /** Calls Groq's OpenAI-compatible endpoint with a strict JSON schema; returns the raw message content. */
 export async function requestGroqSummary(messages: ReturnType<typeof groqMessages>, config: GroqConfig): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), config.timeoutMs ?? 15_000);
+  // Low reasoning effort keeps gpt-oss replies fast and within free-tier token limits.
+  const reasoning = config.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {};
+  const attempt = async () => {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.timeoutMs ?? 15_000);
+    try {
+      const response = await (config.fetchImpl ?? fetch)('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: config.model,
+          messages,
+          temperature: 0.2,
+          max_completion_tokens: 1024,
+          ...reasoning,
+          response_format: { type: 'json_schema', json_schema: { name: 'dashboard_summary', strict: true, schema: SUMMARY_SCHEMA } },
+        }),
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null) as { error?: { code?: unknown } } | null;
+        throw new GroqError(response.status, typeof body?.error?.code === 'string' ? body.error.code : 'unknown');
+      }
+      const body = await response.json() as { choices?: { message?: { content?: unknown } }[] };
+      const content = body.choices?.[0]?.message?.content;
+      if (typeof content !== 'string') throw new GroqError(response.status, 'no_content');
+      return content;
+    } finally {
+      clearTimeout(timeout);
+    }
+  };
   try {
-    const response = await (config.fetchImpl ?? fetch)('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: config.model,
-        messages,
-        temperature: 0.2,
-        max_completion_tokens: 1024,
-        response_format: { type: 'json_schema', json_schema: { name: 'dashboard_summary', strict: true, schema: SUMMARY_SCHEMA } },
-      }),
-      signal: controller.signal,
-    });
-    if (!response.ok) throw new Error(`Groq request failed (${response.status}).`);
-    const body = await response.json() as { choices?: { message?: { content?: unknown } }[] };
-    const content = body.choices?.[0]?.message?.content;
-    if (typeof content !== 'string') throw new Error('Groq returned no content.');
-    return content;
-  } finally {
-    clearTimeout(timeout);
+    return await attempt();
+  } catch (error) {
+    // The model occasionally misses the strict schema; one retry usually succeeds. Rate limits are not retried.
+    if (error instanceof GroqError && error.code === 'json_validate_failed') return attempt();
+    throw error;
   }
 }

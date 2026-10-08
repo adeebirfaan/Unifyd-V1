@@ -4,7 +4,7 @@ import multer from 'multer';
 
 import { DEFAULT_TIME_ZONE, isValidTimeZone } from './insight-facts.js';
 import type { InsightFacts } from './insight-facts.js';
-import { groqMessages, groqPayload, validateSummary } from './insight-summary.js';
+import { GroqError, groqMessages, groqPayload, validateSummary } from './insight-summary.js';
 import type { InsightSummary, SummaryLanguage } from './insight-summary.js';
 import { parseReceiptText } from './receipt-parser.js';
 
@@ -143,11 +143,13 @@ export function createApp({ verifyToken, detectText, insights }: OcrDependencies
     let raw: string;
     try {
       raw = await insights.summarize(groqMessages(payload, language));
-    } catch {
+    } catch (error) {
       // Provider errors stay server-side; the student still receives verified facts.
+      // Only the status and error code are logged, never facts, summaries, tokens, or keys.
+      console.warn(`AI summary unavailable: ${error instanceof GroqError ? `${error.status} ${error.code}` : 'request failed'}`);
       return send(null, 'unavailable');
     }
-    const summary = validateSummary(raw, payload);
+    const summary = validateSummary(raw, payload, language);
     if (!summary) return send(null, 'invalid_response');
     summaryCache.set(userId, { key: cacheKey, summary, at: now.getTime() });
     return send(summary, null);

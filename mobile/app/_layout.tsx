@@ -1,10 +1,11 @@
-import { DarkTheme, Stack, ThemeProvider } from 'expo-router';
+import { DarkTheme, Stack, ThemeProvider, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { colors, spacing, typography } from '@/constants/theme';
+import { clearTaskReminders, observeTaskReminderTaps, syncTaskReminders } from '@/lib/taskReminders';
 import { AppearanceProvider, useAppearance } from '@/providers/AppearanceProvider';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { LanguageProvider, useI18n } from '@/providers/LanguageProvider';
@@ -52,8 +53,14 @@ function RootNavigator() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="edit-profile" />
         <Stack.Screen name="add-expense" />
+        <Stack.Screen name="scan-receipt" />
+        <Stack.Screen name="set-budget" />
         <Stack.Screen name="expense-detail" />
         <Stack.Screen name="edit-expense" />
+        <Stack.Screen name="add-task" />
+        <Stack.Screen name="task-detail" />
+        <Stack.Screen name="edit-task" />
+        <Stack.Screen name="my-semester" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="privacy-policy" />
         <Stack.Screen name="terms-of-use" />
@@ -78,9 +85,33 @@ function AppTheme() {
   return (
     <ThemeProvider value={navigationTheme}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
+      <TaskReminderCoordinator />
       <RootNavigator />
     </ThemeProvider>
   );
+}
+
+function TaskReminderCoordinator() {
+  const { gate, session } = useAuth();
+  const { language } = useI18n();
+  const userId = session?.user.id;
+
+  useEffect(() => {
+    if (gate === 'signedOut') { void clearTaskReminders(); return; }
+    if (gate !== 'ready' || !userId) return;
+    void syncTaskReminders(userId, language);
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void syncTaskReminders(userId, language);
+    });
+    let active = true;
+    let stopObserving: () => void = () => undefined;
+    void observeTaskReminderTaps(userId, (taskId) => router.push({ pathname: '/task-detail', params: { id: taskId } }))
+      .then((stop) => { if (active) stopObserving = stop; else stop(); })
+      .catch(() => undefined);
+    return () => { active = false; appState.remove(); stopObserving(); };
+  }, [gate, userId, language]);
+
+  return null;
 }
 
 const styles = StyleSheet.create({

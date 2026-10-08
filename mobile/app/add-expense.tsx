@@ -1,5 +1,5 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -12,6 +12,7 @@ import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
 export default function AddExpenseScreen() {
+  const { budgetPeriod } = useLocalSearchParams<{ budgetPeriod?: string }>();
   const { session } = useAuth();
   const { tokens } = useAppearance();
   const { t } = useI18n();
@@ -21,7 +22,7 @@ export default function AddExpenseScreen() {
     try {
       const { error } = await supabase.from('expenses').insert({ user_id: session.user.id, ...input });
       if (error) return false;
-      router.replace({ pathname: '/(tabs)/wallet', params: { saved: '1' } });
+      router.replace({ pathname: '/(tabs)/wallet', params: { saved: '1', budgetPeriod: budgetPeriod === 'weekly' ? 'weekly' : 'monthly' } });
       return true;
     } catch {
       return false;

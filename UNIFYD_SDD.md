@@ -60,7 +60,7 @@ The mobile application retains Expo Router navigation and uses the following fun
 | Planner screens | Task list, task detail, add/edit task, reminder history/settings access |
 | Mind screens | Mood entry, mood history, wellness suggestion |
 | Home/Dashboard screens | Cross-module summary panels and detailed-module navigation |
-| Profile screens | Personal data, reminder preference, permissions guidance, and logout |
+| Profile screens | Personal data, reminder preference, appearance settings, permissions guidance, and logout |
 
 Existing screens and folders must be preserved. New routes or components may be added only where required by the approved phase; unrelated routes must not be moved, renamed, duplicated, or removed.
 
@@ -83,6 +83,20 @@ Existing screens and folders must be preserved. New routes or components may be 
 | Service modules | Supabase client, API client, notification service | Centralise provider communication and return typed/normalised results |
 | Utility modules | Currency/date formatting, calculation helpers, validation | Remain deterministic and easy to test |
 
+### 4.4 Appearance preference
+
+The app keeps the approved Dark palette unchanged. A semantic theme layer provides `screenBackground`, `screenText`, `mutedText`, `cardBackground`, `cardText`, `border`, `navigationBackground`, and brand tokens. Light changes the page to cool off-white and adjusts text and icons directly on that page; cards and bottom navigation retain their dark styling.
+
+Profile Settings offers `system`, `light`, and `dark` in a collapsed-by-default Appearance row that shows the current selection. Expanding reveals the existing descriptions and radio choices. The choice is stored in `public.profiles.theme_preference` using the authenticated student's existing owner-scoped update path. The profile is refreshed after saving and the theme changes immediately; successful saves collapse the row, while failures keep it open. `system` follows the device appearance; the saved database default is `dark`. Semantic action tokens keep the white Edit Profile control legible, give the Home avatar a mode-appropriate circular outline, and style Sign out as a filled red action with white foreground.
+
+### 4.5 Language preference
+
+Onboarding offers the initial `en` (English) or `ms` (Bahasa Melayu) choice. Settings is the central editing location: its collapsed-by-default Language row shows the current value and expands to two radio choices. `LanguageProvider.saveLanguage()` writes `language_preference` to the authenticated user's existing `public.profiles` row; `AuthProvider.refreshProfile()` reloads it after a successful save, so Settings and the rest of the interface translate without restarting. A successful save collapses the section; a failure leaves it open with a translated error. Edit Profile contains identity, academic details, avatar, and reminder timing only. Missing or invalid language values fall back to English. `mobile/constants/i18n.ts` is the typed central source of translated interface strings and interpolation; `LanguageProvider` supplies the current language and translator to screens and shared controls. User-entered data, email addresses, and official UMPSA institution, faculty, and programme names are not translated. The existing applied profile preferences migration already provides this column; no additional migration is needed.
+
+### 4.6 Legal information pages
+
+Settings has a separate Legal card with direct links to protected `/privacy-policy` and `/terms-of-use` routes. Both routes reuse `mobile/components/profile/LegalPage.tsx` for the account heading, back action, October 2026 update line, and scrollable sections. All headings and copy use typed keys in `mobile/constants/i18n.ts` for English and Bahasa Melayu. The pages describe the academic prototype and planned optional features accurately, avoid guarantees or certifications, and do not collect consent or write to the database. They use the existing semantic Light and Dark tokens; no theme behavior or database migration changes are required.
+
 ## 5. Backend integration design
 
 ### 5.1 Backend responsibilities
@@ -100,7 +114,7 @@ Standard user-owned CRUD data may use Supabase directly from the mobile app, pro
 
 | Endpoint | Method | Caller | Purpose | Success response |
 |---|---|---|---|---|
-| `/api/health` | GET | App/developer | Confirm backend availability | Service status |
+| `/health` | GET | App/developer | Confirm backend availability | Non-sensitive service status |
 | `/api/ocr/receipt` | POST | Authenticated app | Process a selected receipt image | Editable merchant, date, amount, raw extracted text/status |
 | `/api/insights/generate` | POST | Authenticated app | Generate a validated descriptive summary from verified facts | Module summaries, provider/fallback status |
 
@@ -113,6 +127,10 @@ Standard user-owned CRUD data may use Supabase directly from the mobile app, pro
 - Provider API keys are stored only in backend environment variables.
 - Backend errors must be converted into short, safe, user-facing error codes/messages; raw provider errors and secrets must not be exposed.
 
+The first receipt OCR backend phase lives in `server/`. `POST /api/ocr/receipt` verifies the supplied access token with Supabase Auth `getUser(token)` using the project URL and publishable key before parsing an upload. It accepts exactly one in-memory `image` part (JPEG, PNG, or WEBP, at most 5 MiB), checks both declared MIME type and file signature, and sends the bytes to Google Vision `documentTextDetection`. The official client uses local Google Application Default Credentials; no service-account JSON key is stored in the repository. The response is a review draft with nullable merchant, ISO purchase date, nullable positive total, raw detected text, and non-sensitive warnings. No file, OCR result, or expense is saved. Provider and authorization failures return safe error codes without receipt contents or credentials.
+
+Receipt Phase 2 adds a protected Expo Router `/scan-receipt` route from Wallet. Expo ImagePicker offers camera and photo library selection. The app shows the selected image, rejects known unsupported types and images larger than 5 MiB, obtains the current Supabase session token, and sends one `image` FormData part to `${EXPO_PUBLIC_OCR_API_URL}/api/ocr/receipt`. It shows the returned fields, warnings, and detected text as a read-only, unsaved draft, with a link to the existing manual expense flow. A 45-second request timeout and safe translated errors cover unavailable, unauthorized, oversized, and invalid uploads. Web uses the picker-provided `File`; native uses the selected local file URI. The backend allows scoped browser preflight origins and has an optional private-network listener for physical-device development; bearer verification and upload validation are unchanged. Editable review, storage, and saving an OCR expense remain future work.
+
 ## 6. Data design
 
 ### 6.1 Entity relationship overview
@@ -124,7 +142,7 @@ erDiagram
     PROFILE ||--o{ BUDGET : owns
     PROFILE ||--o{ TASK : owns
     PROFILE ||--o{ REMINDER : owns
-    PROFILE ||--o{ MOOD_LOG : owns
+    PROFILE ||--o{ MOOD_ENTRY : owns
     TASK ||--o{ REMINDER : schedules
     RECEIPT ||--o| EXPENSE : confirms_as
 
@@ -137,13 +155,16 @@ erDiagram
         text reminder_preference
     }
     EXPENSE {
-        uuid expense_id PK
+        uuid id PK
         uuid user_id FK
         text title
-        decimal amount
+        numeric amount
         text category
         date expense_date
         text notes
+        text entry_source
+        timestamptz created_at
+        timestamptz updated_at
     }
     RECEIPT {
         uuid receipt_id PK
@@ -178,12 +199,15 @@ erDiagram
         timestamp scheduled_at
         text delivery_status
     }
-    MOOD_LOG {
-        uuid mood_log_id PK
+    MOOD_ENTRY {
+        uuid id PK
         uuid user_id FK
-        int mood_score
+        smallint mood_level
+        smallint stress_level
         text note
-        date log_date
+        timestamptz recorded_at
+        timestamptz created_at
+        timestamptz updated_at
     }
 ```
 
@@ -192,12 +216,40 @@ erDiagram
 | Table | Key fields | Constraints and rules |
 |---|---|---|
 | `profiles` | `user_id`, name, university, programme, year, reminder preference | `user_id` links one-to-one with Supabase Auth user; essential profile data is required before protected use |
-| `expenses` | `expense_id`, `user_id`, title, amount, category, `expense_date` | Amount must be greater than zero; category must be an approved value |
+| `expenses` | `id`, `user_id`, `title`, `amount`, `category`, `expense_date`, `notes`, `entry_source`, `created_at`, `updated_at` | `id` is generated; `user_id` references `auth.users` with cascade delete; amount is positive `numeric(12,2)`; category and source use checks; date and timestamps have defaults |
 | `receipts` | `receipt_id`, `user_id`, image reference, extracted fields, OCR status | OCR output is draft/review data until confirmed as an expense |
-| `budgets` | `budget_id`, `user_id`, amount, period type/start/end | Amount must be greater than zero; period type is weekly or monthly |
-| `tasks` | `task_id`, `user_id`, title, subject, deadline, priority, status | Status is Pending, Ongoing, or Completed; title/subject/deadline required |
+| `budgets` | `id`, `user_id`, `amount`, `period_type`, `period_start`, `created_at`, `updated_at` | Auth-owned with cascade delete; positive `numeric(12,2)` amount; weekly starts Monday and monthly starts on day 1; unique (`user_id`, `period_type`, `period_start`) |
+| `tasks` | `id`, `user_id`, `title`, `subject`, `description`, `deadline`, `priority`, `status`, `completed_at`, `reminder_offset_minutes`, `created_at`, `updated_at` | Auth-owned with cascade delete; title/subject/deadline required; priority and status constrained; completion time matches completed status; nullable reminder offset permits 0, 60, or 1440 minutes |
+| `catalog_courses` | `id`, `academic_session`, `semester`, `faculty_code`, `campus`, `course_code`, `course_name`, `credit_hours`, `source_label`, `is_active`, timestamps | Curated reference only; nonblank identifying fields; semester 1 or 2; optional positive credit hours; unique session/semester/campus/course code, including null campus; authenticated students read only active rows |
+| `student_semester_courses` | `id`, `user_id`, `academic_session`, `semester`, `catalog_course_id`, `course_code`, `course_name`, `credit_hours`, `is_custom`, timestamps | Auth-owned with cascade delete; required session/name, semester 1 or 2, optional positive credit hours; non-custom rows link to a catalogue course and custom rows do not |
 | `reminders` | `reminder_id`, `user_id`, `task_id`, scheduled time, status | Deleted/cancelled when the task is deleted or completed |
-| `mood_logs` | `mood_log_id`, `user_id`, mood score, note, `log_date` | Unique constraint on (`user_id`, `log_date`) enforces one mood entry per day |
+| `mood_entries` | `id`, `user_id`, `mood_level`, `stress_level`, `note`, `recorded_at`, `created_at`, `updated_at` | Auth-owned with cascade delete; both self-reported scales constrained to 1–5; optional note cannot be blank; multiple check-ins per day are permitted |
+
+The applied Module 6 Phase 1 migration grants authenticated students column-scoped SELECT, INSERT, and UPDATE plus table-level DELETE, with owner-only RLS on all four operations. The app inserts only `user_id`, `mood_level`, `stress_level`, and nullable `note`; the database supplies IDs and timestamps. Students cannot update ownership, IDs, or timestamps. An index on `(user_id, recorded_at DESC)` supports private recent history. A private security-invoker trigger maintains `updated_at`. The values are self-reported wellbeing check-ins, not clinical measurements or diagnoses. AI insights and predictive features remain future phases.
+
+The Phase 2 expense migration grants authenticated students only SELECT, DELETE, and column-scoped INSERT/UPDATE for manual expense fields. It never grants UPDATE on `user_id`, `entry_source`, IDs, or timestamps. Separate owner-only RLS policies cover SELECT, INSERT, UPDATE, and DELETE using `auth.uid() = user_id`; an index on `(user_id, expense_date DESC)` supports history and cascade deletion. A private, security-invoker trigger sets `updated_at` server-side. `entry_source` defaults to `manual`. The separate Phase 3 migration adds only authenticated INSERT permission for `entry_source`, allowing a reviewed OCR expense to be labelled `ocr` while retaining the same owner-only RLS and prohibiting source updates. That grant is prepared locally and has not been applied. Receipt images, extraction fields, and merchants are not stored in `expenses`.
+
+The Phase 2 manual entry client uses the existing authenticated Supabase session and owner-only RLS. The protected `/add-expense` route validates title, positive decimal amount (maximum two fractional digits), category, and a local calendar date before inserting `user_id`, trimmed `title`, numeric `amount`, category code, ISO `expense_date`, and nullable `notes`. The client omits `entry_source`, leaving the database default `manual`. A failed insert retains the form and displays a safe translated error.
+
+Wallet queries `public.expenses` with the current session's `user_id` and only the fields needed for history. It orders by `expense_date DESC`, then `created_at DESC`, with `id` as a stable tie-breaker, and pages through the result so the summary covers every saved expense rather than only the first server page. Existing owner-only RLS remains the database security boundary. A virtualized list displays translated category labels, title, localized date, RM amount, and an optional single-line note. The summary totals saved amounts in integer cents to avoid accumulation drift from decimal currency. Focus after a successful insert and pull-to-refresh reload the rows and total. Loading, empty, and safe retry states are explicit.
+
+In Phase 4, a history row opens a protected Expense Detail route carrying only its record ID. Detail and Edit each fetch that single ID under the current session's `user_id`; RLS also restricts visibility. An inaccessible or missing row resolves to a safe not-found state. Add and Edit share the same field components and local validation. Edit updates only `title`, `amount`, `category`, `expense_date`, and `notes`, with an ID and current-user filter; the database retains ownership, source, and server-managed timestamps. Delete requires a translated confirmation showing the title and RM amount, then deletes only the selected ID under the current user. Update and delete require a returned row before reporting success. Both mutations return to Wallet, whose focus query refreshes the total and history. Budgets, OCR, receipts, charts, and AI remain outside this sub-phase.
+
+The Module 4 budget data-foundation migration creates `public.budgets` without changing the expense table. The budget row stores one positive amount and a canonical start date per weekly or monthly period. Named checks enforce Monday for weekly starts and day 1 for monthly starts; a named unique constraint prevents duplicate budgets for one user, type, and start. The table uses narrow authenticated column grants, owner-only SELECT/INSERT/UPDATE/DELETE RLS policies, an index on (`user_id`, `period_start DESC`), and a private security-invoker trigger for `updated_at`. The project owner reports this migration has been applied in Supabase.
+
+The protected `/set-budget` route calculates the current local calendar week (Monday through Sunday) or month (first through last day) without UTC date conversion. It defaults to monthly, reads the selected period's owner-scoped row, and prefills the amount when found. Local validation requires a positive decimal with at most two fractional digits. Saving inserts only `user_id`, `amount`, `period_type`, and `period_start` for a new row; an existing row updates only `amount`, with ID, owner, type, and start filters. Separate insert/update operations respect the migration's column grants. Database RLS and the unique constraint remain the security and duplicate boundaries. Success returns to Wallet and reloads the selected current period.
+
+In Phase 3, Wallet's period selector changes its route parameter and reloads both the owner-scoped current-period budget and all owned expenses with `expense_date` between the local start and end dates, inclusive. Results are paged so calculations do not silently stop at the API page limit. `mobile/lib/budgetSummary.ts` sums `numeric(12,2)` amounts in integer cents, groups the five stored categories, calculates budget use and the remaining or overspent amount, and divides spending by elapsed calendar days in the selected period with a minimum divisor of one. Older expenses remain in the separate all-time history but do not enter period metrics. A dark presentation card uses semantic cyan for a normal balance and destructive red for overspending, with translated empty states and category rows. Focus, period switches, Add/Edit/Delete returns, budget saves, and pull-to-refresh reload the period query. Expense routes carry the selected period back to Wallet. No migration, RPC, chart, or forecast was added.
+
+The Module 5 Phase 1 migration creates `public.tasks` only. It uses a generated UUID and an Auth-user foreign key with cascade deletion. Nonblank title and subject checks, a required `timestamptz` deadline, `low`/`medium`/`high` priority, and `pending`/`ongoing`/`completed` status define valid task records. New tasks default to medium priority and pending status; a named check requires `completed_at` exactly for completed tasks. There is no future-only deadline check, so overdue tasks remain representable. Authenticated users receive SELECT and DELETE plus column-scoped INSERT/UPDATE; ownership, IDs, and timestamps cannot be updated by clients. Owner-only RLS policies cover all four operations. An index on `(user_id, status, deadline)` supports status sections ordered by deadline, and a private security-invoker trigger maintains `updated_at`. The project owner reports this migration has been applied in Supabase.
+
+The Module 7 Phase 1 migration, pending review and execution, adds `public.catalog_courses` and `public.student_semester_courses` without changing `tasks` or Planner. The curated catalogue has named content and positive-credit checks, a two-semester check, and `UNIQUE NULLS NOT DISTINCT` across session, semester, campus, and course code so unknown-campus duplicates are blocked. Students get SELECT on active catalogue rows only; imports and curation require a later trusted workflow. Student choices use a nullable catalogue FK with `ON DELETE SET NULL`, a saved course name/code, and a check tying `is_custom` to the presence of the FK. A private BEFORE UPDATE trigger converts a linked selection to a custom snapshot when its catalogue entry is removed, allowing the FK action and check to coexist. Student choices have narrow authenticated column grants, owner-only RLS for all four operations, and an index on `(user_id, academic_session, semester, created_at ASC)`. Both tables have separate private security-invoker `updated_at` triggers with empty search paths and no direct client EXECUTE. There is no database credit-hour maximum. The catalogue is a convenience reference, not official UMPSA registration; availability, sections, capacity, and final registration remain subject to UMPSA/faculty processes. A future UI may select catalogue or manual custom subjects and warn against a configurable credit load without blocking a student. Offerings, timetable sections, conflict checks, prerequisites, and registration integration are outside this phase.
+
+The project owner reports that the Phase 1 tables have now been applied. Phase 2 keeps the original 2026/2027 UMPSA catalogue PDF local and outside the mobile bundle. A trusted, reviewable SQL seed curates only Faculty of Computing (`FK`) degree entries on PDF pages 393–434, with source page labels, explicit Semester I/II offerings, and source campus where meaningful (`NO TIMETABLE` is stored as `NULL`). Its 169 rows (92 Semester 1, 77 Semester 2; 105 distinct course/campus entries) are idempotent through `INSERT … ON CONFLICT ON CONSTRAINT catalog_courses_session_semester_campus_code_key DO UPDATE`. On conflict, `credit_hours` uses `COALESCE(excluded, existing)`, and the existing `source_label` is kept while preserved credits remain, so re-running the seed never erases credits verified later. Every row was checked programmatically against text extracted from those PDF pages. The PDF does not explicitly supply credit hours; the seed stores `NULL` rather than inferring them from course codes. Adding a later session means adding a new reviewed seed; the app lists every active session and defaults only when exactly one exists. The project owner applied the seed on 2026-10-08.
+
+The protected `/my-semester` route reads active catalogue sessions and courses through the authenticated client, filters by chosen session and semester, searches code/name locally, and stores an owned snapshot in `student_semester_courses`. A custom subject keeps a null catalogue link. The client checks for an existing identical catalogue selection before insertion; without a database uniqueness rule for student choices, concurrent duplicate requests on separate devices remain possible. Edit changes only subject code/name/credits; delete targets the owned row and leaves `tasks` untouched. Known credits are summed without imputing unknown values, with a non-blocking notice (semantic warning colour plus icon) above 19. The selected session/semester is stored locally per user for convenience. Add/Edit Task reads those selected subjects and copies the chosen code/name into the existing editable `tasks.subject` text; tasks retain this text after a semester selection is removed. Official UMPSA registration, availability, sections, capacity, timetable conflicts, prerequisites, and calendar integration are outside this phase.
+
+In Module 5 Phase 2, the protected Planner tab pages through the current user's task rows and sorts pending then ongoing by ascending deadline; completed tasks follow by descending `completed_at`. A dedicated Add route validates trimmed title and subject, local date and time, priority, and status, then inserts only the columns granted to authenticated clients; database defaults supply pending status and null completion time. If a student chooses an initial ongoing or completed status, a separate owner-scoped UPDATE uses the granted status columns; a failed second step attempts to remove the new row and reports a safe save error. Protected Detail and Edit routes fetch one ID with the current `user_id` filter, with RLS as the ownership boundary. Edit changes only title, subject, description, deadline, priority, status, and `completed_at`. Completing sets the current timestamp; reopening clears it. Delete requires explicit confirmation. Mutations check for a returned owned row, then return to Planner, whose focus reload plus pull-to-refresh update the list. Form date/time is interpreted in local time before conversion to the `timestamptz` ISO instant. Reminder and notification services remain outside this phase.
 
 ### 6.3 Data ownership and RLS policies
 
@@ -228,14 +280,17 @@ Required policy behaviours:
 
 Financial totals are deterministic. For a selected budget period:
 
+The client calculates local Monday–Sunday and first-to-last-day date ranges. It queries `expense_date >= period_start` and `expense_date <= period_end`; because `expense_date` is a date, this is equivalent to a half-open weekly `[period_start, period_start + 7 days)` or monthly `[period_start, period_start + 1 month)` interval. The end is derived and is not stored on the budget row. UTC conversion is used only on date parts for elapsed-day arithmetic, never to serialize a local calendar date for Supabase.
+
 ```text
 total_spent = sum(expense.amount within selected period)
 remaining_balance = budget.amount - total_spent
-daily_average = total_spent / number_of_elapsed_or_selected_days
+percentage_used = total_spent / budget.amount × 100 (only when a budget exists)
+daily_average = total_spent / max(1, elapsed_calendar_days_in_current_period)
 category_percentage = category_total / total_spent × 100
 ```
 
-When `total_spent` is zero, the UI must avoid division by zero and show a sensible zero/empty state.
+Amounts are accumulated as integer cents before RM formatting. When `total_spent` is zero, category percentages are omitted. Without a budget, remaining balance and percentage used are omitted. A negative balance is shown as an absolute over-budget amount with a destructive label and colour, never as a remaining amount.
 
 ### 7.3 OCR receipt flow
 
@@ -260,24 +315,30 @@ sequenceDiagram
 
 Parsing must be defensive: missing or uncertain values remain empty for student completion. The application must never auto-save a financial expense solely from OCR output.
 
+The Phase 3 mobile review form reuses the manual expense controls and validation. It suggests a title from the extracted merchant, an amount from the extracted total, and a date only when one was detected. Category always starts unselected, and an undetected date stays blank so the student must choose it. The student may edit title, amount, category, date, and notes. Only an explicit save inserts those five reviewed fields, the current session's `user_id`, and `entry_source = 'ocr'` through the normal Supabase client. No receipt image, raw OCR text, or merchant field is inserted. A failed insert retains edits and shows a translated safe error. A successful insert returns to Wallet, whose focus refreshes history and budget-period figures. The OCR backend remains extraction-only.
+
 ### 7.4 Academic task and reminder flow
 
-1. Student saves a valid task with a deadline.
-2. The app determines the preferred reminder timing from the profile.
-3. The reminder service schedules and records the reminder.
-4. Changing the deadline reschedules the active reminder.
-5. Completing or deleting the task cancels the active reminder and updates reminder status/history.
+1. Student saves a valid task with a deadline and optional per-task reminder offset (None, 0, 60, or 1440 minutes before).
+2. A narrow additive migration grants authenticated users INSERT/UPDATE access only to `tasks.reminder_offset_minutes`; existing owner-only RLS remains unchanged. The migration must be reviewed and applied before non-None reminders can be saved.
+3. On the device, `expo-notifications` requests permission when a student chooses an active future reminder. Local notifications use date triggers. Their visible title/body contain only a short translated reminder and the task title; internal notification data retains the existing ownership, navigation, and reconciliation fields. No push token, backend job, or notification table is used.
+4. The app compares the current user's owned task rows with its scheduled local task notifications on startup, foreground, language change, and after task mutations. It cancels stale entries, reschedules changed deadline/title/offset entries, and does not schedule completed or past-fire-time tasks. Signing out clears this app's scheduled task reminders from the device.
+5. Tapping a delivered reminder opens the owned task detail route only for the matching signed-in user; row-level security still protects the record. Denied notification permission preserves task data and shows a translated warning. Web can edit the saved offset but local delivery requires the mobile app.
+
+Android reminders use the single `unifyd-task-reminders` channel with translated name/description, high normal-reminder importance, a short vibration pattern, and the existing `brandBlue` accent where supported. `expo-notifications` configures the 96×96 white transparent small icon, accent colour, and default channel. Its SDK 57 plugin does not expose a large-icon setting, so a local config plugin adds the full-colour Unifyd drawable and the native manifest metadata read by Expo Notifications. Both icons derive from the existing Unifyd logo; the launcher icon and splash stay unchanged. Android system settings can override channel behaviour. iOS uses native notification presentation and its app icon; web remains unsupported. Expo Go can exercise local reminder logic, but icon/manifest branding requires a new installed native build.
 
 ### 7.5 Mood and wellness-rule flow
 
-1. Student selects a mood and optional note.
-2. The app checks whether the student already has a mood log for that date.
-3. The app inserts the record or opens the existing record for editing.
-4. The system retrieves recent mood records for the selected period.
-5. A transparent backend/application rule checks whether a predefined low-mood threshold is met, for example a defined number of low mood scores within the last five to seven entries.
-6. If met, the system displays a general self-care message and the non-clinical disclaimer.
+1. The protected Mind tab loads up to ten `mood_entries` rows for the authenticated `user_id`, newest `recorded_at` first; owner-only RLS is the database boundary. It shows loading, empty, error/retry, and pull-to-refresh states.
+2. Student selects self-reported mood and stress levels (both 1–5) and optionally enters a note. Local validation requires both levels; the note is trimmed and empty text becomes null.
+3. The normal Supabase client inserts only `user_id`, `mood_level`, `stress_level`, and `note`. Database defaults set the ID and timestamps; multiple entries on one day are allowed. Failure preserves form data and shows a safe translated error; success clears the form and refreshes history.
+4. Each history card shows translated level labels, localised date/time, and its note only when present. A translated modal requires confirmation before an ID-filtered owner-scoped deletion; cancellation sends no request. Success refreshes history, while failure keeps the confirmation open with a safe error.
+5. The 7-day default or selected 30-day trend query reads only `mood_level`, `stress_level`, and `recorded_at` for the signed-in `user_id`, bounded to the selected local-calendar window plus its preceding equal-length comparison window. It pages results in groups of 500. The ten-entry history query remains separate and is the only Mind query that reads notes.
+6. `mobile/lib/moodTrends.ts` averages all check-ins in the selected period for the summary and averages multiple check-ins on each local day for the visual. Missing days have null averages and no bars; they never count as zero. Comparison appears only with at least two entries in both windows. A difference smaller than 0.25 points is described as similar; larger differences are described only as higher or lower.
+7. The latest saved check-in supplies only its mood/stress levels to a deterministic local rule returning at most two general ideas. Stress 4–5 takes priority; mood 1–2 selects calm/general connection ideas, including one idea from each branch when both apply. Without history, the card displays generic ideas. Every card includes a translated non-professional-advice statement. No notes, IDs, AI service, prediction, diagnosis, treatment, or notification enters this flow.
+8. Editing, broader history browsing, and any AI insights remain future phases. These values must not be treated as clinical measurements or diagnoses.
 
-The exact threshold must be defined once in a configuration/utility module and used consistently in tests and documentation.
+If a later phase introduces a rule-based low-mood threshold, define it once in a configuration/utility module and use it consistently in tests and documentation.
 
 ### 7.6 Integrated insights flow
 
@@ -340,7 +401,7 @@ Before display, the backend validates that required fields are present and rejec
 | SRS-FR-101 to 108 | Sections 4.1, 6.1–6.3, and 7.2 |
 | SRS-FR-201 to 207 | Sections 5.1–5.3 and 7.3 |
 | SRS-FR-301 to 307 | Sections 6.1–6.3 and 7.2 |
-| SRS-FR-401 to 408 | Sections 4.1, 6.1–6.3, and 7.4 |
+| SRS-FR-401 to 412 | Sections 4.1, 6.1–6.3, and 7.4 |
 | SRS-FR-501 to 507 | Sections 4.1, 5.1, and 7.4 |
 | SRS-FR-601 to 610 | Sections 4.1, 6.1–6.3, and 7.5 |
 | SRS-FR-701 to 710 | Sections 5.1–5.3 and 7.6–7.7 |

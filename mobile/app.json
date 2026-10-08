@@ -25,6 +25,28 @@
     "plugins": [
       "expo-router",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/brand/notification-icon.png",
+          "color": "#007AFB",
+          "defaultChannel": "unifyd-task-reminders"
+        }
+      ],
+      [
+        "./plugins/withUnifydNotificationLargeIcon",
+        {
+          "largeIcon": "./assets/brand/notification-large-icon.png"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Unifyd to select a receipt photo for text extraction.",
+          "cameraPermission": "Allow Unifyd to photograph a receipt for text extraction.",
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
           "image": "./assets/brand/unifyd-logo.png",

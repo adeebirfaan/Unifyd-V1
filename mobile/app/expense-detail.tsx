@@ -15,7 +15,7 @@ import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
 export default function ExpenseDetailScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, budgetPeriod } = useLocalSearchParams<{ id?: string; budgetPeriod?: string }>();
   const { state, expense, reload } = useExpenseRecord(typeof id === 'string' ? id : undefined);
   const { session } = useAuth();
   const { tokens } = useAppearance();
@@ -25,7 +25,11 @@ export default function ExpenseDetailScreen() {
   const [deleteError, setDeleteError] = useState(false);
 
   async function confirmDelete() {
-    if (!expense || !session || deleting) return;
+    if (deleting) return;
+    if (!expense || !session) {
+      setDeleteError(true);
+      return;
+    }
     setDeleting(true);
     setDeleteError(false);
     try {
@@ -40,7 +44,7 @@ export default function ExpenseDetailScreen() {
         return;
       }
       setConfirmVisible(false);
-      router.replace({ pathname: '/(tabs)/wallet', params: { deleted: '1' } });
+      router.replace({ pathname: '/(tabs)/wallet', params: { deleted: '1', budgetPeriod: budgetPeriod === 'weekly' ? 'weekly' : 'monthly' } });
     } catch {
       setDeleteError(true);
     } finally {
@@ -56,7 +60,7 @@ export default function ExpenseDetailScreen() {
     <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>{t('wallet.eyebrow')}</Text>
     <Text style={[styles.heading, { color: tokens.screenText }]}>{t('expense.detailTitle')}</Text>
     {state !== 'ready' || !expense ? <View style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
-      {state === 'loading' ? <><ActivityIndicator size="large" color={tokens.brandCyan} /><Text style={[styles.muted, { color: tokens.cardMutedText }]}>{t('wallet.loading')}</Text></> : <>
+      {state === 'loading' ? <><ActivityIndicator size="large" color={tokens.brandCyan} /><Text style={[styles.muted, { color: tokens.cardMutedText }]}>{t('expense.detailLoading')}</Text></> : <>
         <Ionicons name="alert-circle-outline" size={28} color={tokens.brandCyan} />
         <Text style={[styles.cardTitle, { color: tokens.cardText }]}>{state === 'notFound' ? t('expense.notFound') : t('expense.detailError')}</Text>
         <View style={styles.fullWidth}><PrimaryButton onPress={() => { void reload(); }}>{t('wallet.retry')}</PrimaryButton></View>
@@ -75,7 +79,7 @@ export default function ExpenseDetailScreen() {
         <Text style={[styles.source, { color: tokens.cardMutedText }]}>{expense.entry_source === 'ocr' ? t('expense.sourceOcr') : t('expense.sourceManual')}</Text>
       </View>
       <View style={styles.actions}>
-        <PrimaryButton onPress={() => router.push({ pathname: '/edit-expense', params: { id: expense.id } })}>{t('expense.edit')}</PrimaryButton>
+        <PrimaryButton onPress={() => router.push({ pathname: '/edit-expense', params: { id: expense.id, budgetPeriod: budgetPeriod === 'weekly' ? 'weekly' : 'monthly' } })}>{t('expense.edit')}</PrimaryButton>
         <Pressable accessibilityRole="button" onPress={() => { setDeleteError(false); setConfirmVisible(true); }} style={[styles.deleteButton, { backgroundColor: tokens.destructiveBackground }]}><Ionicons name="trash-outline" size={20} color={tokens.destructiveForeground} /><Text style={[styles.deleteText, { color: tokens.destructiveForeground }]}>{t('expense.delete')}</Text></Pressable>
       </View>
       <Modal visible={confirmVisible} transparent animationType="fade" onRequestClose={() => { if (!deleting) setConfirmVisible(false); }}>
@@ -86,7 +90,7 @@ export default function ExpenseDetailScreen() {
             <Text style={[styles.dialogBody, { color: tokens.cardMutedText }]}>{t('expense.deleteConfirmBody', { title: expense.title, amount })}</Text>
             {deleteError && <Text style={[styles.error, { color: tokens.cardErrorText }]} accessibilityRole="alert">{t('expense.deleteError')}</Text>}
             <View style={styles.dialogActions}>
-              <Pressable accessibilityRole="button" accessibilityState={{ disabled: deleting }} disabled={deleting} onPress={() => setConfirmVisible(false)} style={[styles.dialogButton, { borderColor: tokens.border, backgroundColor: tokens.cardElevated }]}><Text style={[styles.dialogButtonText, { color: tokens.cardText }]}>{t('expense.cancel')}</Text></Pressable>
+              <Pressable accessibilityRole="button" accessibilityState={{ disabled: deleting }} disabled={deleting} onPress={() => setConfirmVisible(false)} style={[styles.dialogButton, { borderColor: tokens.border, borderWidth: 1, backgroundColor: tokens.cardElevated }]}><Text style={[styles.dialogButtonText, { color: tokens.cardText }]}>{t('expense.cancel')}</Text></Pressable>
               <Pressable accessibilityRole="button" accessibilityState={{ disabled: deleting, busy: deleting }} disabled={deleting} onPress={() => { void confirmDelete(); }} style={[styles.dialogButton, { backgroundColor: tokens.destructiveBackground }]}>{deleting ? <ActivityIndicator color={tokens.destructiveForeground} /> : <Text style={[styles.dialogButtonText, { color: tokens.destructiveForeground }]}>{t('expense.delete')}</Text>}</Pressable>
             </View>
           </View>
@@ -109,5 +113,5 @@ const styles = StyleSheet.create({
   modalRoot: { flex: 1, justifyContent: 'center', padding: spacing.space5 }, scrim: { ...StyleSheet.absoluteFill },
   dialog: { width: '100%', maxWidth: 420, alignSelf: 'center', borderWidth: 1, borderRadius: radius.radiusLg, padding: spacing.space5, gap: spacing.space4 },
   dialogTitle: { ...typography.sectionTitle }, dialogBody: { ...typography.body, lineHeight: 23 }, error: { ...typography.label, lineHeight: 20 },
-  dialogActions: { flexDirection: 'row', gap: spacing.space3 }, dialogButton: { flex: 1, minHeight: 50, borderRadius: radius.radiusMd, borderWidth: 1, borderColor: 'transparent', alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.space2 }, dialogButtonText: { ...typography.body, fontWeight: '700' },
+  dialogActions: { flexDirection: 'row', gap: spacing.space3 }, dialogButton: { flex: 1, minHeight: 50, borderRadius: radius.radiusMd, alignItems: 'center', justifyContent: 'center', paddingHorizontal: spacing.space2 }, dialogButtonText: { ...typography.body, fontWeight: '700' },
 });

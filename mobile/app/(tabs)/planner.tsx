@@ -99,6 +99,7 @@ export default function PlannerScreen() {
       <Text style={[styles.helper, { color: tokens.mutedText }]}>{t('task.helper')}</Text>
       <PrimaryButton onPress={() => router.push('/add-task')}>{t('task.add')}</PrimaryButton>
       <Pressable accessibilityRole="button" onPress={() => router.push('/my-semester')} style={[styles.semesterLink, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}><Ionicons name="book-outline" size={20} color={tokens.brandCyan} /><Text style={[styles.semesterLinkText, { color: tokens.cardText }]}>{t('semester.title')}</Text><Ionicons name="chevron-forward" size={19} color={tokens.cardMutedText} /></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/reminders')} style={[styles.semesterLink, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}><Ionicons name="notifications-outline" size={20} color={tokens.brandCyan} /><Text style={[styles.semesterLinkText, { color: tokens.cardText }]}>{t('reminders.title')}</Text><Ionicons name="chevron-forward" size={19} color={tokens.cardMutedText} /></Pressable>
       {feedback && <Text style={[styles.feedback, { color: tokens.successText }]} accessibilityRole="alert">{feedback}</Text>}
       {statusError && <Text style={[styles.feedback, { color: tokens.errorText }]} accessibilityRole="alert">{t('task.statusError')}</Text>}
       {reminderMessage && <Text style={[styles.feedback, { color: tokens.errorText }]} accessibilityRole="alert">{reminderMessage}</Text>}

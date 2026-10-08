@@ -90,7 +90,7 @@ The suite captures and restores the test profile around the run, including tempo
 | 2. Financial tracking | In progress | Applied expense table (per project owner), manual creation, Wallet total/history, detail, edit, and confirmed delete | User reports a saved real expense; live mutation and cross-user checks pending account access |
 | 3. Budget and spending analysis | In progress | Applied budget table (per project owner), Set / Manage Budget, and current-period spending summary | Authenticated Expo Web budget test passed; native and cross-user checks remain |
 | 4. Academic task management | In progress | Applied task table per project owner; Planner CRUD implemented locally | Authenticated CRUD and cross-user verification pending |
-| 5. Reminder notifications | In progress | Per-task offset migration and local Expo scheduling prepared | Migration review and native-device delivery tests pending |
+| 5. Reminder notifications | In progress | Per-task offset migration applied (verified 2026-10-09); local Expo scheduling and reminder history implemented | Native-device delivery tests pending |
 | 6. Mood tracking and wellness rules | In progress | Applied mood table (per project owner); private check-ins, history, 7/30-day trends, and local ideas implemented | Authenticated tests and physical-device review pending for Phase 3 |
 | 7. Receipt OCR | Complete per project owner | Protected backend, mobile capture, editable OCR review, and explicit expense save | No OCR retest in this task; prior grant and live-save status were not independently rechecked |
 | 8. Integrated dashboard and Groq summaries | In progress | Home facts panels, authenticated insights endpoint, Groq summary with validation and fallback | Live Groq English/Malay summaries verified locally; phone review pending |
@@ -108,6 +108,42 @@ The suite captures and restores the test profile around the run, including tempo
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-10-09 — Reminder history (SRS-FR-507)
+
+**Changed files:**
+- `mobile/lib/reminderHistory.ts`, `mobile/app/reminders.tsx`
+- `mobile/app/_layout.tsx`, `mobile/app/(tabs)/planner.tsx` (Reminders link)
+- `mobile/constants/i18n.ts`
+- `mobile/tests/reminderHistory.test.mjs`, `mobile/e2e/reminders.spec.ts`
+- `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and this file
+
+**What changed:** Planner has a new Reminders link. The screen lists Upcoming reminders (active tasks, soonest first) and Past 30 days, worked out from each owned task's deadline and saved offset with the scheduler's rule. Tasks completed before their reminder time are excluded. Each item opens its task. Loading, empty, error/retry, and pull-to-refresh states and English/Bahasa Melayu text are included. No database change was made. The screen shows scheduled times, not device delivery or dismissal.
+
+**Tests performed:**
+- Mobile TypeScript and Expo lint pass.
+- Unit tests 17/17 (3 new).
+- E2E: 2 new reminder tests, covering ordering, offsets, exclusions, owner and non-null filters, empty states, and a live task appearing and opening. Planner and My Semester suites re-run (3/3).
+- The test account had 0 tasks afterwards.
+
+**Next action:** Make the Home greeting follow the time of day.
+
+### 2026-10-09 — Database check: OCR source grant and task reminder offset
+
+**What was checked:** The two migrations still recorded as unexecuted were checked with the test account through requests that cannot save data:
+- Inserts were deliberately invalid (a blank task title or a negative expense amount).
+- The update targeted a non-existent ID.
+
+PostgreSQL checks privileges before constraints. A check-constraint error therefore proves the privilege exists, while "permission denied" would show it is missing.
+
+**Results:**
+- `20261008_004_task_reminder_offset.sql` is applied. `reminder_offset_minutes` is readable, insertable, and updatable, and its check constraint rejected 30.
+- `20261008_002_expense_ocr_insert_grant.sql` is applied. An insert with `entry_source = 'ocr'` reached the amount check, and an update of `entry_source` was refused (42501), as designed.
+- Task and expense counts for the test account stayed at 0, and no SQL was run.
+
+**Changed files:** `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and this file (status wording only).
+
+**Next action:** Decide whether to build or formally defer reminder history (SRS-FR-507).
 
 ### 2026-10-09 — Mood check-in editing (SRS-FR-607)
 

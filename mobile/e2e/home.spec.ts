@@ -57,7 +57,10 @@ const aiSummary = {
   wellness: 'You checked in 3 times this week.',
 };
 
-test('dashboard shows verified facts, a labelled AI summary, and opens each module', async ({ page }) => {
+const front = (page: Page, key: string) => page.getByTestId(`deck-card-${key}`);
+const showCard = (page: Page, name: string) => page.getByRole('button', { name: `Show ${name} card` }).click();
+
+test('dashboard deck shows verified facts, a labelled AI summary, and opens each module', async ({ page }) => {
   await mockDashboardData(page, fixtures);
   const insightRequests: { auth: string | undefined; body: unknown }[] = [];
   await page.route('**/api/insights/generate', async (route) => {
@@ -66,29 +69,25 @@ test('dashboard shows verified facts, a labelled AI summary, and opens each modu
   });
   await signIn(page);
 
-  // Hero: budget status, nearest deadline, and this week's mood.
-  await expect(page.getByText('RM 150.00', { exact: true })).toBeVisible();
-  await expect(page.getByText('RM 350.00 left of RM 500.00')).toBeVisible();
-  await expect(page.getByText('E2E Lab report')).toBeVisible();
-  await expect(page.getByText('1.7 / 5').first()).toBeVisible();
+  // Overview (front): budget status, nearest deadline, this week's mood, and summary chips.
+  const overview = front(page, 'overview');
+  for (const text of ['RM 150.00', 'RM 350.00 left of RM 500.00', 'E2E Lab report', '1.7 / 5', '1Due in 7 days', '1Overdue', '3Check-ins (7 days)']) {
+    await expect(overview).toContainText(text);
+  }
+  // Cards behind the front one are not exposed as controls.
+  await expect(page.getByRole('button', { name: 'Open Wallet' })).toHaveCount(0);
 
-  const money = page.getByRole('button', { name: 'Open Wallet' });
-  await expect(money).toContainText('Expenses this month2');
-  await expect(money).toContainText('Budget used30%');
-  await expect(money).toContainText('Top spending');
-  await expect(money).toContainText('Food80%');
-  await expect(money).toContainText('Transport20%');
-  const studies = page.getByRole('button', { name: 'Open Planner' });
-  await expect(studies).toContainText('Pending2');
-  await expect(studies).toContainText('Ongoing1');
-  await expect(studies).toContainText('Overdue1');
-  await expect(studies).toContainText('Due in 7 days1');
-  await expect(studies).toContainText('Completed in 7 days1');
-  const wellbeing = page.getByRole('button', { name: 'Open Mind' });
-  await expect(wellbeing).toContainText('Check-ins (7 days)3');
-  await expect(wellbeing).toContainText('Average stress4.0 / 5');
-  await expect(wellbeing).toContainText('You noted a low mood on several days this week.');
-  await expect(wellbeing).toContainText('not medical or professional advice');
+  await showCard(page, 'Money');
+  const money = front(page, 'money');
+  for (const text of ['RM 150.00', '2Expenses this month', '30%Budget used', 'Top spending', 'Food80%', 'Transport20%']) await expect(money).toContainText(text);
+  await showCard(page, 'Studies');
+  const studies = front(page, 'studies');
+  for (const text of ['2Pending', '1Ongoing', '1Overdue', '1Due in 7 days', 'Completed in 7 days1', 'E2E Lab report', 'BCS2233']) await expect(studies).toContainText(text);
+  await showCard(page, 'Wellbeing');
+  const wellbeing = front(page, 'wellbeing');
+  for (const text of ['3Check-ins (7 days)', '4.0 / 5Average stress', 'You noted a low mood on several days this week.', 'not medical or professional advice']) {
+    await expect(wellbeing).toContainText(text);
+  }
 
   await expect(page.getByText('AI summary', { exact: true })).toBeVisible();
   await expect(page.getByText(aiSummary.finance)).toBeVisible();
@@ -99,18 +98,62 @@ test('dashboard shows verified facts, a labelled AI summary, and opens each modu
   expect(insightRequests[0].auth).toMatch(/^Bearer .+/);
   expect(insightRequests[0].body).toEqual({ language: 'en', timeZone: zone });
 
-  await money.click();
-  await expect(page).toHaveURL(/\/wallet/);
-  await page.getByRole('tab', { name: 'Home' }).click();
-  await page.getByRole('button', { name: 'Open Planner' }).click();
-  await expect(page).toHaveURL(/\/planner/);
-  await page.getByRole('tab', { name: 'Home' }).click();
   await page.getByRole('button', { name: 'Open Mind' }).click();
   await expect(page).toHaveURL(/\/mind/);
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await showCard(page, 'Money');
+  await page.getByRole('button', { name: 'Open Wallet' }).click();
+  await expect(page).toHaveURL(/\/wallet/);
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await showCard(page, 'Studies');
+  await page.getByRole('button', { name: 'Open Planner' }).click();
+  await expect(page).toHaveURL(/\/planner/);
   // Returning within five minutes reloads facts but does not request another summary.
   await page.getByRole('tab', { name: 'Home' }).click();
   await expect(page.getByText(aiSummary.finance)).toBeVisible();
   expect(insightRequests).toHaveLength(1);
+});
+
+test('the deck moves by swipe, peeking cards, dots, and the overview button', async ({ page }) => {
+  await mockDashboardData(page, fixtures);
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  await signIn(page);
+  const deck = page.getByTestId('card-deck');
+  const selected = (name: string) => expect(page.getByRole('button', { name: `Show ${name} card` })).toHaveAttribute('aria-selected', 'true');
+  // On the web the deck is a horizontal snap scroller; a horizontal wheel/trackpad scroll is the swipe.
+  const swipe = async (pages: number) => {
+    const box = (await deck.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.wheel(pages * box.width, 0);
+    await page.waitForTimeout(700);
+  };
+
+  await selected('Overview');
+  await swipe(-1); // nothing before the first card
+  await selected('Overview');
+  await swipe(1);
+  await selected('Money');
+  // Only the front card's controls are exposed.
+  await expect(page.getByRole('button', { name: 'Open Wallet' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Open Planner' })).toHaveCount(0);
+  await swipe(1);
+  await selected('Studies');
+  await swipe(-1);
+  await selected('Money');
+
+  await page.getByRole('button', { name: 'Back to overview' }).click();
+  await selected('Overview');
+
+  // Tapping the edge of the card peeking behind brings it forward.
+  const box = (await page.getByTestId('deck-card-overview').boundingBox())!;
+  await page.mouse.click(box.x + box.width / 2, box.y - 9);
+  await selected('Money');
+
+  await showCard(page, 'Wellbeing');
+  await selected('Wellbeing');
+  await swipe(1); // nothing after the last card
+  await selected('Wellbeing');
+  await expect(page.getByRole('button', { name: 'Back to overview' })).toHaveCount(1);
 });
 
 test('facts stay visible when the AI service fails, and the summary can be retried', async ({ page }) => {
@@ -126,14 +169,16 @@ test('facts stay visible when the AI service fails, and the summary can be retri
   await signIn(page);
 
   // Empty data shows explicit empty states, never invented figures.
-  await expect(page.getByText('RM 0.00', { exact: true })).toBeVisible();
-  await expect(page.getByText('No monthly budget set')).toBeVisible();
-  await expect(page.getByText('No upcoming deadlines')).toBeVisible();
-  await expect(page.getByText('No check-ins yet')).toBeVisible();
-  await expect(page.getByText('No expenses recorded this month yet.')).toBeVisible();
-  await expect(page.getByText('No active tasks right now.')).toBeVisible();
-  await expect(page.getByText('No check-ins in the last 7 days.')).toBeVisible();
-  await expect(page.getByText(/low mood/)).toHaveCount(0);
+  const overview = front(page, 'overview');
+  for (const text of ['RM 0.00', 'No monthly budget set', 'No upcoming deadlines', 'No check-ins yet']) await expect(overview).toContainText(text);
+  await showCard(page, 'Money');
+  await expect(front(page, 'money')).toContainText('No expenses recorded this month yet.');
+  await showCard(page, 'Studies');
+  await expect(front(page, 'studies')).toContainText('No active tasks right now.');
+  await expect(front(page, 'studies')).toContainText('No upcoming deadlines');
+  await showCard(page, 'Wellbeing');
+  await expect(front(page, 'wellbeing')).toContainText('No check-ins in the last 7 days.');
+  await expect(front(page, 'wellbeing')).not.toContainText('low mood');
 
   const fallback = page.getByText('An AI summary isn’t available right now. Your figures above are up to date.');
   await expect(fallback).toBeVisible();
@@ -150,11 +195,9 @@ test('dashboard loads the signed-in student’s real records without errors', as
   // Real Supabase data; only the optional AI request is stubbed so no server is needed.
   await page.route('**/api/insights/generate', (route) => route.abort());
   await signIn(page);
-  await expect(page.getByRole('button', { name: 'Open Wallet' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open Planner' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Open Mind' })).toBeVisible();
+  await expect(front(page, 'overview')).toContainText('Spent this month');
+  for (const name of ['Overview', 'Money', 'Studies', 'Wellbeing']) await expect(page.getByRole('button', { name: `Show ${name} card` })).toBeVisible();
   await expect(page.getByText('We could not load your overview.', { exact: false })).toHaveCount(0);
-  await expect(page.getByText('Spent this month', { exact: true })).toBeVisible();
 });
 
 test('the greeting follows the local time of day', async ({ page }) => {

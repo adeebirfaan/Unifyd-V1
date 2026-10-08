@@ -1,23 +1,20 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Avatar } from '@/components/Avatar';
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
-import { DashboardPanel, PanelNote, StatRow } from '@/components/home/DashboardPanel';
+import { CardDeck } from '@/components/home/CardDeck';
+import { MoneyCard, OverviewCard, StudiesCard, WellbeingCard } from '@/components/home/DeckCards';
 import { Screen } from '@/components/Screen';
 import { DEFAULT_AVATAR_ID } from '@/constants/avatars';
-import type { TranslationKey } from '@/constants/i18n';
 import { colors, radius, spacing, typography } from '@/constants/theme';
-import { formatPercentage } from '@/lib/budgetSummary';
+import { CARD_SHADES, DEFAULT_CARD_SHADES } from '@/lib/cardShades';
 import { loadDashboardFacts } from '@/lib/dashboardData';
 import { greetingKey } from '@/lib/greeting';
-import type { DashboardFacts, Direction } from '@/lib/dashboardFacts';
-import { formatRinggit } from '@/lib/expenseHistory';
+import type { DashboardFacts } from '@/lib/dashboardFacts';
 import { requestInsightSummary } from '@/lib/insights';
 import type { InsightResult } from '@/lib/insights';
-import { formatTaskDeadline } from '@/lib/tasks';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
@@ -26,8 +23,6 @@ import { useI18n } from '@/providers/LanguageProvider';
 const SUMMARY_STALE_MS = 5 * 60 * 1000;
 type FactsState = { status: 'loading' } | { status: 'error' } | { status: 'ready'; facts: DashboardFacts };
 type SummaryState = { status: 'idle' } | { status: 'loading' } | { status: 'done'; result: InsightResult };
-
-const directionKey: Record<Direction, TranslationKey> = { higher: 'home.higher', lower: 'home.lower', similar: 'home.similar' };
 
 export default function HomeScreen() {
   const { profile, session } = useAuth();
@@ -80,11 +75,6 @@ export default function HomeScreen() {
   }
 
   const facts = factsState.status === 'ready' ? factsState.facts : null;
-  const finance = facts?.finance;
-  const academic = facts?.academic;
-  const wellness = facts?.wellness;
-  const ringgit = (cents: number) => formatRinggit(cents / 100);
-  const outOfFive = (value: number) => t('home.outOfFive', { value: value.toFixed(1) });
   const open = (path: '/(tabs)/wallet' | '/(tabs)/planner' | '/(tabs)/mind') => router.navigate(path);
 
   return (
@@ -116,63 +106,12 @@ export default function HomeScreen() {
         <PrimaryButton onPress={() => { void loadFacts(); }}>{t('home.retry')}</PrimaryButton>
       </View>}
 
-      {finance && academic && wellness && <>
-        <LinearGradient colors={colors.brandGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
-          <Text style={styles.heroLabel}>{t('home.overview')}</Text>
-          <View>
-            <Text style={styles.heroCaption}>{t('home.monthSpent')}</Text>
-            <Text style={styles.heroAmount}>{ringgit(finance.spentCents)}</Text>
-            <Text style={styles.heroLine}>{finance.remainingCents === null ? t('home.noBudget')
-              : finance.remainingCents >= 0 ? t('home.budgetLeft', { amount: ringgit(finance.remainingCents), budget: ringgit(finance.budgetCents ?? 0) })
-                : t('home.budgetOver', { amount: ringgit(-finance.remainingCents), budget: ringgit(finance.budgetCents ?? 0) })}</Text>
-          </View>
-          <View style={styles.heroSplit}>
-            <View style={styles.heroCell}>
-              <Text style={styles.heroCaption}>{t('home.nextDeadline')}</Text>
-              <Text style={styles.heroLine} numberOfLines={2}>{academic.nextDeadline ? academic.nextDeadline.title : t('home.noDeadline')}</Text>
-              {academic.nextDeadline && <Text style={styles.heroSmall}>{formatTaskDeadline(academic.nextDeadline.deadline, language)}</Text>}
-            </View>
-            <View style={styles.heroCell}>
-              <Text style={styles.heroCaption}>{t('home.moodWeek')}</Text>
-              <Text style={styles.heroLine}>{wellness.averageMood === null ? t('home.noCheckIns') : outOfFive(wellness.averageMood)}</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        <View style={styles.panels}>
-          <DashboardPanel title={t('home.panelMoney')} icon="wallet-outline" accessibilityLabel={t('home.openPanel', { name: t('tab.wallet') })} onPress={() => open('/(tabs)/wallet')}>
-            {finance.expenseCount === 0 ? <PanelNote>{t('home.noExpenses')}</PanelNote> : <>
-              <StatRow label={t('home.expenseCount')} value={String(finance.expenseCount)} />
-              {finance.percentUsed !== null && <StatRow label={t('home.budgetUsed')} value={formatPercentage(finance.percentUsed)} tone={finance.remainingCents !== null && finance.remainingCents < 0 ? 'danger' : 'normal'} />}
-              <PanelNote>{t('home.topCategories')}</PanelNote>
-              {finance.topCategories.map(({ category, percent }) => <StatRow key={category} label={t(`expense.category.${category}`)} value={formatPercentage(percent)} />)}
-            </>}
-          </DashboardPanel>
-
-          <DashboardPanel title={t('home.panelStudies')} icon="calendar-outline" accessibilityLabel={t('home.openPanel', { name: t('tab.planner') })} onPress={() => open('/(tabs)/planner')}>
-            {academic.pending + academic.ongoing === 0 ? <PanelNote>{t('home.noTasks')}</PanelNote> : <>
-              <StatRow label={t('home.pending')} value={String(academic.pending)} />
-              <StatRow label={t('home.ongoing')} value={String(academic.ongoing)} />
-              <StatRow label={t('home.overdue')} value={String(academic.overdue)} tone={academic.overdue > 0 ? 'danger' : 'normal'} />
-              <StatRow label={t('home.dueSoon')} value={String(academic.dueSoon)} />
-            </>}
-            <StatRow label={t('home.completedRecently')} value={String(academic.completedRecently)} />
-          </DashboardPanel>
-
-          <DashboardPanel title={t('home.panelWellbeing')} icon="heart-outline" accessibilityLabel={t('home.openPanel', { name: t('tab.mind') })} onPress={() => open('/(tabs)/mind')}>
-            {wellness.checkIns === 0 ? <PanelNote>{t('home.noMoodData')}</PanelNote> : <>
-              <StatRow label={t('home.checkIns')} value={String(wellness.checkIns)} />
-              {wellness.averageMood !== null && <StatRow label={t('home.avgMood')} value={outOfFive(wellness.averageMood)} />}
-              {wellness.averageStress !== null && <StatRow label={t('home.avgStress')} value={outOfFive(wellness.averageStress)} />}
-              {wellness.moodVsPrevious && wellness.stressVsPrevious && <PanelNote>{t('home.vsPrevious', { mood: t(directionKey[wellness.moodVsPrevious]), stress: t(directionKey[wellness.stressVsPrevious]) })}</PanelNote>}
-            </>}
-            {wellness.repeatedLowMood && <View style={styles.notice} accessibilityRole="text">
-              <Ionicons name="leaf-outline" size={18} color={colors.warning} />
-              <View style={styles.noticeCopy}><PanelNote tone="warning">{t('home.lowMoodNotice')}</PanelNote><PanelNote>{t('home.notAdvice')}</PanelNote></View>
-            </View>}
-          </DashboardPanel>
-        </View>
-      </>}
+      {facts && <CardDeck cards={[
+        { key: 'overview', name: t('home.cardOverview'), render: () => <OverviewCard facts={facts} /> },
+        { key: 'money', name: t('home.panelMoney'), render: ({ goTo }) => <MoneyCard facts={facts} shade={CARD_SHADES[DEFAULT_CARD_SHADES.money]} onOverview={() => goTo(0)} onOpen={() => open('/(tabs)/wallet')} /> },
+        { key: 'studies', name: t('home.panelStudies'), render: ({ goTo }) => <StudiesCard facts={facts} shade={CARD_SHADES[DEFAULT_CARD_SHADES.studies]} onOverview={() => goTo(0)} onOpen={() => open('/(tabs)/planner')} /> },
+        { key: 'wellbeing', name: t('home.panelWellbeing'), render: ({ goTo }) => <WellbeingCard facts={facts} shade={CARD_SHADES[DEFAULT_CARD_SHADES.wellbeing]} onOverview={() => goTo(0)} onOpen={() => open('/(tabs)/mind')} /> },
+      ]} />}
 
       <View style={[styles.aiCard, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
         <View style={styles.aiHeader}>
@@ -211,17 +150,6 @@ const styles = StyleSheet.create({
   intro: { ...typography.body, color: colors.textSecondary, marginTop: spacing.space2, marginBottom: spacing.space6 },
   stateCard: { borderRadius: radius.radiusLg, borderWidth: 1, padding: spacing.space5, gap: spacing.space4, alignItems: 'stretch' },
   stateText: { ...typography.body, lineHeight: 22, textAlign: 'center' },
-  hero: { borderRadius: radius.radiusLg, padding: spacing.space6, gap: spacing.space5 },
-  heroLabel: { ...typography.label, color: colors.white, letterSpacing: 1.5, opacity: 0.85 },
-  heroCaption: { ...typography.label, color: colors.white, opacity: 0.85 },
-  heroAmount: { fontSize: 32, fontWeight: '700', color: colors.white, marginTop: spacing.space1, fontVariant: ['tabular-nums'] },
-  heroLine: { ...typography.body, color: colors.white, fontWeight: '600', marginTop: spacing.space1 },
-  heroSmall: { ...typography.label, color: colors.white, opacity: 0.85, marginTop: spacing.space1 },
-  heroSplit: { flexDirection: 'row', gap: spacing.space4, flexWrap: 'wrap' },
-  heroCell: { flex: 1, minWidth: 130 },
-  panels: { gap: spacing.space3, marginTop: spacing.space5 },
-  notice: { flexDirection: 'row', gap: spacing.space2, alignItems: 'flex-start', marginTop: spacing.space1 },
-  noticeCopy: { flex: 1, gap: spacing.space1 },
   aiCard: { borderRadius: radius.radiusMd, borderWidth: 1, padding: spacing.space4, gap: spacing.space3, marginTop: spacing.space5 },
   aiHeader: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2 },
   aiTitle: { ...typography.sectionTitle, flex: 1 },

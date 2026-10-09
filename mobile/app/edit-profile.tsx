@@ -10,7 +10,7 @@ import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { AcademicFields, validateAcademicFields } from '@/components/profile/AcademicFields';
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
 import { SelectionField } from '@/components/profile/SelectionField';
-import { AVATARS, DEFAULT_AVATAR_ID } from '@/constants/avatars';
+import { isAvatarId, resolveAvatarId } from '@/constants/avatars';
 import { DEFAULT_REMINDER_TIMING, REMINDER_OPTIONS } from '@/constants/reminder-timing';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { UMPSA_NAME, facultyForLabel, programmeForLabel } from '@/constants/umpsa-academic-catalog';
@@ -30,7 +30,7 @@ export default function EditProfileScreen() {
   const [faculty, setFaculty] = useState(profile?.faculty ?? '');
   const [programme, setProgramme] = useState(programmeForLabel(profile?.faculty, profile?.programme)?.label ?? profile?.programme ?? '');
   const [studyYear, setStudyYear] = useState(profile?.study_year?.toString() ?? '');
-  const [avatarId, setAvatarId] = useState(profile?.avatar_id ?? DEFAULT_AVATAR_ID);
+  const [avatarId, setAvatarId] = useState(() => resolveAvatarId(profile?.avatar_id));
   const [reminderTiming, setReminderTiming] = useState(profile?.default_reminder_timing ?? DEFAULT_REMINDER_TIMING);
   const reminderOptions = REMINDER_OPTIONS.map((option) => ({ id: option.id, label: t(`reminder.${option.id}`) }));
   const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
@@ -41,7 +41,7 @@ export default function EditProfileScreen() {
     const validation: FieldErrors = {
       fullName: !fullName.trim() ? t('common.nameRequired') : undefined,
       ...validateAcademicFields(faculty, programme, studyYear, t),
-      avatar: !AVATARS.some((option) => option.id === avatarId) ? t('common.avatarRequired') : undefined,
+      avatar: !isAvatarId(avatarId) ? t('common.avatarRequired') : undefined,
       reminder: !REMINDER_OPTIONS.some((option) => option.id === reminderTiming) ? t('edit.reminderRequired') : undefined,
     };
     setFieldErrors(validation);

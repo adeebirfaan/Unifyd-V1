@@ -221,20 +221,23 @@ Every student has a personal visual identity through an **original illustrated a
 
 ### MVP behaviour
 
-- During Complete Profile, show a curated grid of at least 12 original line-art avatar options.
-- Each avatar uses near-black line art on a light neutral circular background.
-- The student selects one avatar; the app stores its stable `avatar_id` in the profile.
-- Display the selected avatar in the Home greeting, Profile screen, settings/profile entry points, and relevant list headers.
-- If no selection exists, assign a default avatar deterministically from the user ID and prompt the student to personalise it later.
-- Profile settings must allow the student to change their avatar at any time.
-- Do not add photo-upload avatars in the PSM 2 MVP.
+- **Library.** Students choose from the project's curated library of **12 local illustrations**: Turban woman, Afro guy, Gorpcore guy, Music girl, Cap guy, Everyday guy, Genius guy, Cool guy, Floral girl, Hijab girl, IT girl, and Curly guy.
+  - The approved originals live in `/assets/avatars/`.
+  - The app bundles 384 px copies in `mobile/assets/avatars/`, named by stable ID, with aspect ratio preserved and centred on a transparent square.
+  - Avatars are never generated or downloaded.
+- **Picker.** The chooser in onboarding and Edit Profile is a 3-column grid of dark tiles, each with the avatar and its translated name.
+  - The selection shows a cyan tick badge, a thicker cyan ring, and a bold name, so it is never indicated by colour alone.
+  - Each tile's accessible label reads "Select {name} avatar".
+- **Storage and display.** The app stores only the stable ID, such as `music_girl`, in `profiles.avatar_id`. The selected avatar appears on Home and Profile.
+- **Fallback.** A missing, legacy, or unknown stored value shows the default, Turban woman, until the student picks another.
+- **Changing it.** Edit Profile lets the student change the avatar at any time. Photo-upload avatars are not part of the PSM 2 MVP.
 
 ### Avatar art direction
 
 - Friendly black line drawings of diverse students; simple hair, glasses, hijab, and facial-feature variants.
-- Circular white/off-white background with optional thin `brandBlue` selection ring.
+- Circular white background. The whole illustration is shown (`contain`), so faces and blue details are never cropped.
 - No branded characters, copied Notion art, real-person likenesses, or copyrighted avatar packs.
-- Use SVG/vector assets where possible for a sharp appearance and small app size.
+- Bundled PNGs are sized for on-screen use (largest display 76 pt), keeping the app small (about 1.5 MB for all 12).
 
 ## 10. Screen-specific direction
 
@@ -284,8 +287,8 @@ The Unifyd design system is non-negotiable:
 ## 13. Asset implementation checklist
 
 - [ ] Add the supplied Unifyd logo as `assets/brand/unifyd-logo.png`.
-- [ ] Add original avatar SVGs under `assets/avatars/`.
-- [ ] Add `avatar_id` to the `profiles` data model and profile form.
+- [x] Add the curated avatar illustrations under `assets/avatars/` (bundled copies in `mobile/assets/avatars/`).
+- [x] Add `avatar_id` to the `profiles` data model and profile form.
 - [ ] Create shared colour, spacing, typography, radius, and component tokens.
 - [ ] Create reusable Avatar, Card, Button, Input, EmptyState, and BottomNavigation components.
 - [ ] Verify at least one representative screen from each module against this design system.

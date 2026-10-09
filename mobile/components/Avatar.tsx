@@ -1,20 +1,24 @@
 import { Image, StyleSheet, View } from 'react-native';
 
-import { getAvatarUrl } from '@/constants/avatars';
+import { getAvatar } from '@/constants/avatars';
+import { useI18n } from '@/providers/LanguageProvider';
 
-export function Avatar({ id, size = 64 }: { id: string; size?: number }) {
+/**
+ * A student's avatar from the bundled library. The whole illustration is shown
+ * (contain, never cropped) on a white circle, so faces and blue details stay intact.
+ * Unknown or legacy stored values show the default avatar.
+ */
+export function Avatar({ id, size = 64 }: { id: string | null | undefined; size?: number }) {
+  const { t } = useI18n();
+  const avatar = getAvatar(id);
   return (
     <View style={[styles.frame, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Image
-        source={{ uri: getAvatarUrl(id) }}
-        style={{ width: size, height: size }}
-        resizeMode="cover"
-        accessibilityLabel="Illustrated profile avatar"
-      />
+      <Image source={avatar.source} style={{ width: size, height: size }} resizeMode="contain"
+        accessibilityRole="image" accessibilityLabel={t('avatar.image', { name: t(avatar.labelKey) })} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  frame: { overflow: 'hidden', backgroundColor: '#F8FAFC' },
+  frame: { overflow: 'hidden', backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center' },
 });

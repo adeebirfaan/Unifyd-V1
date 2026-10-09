@@ -43,7 +43,7 @@ export function AcademicFields({ faculty, programme, studyYear, onFacultyChange,
         }}
         error={errors?.faculty}
       />
-      {faculty && !selectedFaculty && <Text style={[styles.futureMessage, { color: tokens.mutedText }]}>{t('academic.legacyFaculty', { value: faculty })}</Text>}
+      {!!faculty && !selectedFaculty && <Text style={[styles.futureMessage, { color: tokens.mutedText }]}>{t('academic.legacyFaculty', { value: faculty })}</Text>}
       {programmeOptions.length > 0 ? (
         <View style={styles.programmeField}>
           <SelectionField
@@ -54,7 +54,7 @@ export function AcademicFields({ faculty, programme, studyYear, onFacultyChange,
             onSelect={(id) => onProgrammeChange(programmeOptions.find((entry) => entry.id === id)?.label ?? '')}
             error={errors?.programme}
           />
-          {programme && !selectedProgramme && <Text style={[styles.futureMessage, { color: tokens.mutedText }]}>{t('academic.legacyProgramme', { value: programme })}</Text>}
+          {!!programme && !selectedProgramme && <Text style={[styles.futureMessage, { color: tokens.mutedText }]}>{t('academic.legacyProgramme', { value: programme })}</Text>}
         </View>
       ) : selectedFaculty ? (
         <Text style={[styles.futureMessage, { color: tokens.mutedText }]}>{t('academic.future')}</Text>

@@ -234,7 +234,7 @@ test('profile controls, settings preferences, and legal pages', async ({ page })
     await expect(page.getByRole('button', { name: /^Faculty or centre:/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Study year:/ })).toBeVisible();
     await expect(page.getByRole('button', { name: /^Default reminder:/ })).toBeVisible();
-    await expect(page.getByRole('radio', { name: 'Avatar 1', exact: true })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Select Turban woman avatar' })).toBeVisible();
     await page.getByRole('button', { name: /^Faculty or centre:/ }).click();
     await page.getByRole('radio', { name: 'Faculty of Computing' }).click();
     await expect(page.getByRole('button', { name: /^Programme:/ })).toBeVisible();

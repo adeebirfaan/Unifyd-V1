@@ -5,7 +5,6 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { Avatar } from '@/components/Avatar';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_AVATAR_ID } from '@/constants/avatars';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppearance } from '@/providers/AppearanceProvider';
@@ -46,7 +45,7 @@ export default function ProfileScreen() {
         </View>
       ) : (
       <View style={styles.card}>
-        <Avatar id={profile?.avatar_id ?? DEFAULT_AVATAR_ID} size={76} />
+        <Avatar id={profile?.avatar_id} size={76} />
         <Text style={styles.name}>{profile?.full_name || t('profile.fallbackName')}</Text>
         <Text style={styles.email}>{profile?.email ?? session?.user.email}</Text>
         <View style={styles.divider} />

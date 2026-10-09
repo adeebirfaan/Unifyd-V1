@@ -109,6 +109,58 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Curated local avatar library
+
+**Requirements implemented:** SRS-FR-013 (new) and SRS-FR-006 (profile editing).
+
+**Changed files:**
+- `mobile/lib/avatarIds.ts` (new), `mobile/constants/avatars.ts`
+- `mobile/components/Avatar.tsx`, `mobile/components/profile/AvatarPicker.tsx`
+- `mobile/app/onboarding.tsx`, `mobile/app/edit-profile.tsx`, `mobile/app/(tabs)/index.tsx`, `mobile/app/(tabs)/profile.tsx`
+- `mobile/components/profile/AcademicFields.tsx` (render fix)
+- `mobile/constants/i18n.ts`
+- `mobile/assets/avatars/*.png` (12 new)
+- `mobile/tests/avatarIds.test.mjs` (new), `mobile/e2e/avatar.spec.ts` (new), `mobile/e2e/unifyd.spec.ts`, `mobile/e2e/global-setup.ts`
+- `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, `UNIFYD_DESIGN_SYSTEM.md`, and this file
+
+**What changed:**
+- **Library.** Generated DiceBear avatars (remote `api.dicebear.com` URLs built from seeds) were replaced by the curated library.
+  - The approved PNGs in `/assets/avatars/` were copied at 384 px into `mobile/assets/avatars/`, aspect ratio preserved, about 1.5 MB in total versus about 12 MB of originals. The originals are untouched.
+  - One typed manifest supplies IDs, translated names, and bundled sources.
+- **Picker.** The picker shows all 12 with names and a tick, ring, and bold selection.
+- **Storage.** Only stable IDs are stored in the existing `profiles.avatar_id`. **No migration was required.**
+- **Fallback.** Legacy or invalid values show the default (Turban woman), and forms start from a valid ID so legacy values never block saving.
+- **Removed.** `getAvatarUrl` and all DiceBear references. No npm dependency or environment value was involved.
+
+**Bug found and fixed:** Edit Profile, already on the committed code, rendered an empty programme string directly inside a `View`. This raised "Unexpected text node" and, on Expo Web, a development error toast that covered the Save button. `AcademicFields` now uses boolean checks.
+
+**Tests performed:**
+- TypeScript and Expo lint pass.
+- Unit tests 28/28 (3 new: ID shape, valid IDs, and fallback for legacy, remote, path, and empty values).
+- Full Expo Web E2E: 23/23. The new avatar test covers:
+  - legacy `avatar-07` falling back to the default on Home and Profile;
+  - all 12 avatars rendering and loading;
+  - saving Music girl, which persists exactly `music_girl`;
+  - Home and Profile matching without a restart;
+  - a failed save keeping the previous avatar in the database and on screen;
+  - no remote image or avatar-service request.
+
+  The test restores the account's original avatar and programme.
+
+**Remaining manual checks:** Avatar sharpness and the picker layout on a physical phone in Light and Dark. Onboarding with a brand-new account.
+
+### 2026-10-09 — Light code cleanup (first pass)
+
+**Removed:**
+- Two components imported nowhere: `mobile/components/ModuleCard.tsx` (old Home) and `mobile/components/SectionPlaceholder.tsx`.
+- 20 obsolete translation entries (10 keys in English and Malay) from the pre-deck Home and the old floating Add button: `home.heroTitle`, `home.heroDescription`, `home.explore`, `home.walletDescription`, `home.plannerDescription`, `home.mood`, `home.moodDescription`, `home.expenseCount`, `home.budgetUsed`, and `tab.add`.
+
+**Checks:** No stray `console.log`, TODO, or FIXME was found in app or server code. Typed translation keys mean TypeScript would fail if a removed key were still used. TypeScript and lint pass; unit 25/25, server 24/24, Expo Web E2E 22/22.
+
+**For a later pass (review before removing):**
+- Unused strings belonging to other screens: `wallet.emptyBody`, `wallet.totalSpent`, `scan.chooseAnother`, `expense.deleting`.
+- About nine merged feature branches can be deleted locally and on GitHub.
+
 ### 2026-10-09 — Home final adjustments
 
 **What changed:**

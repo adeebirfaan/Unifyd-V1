@@ -7,7 +7,7 @@ import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { AcademicFields, validateAcademicFields } from '@/components/profile/AcademicFields';
 import { AvatarPicker } from '@/components/profile/AvatarPicker';
 import { SelectionField } from '@/components/profile/SelectionField';
-import { DEFAULT_AVATAR_ID } from '@/constants/avatars';
+import { isAvatarId, resolveAvatarId } from '@/constants/avatars';
 import { LANGUAGE_OPTIONS, normalizeLanguagePreference } from '@/constants/i18n';
 import { colors, spacing, typography } from '@/constants/theme';
 import { UMPSA_NAME, facultyForLabel, programmeForLabel } from '@/constants/umpsa-academic-catalog';
@@ -25,7 +25,7 @@ export default function OnboardingScreen() {
   const [faculty, setFaculty] = useState(profile?.faculty ?? '');
   const [programme, setProgramme] = useState(programmeForLabel(profile?.faculty, profile?.programme)?.label ?? profile?.programme ?? '');
   const [studyYear, setStudyYear] = useState(profile?.study_year?.toString() ?? '');
-  const [avatarId, setAvatarId] = useState(profile?.avatar_id ?? DEFAULT_AVATAR_ID);
+  const [avatarId, setAvatarId] = useState(() => resolveAvatarId(profile?.avatar_id));
   const [language, setLanguage] = useState<string>(normalizeLanguagePreference(profile?.language_preference));
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<'fullName' | 'faculty' | 'programme' | 'studyYear' | 'avatar' | 'language', string>>>({});
@@ -40,7 +40,7 @@ export default function OnboardingScreen() {
     const validation = {
       fullName: !name ? t('common.nameRequired') : undefined,
       ...validateAcademicFields(facultyName, programme, studyYear, t),
-      avatar: !avatarId ? t('common.avatarRequired') : undefined,
+      avatar: !isAvatarId(avatarId) ? t('common.avatarRequired') : undefined,
       language: !LANGUAGE_OPTIONS.some((option) => option.id === language) ? t('language.required') : undefined,
     };
     setFieldErrors(validation);

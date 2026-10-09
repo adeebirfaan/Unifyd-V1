@@ -14,7 +14,7 @@ export default async function globalSetup() {
     faculty: original.faculty?.trim() || 'Faculty of Computing',
     programme: original.programme,
     study_year: original.study_year || 1,
-    avatar_id: original.avatar_id || 'avatar-01',
+    avatar_id: original.avatar_id || 'women_turban',
     onboarding_completed: true,
     theme_preference: 'dark',
     language_preference: 'en',

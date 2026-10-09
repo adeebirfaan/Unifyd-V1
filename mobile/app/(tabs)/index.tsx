@@ -9,7 +9,6 @@ import { CardDeck } from '@/components/home/CardDeck';
 import { MoneyCard, OverviewCard, StudiesCard, WellbeingCard } from '@/components/home/DeckCards';
 import { ShadePicker } from '@/components/home/ShadePicker';
 import { Screen } from '@/components/Screen';
-import { DEFAULT_AVATAR_ID } from '@/constants/avatars';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { CARD_SHADES, DEFAULT_CARD_SHADES, cardShadesStorageKey, parseCardShades } from '@/lib/cardShades';
 import type { CardShade, CardShadeChoice, ModuleCardKey } from '@/lib/cardShades';
@@ -110,7 +109,7 @@ export default function HomeScreen() {
         <Text style={[styles.greeting, { color: tokens.screenText }]}>{t(greetingKey(hour, language), { name: firstName })}</Text>
         <Pressable accessibilityRole="button" accessibilityLabel={t('home.openProfile')} onPress={() => router.navigate('/(tabs)/profile')} style={({ pressed }) => [styles.avatarButton, pressed && styles.pressed]}>
           <View style={styles.avatarFrame}>
-            <Avatar id={profile?.avatar_id ?? DEFAULT_AVATAR_ID} size={58} />
+            <Avatar id={profile?.avatar_id} size={58} />
             <View pointerEvents="none" style={[styles.avatarOutline, { borderColor: tokens.homeAvatarOutline }]} />
           </View>
           <View style={[styles.avatarBadge, { backgroundColor: tokens.cardBackground, borderColor: tokens.screenBackground }]}>

@@ -42,6 +42,7 @@ Unifyd is an AI-assisted mobile application for Malaysian university students. I
 | SRS-FR-010 | In Light appearance, the Profile Edit icon and Home greeting avatar outline shall remain visible; Profile Sign out shall use a filled red treatment with white icon and text in both appearances. | Must | Demonstration |
 | SRS-FR-011 | Profile Settings shall initially show compact Appearance and Language rows with their current values. Tapping a row shall reveal its choices and tapping again shall close it; a successful save shall collapse the section, while a failed save shall keep it open with a translated error and prevent repeated taps during saving. | Must | Test |
 | SRS-FR-012 | Profile Settings shall provide direct Privacy Policy and Terms of Use pages in English and Bahasa Melayu. Both shall identify Unifyd as an academic prototype, show an October 2026 update date, and explain relevant data use, safeguards, limitations, and user responsibilities without adding a blocking consent flow. | Must | Inspection/Test |
+| SRS-FR-013 | The student shall choose a profile avatar from a curated library of 12 bundled illustrations during onboarding or in Edit Profile. Only the avatar's stable ID shall be stored; a missing, legacy, or unknown value shall display a default avatar; the same avatar shall appear on Home and Profile; and avatar images shall not be requested from the network. | Must | Test |
 
 ### 5.2 Financial tracking
 

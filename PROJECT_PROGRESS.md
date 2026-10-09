@@ -109,6 +109,15 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-09 — Avatar name and default
+
+**What changed:**
+- The default avatar's display name is now "Turban girl" ("Gadis berserban"); its stored ID stays `women_turban`.
+- Migration `supabase/migrations/20261009_001_profiles_avatar_default.sql` sets `profiles.avatar_id` to default to `women_turban` instead of the legacy `avatar-01`. The project owner reports it was applied in the Supabase SQL Editor on 2026-10-09.
+- Only the column default changed. Existing rows, constraints, grants, and RLS policies are untouched, and the sign-up trigger relies on the default.
+
+**Tests performed:** TypeScript passes; avatar and core profile Expo Web E2E 7/7 with the new name.
+
 ### 2026-10-09 — Curated local avatar library
 
 **Requirements implemented:** SRS-FR-013 (new) and SRS-FR-006 (profile editing).

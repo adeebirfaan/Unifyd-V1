@@ -65,25 +65,25 @@ test('curated local avatars: legacy fallback, choose and save an ID, shown on Ho
     await page.getByRole('textbox', { name: 'Password' }).fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
-    await expect(avatarImage(page, 'Turban woman')).toBeVisible();
+    await expect(avatarImage(page, 'Turban girl')).toBeVisible();
 
     await page.getByRole('button', { name: 'Open profile' }).click();
-    await expect(avatarImage(page, 'Turban woman')).toBeVisible();
+    await expect(avatarImage(page, 'Turban girl')).toBeVisible();
     await page.getByRole('button', { name: 'Edit profile' }).click();
 
     // All 12 local avatars render in the chooser, and the default is preselected without an error.
     const picker = page.getByTestId('avatar-picker');
     await expect(picker.getByRole('radio')).toHaveCount(12);
-    for (const name of ['Turban woman', 'Afro guy', 'Gorpcore guy', 'Music girl', 'Cap guy', 'Everyday guy', 'Genius guy', 'Cool guy', 'Floral girl', 'Hijab girl', 'IT girl', 'Curly guy']) {
+    for (const name of ['Turban girl', 'Afro guy', 'Gorpcore guy', 'Music girl', 'Cap guy', 'Everyday guy', 'Genius guy', 'Cool guy', 'Floral girl', 'Hijab girl', 'IT girl', 'Curly guy']) {
       await expect(picker.getByRole('radio', { name: `Select ${name} avatar` })).toBeVisible();
     }
-    await expect(picker.getByRole('radio', { name: 'Select Turban woman avatar' })).toHaveAttribute('aria-checked', 'true');
+    await expect(picker.getByRole('radio', { name: 'Select Turban girl avatar' })).toHaveAttribute('aria-checked', 'true');
     await expect.poll(() => picker.locator('img').evaluateAll((images) => images.filter((img) => (img as HTMLImageElement).naturalWidth > 0).length)).toBe(12);
 
     // Choosing and saving stores only the stable ID.
     await picker.getByRole('radio', { name: 'Select Music girl avatar' }).click();
     await expect(picker.getByRole('radio', { name: 'Select Music girl avatar' })).toHaveAttribute('aria-checked', 'true');
-    await expect(picker.getByRole('radio', { name: 'Select Turban woman avatar' })).toHaveAttribute('aria-checked', 'false');
+    await expect(picker.getByRole('radio', { name: 'Select Turban girl avatar' })).toHaveAttribute('aria-checked', 'false');
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText('Profile saved.')).toBeVisible();
     expect((patches.at(-1) as { avatar_id?: unknown }).avatar_id).toBe('music_girl');

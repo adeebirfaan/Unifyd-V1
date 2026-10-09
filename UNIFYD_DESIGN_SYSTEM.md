@@ -221,7 +221,7 @@ Every student has a personal visual identity through an **original illustrated a
 
 ### MVP behaviour
 
-- **Library.** Students choose from the project's curated library of **12 local illustrations**: Turban woman, Afro guy, Gorpcore guy, Music girl, Cap guy, Everyday guy, Genius guy, Cool guy, Floral girl, Hijab girl, IT girl, and Curly guy.
+- **Library.** Students choose from the project's curated library of **12 local illustrations**: Turban girl, Afro guy, Gorpcore guy, Music girl, Cap guy, Everyday guy, Genius guy, Cool guy, Floral girl, Hijab girl, IT girl, and Curly guy.
   - The approved originals live in `/assets/avatars/`.
   - The app bundles 384 px copies in `mobile/assets/avatars/`, named by stable ID, with aspect ratio preserved and centred on a transparent square.
   - Avatars are never generated or downloaded.
@@ -229,7 +229,7 @@ Every student has a personal visual identity through an **original illustrated a
   - The selection shows a cyan tick badge, a thicker cyan ring, and a bold name, so it is never indicated by colour alone.
   - Each tile's accessible label reads "Select {name} avatar".
 - **Storage and display.** The app stores only the stable ID, such as `music_girl`, in `profiles.avatar_id`. The selected avatar appears on Home and Profile.
-- **Fallback.** A missing, legacy, or unknown stored value shows the default, Turban woman, until the student picks another.
+- **Fallback.** A missing, legacy, or unknown stored value shows the default, Turban girl, until the student picks another.
 - **Changing it.** Edit Profile lets the student change the avatar at any time. Photo-upload avatars are not part of the PSM 2 MVP.
 
 ### Avatar art direction

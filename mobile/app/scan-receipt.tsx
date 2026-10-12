@@ -10,6 +10,7 @@ import { ExpenseForm } from '@/components/wallet/ExpenseForm';
 import type { TranslationKey } from '@/constants/i18n';
 import { radius, spacing, typography } from '@/constants/theme';
 import type { ExpenseInput } from '@/lib/expenseForm';
+import { FinanceNumber } from '@/components/FinanceNumber';
 import { formatExpenseDate, formatRinggit } from '@/lib/expenseHistory';
 import { ReceiptOcrError, scanReceipt } from '@/lib/receiptOcr';
 import type { ReceiptOcrErrorCode, ReceiptOcrResult } from '@/lib/receiptOcr';
@@ -131,7 +132,7 @@ export default function ScanReceiptScreen() {
         <Text style={[styles.note, { color: tokens.cardMutedText }]}>{t('scan.draftNote')}</Text>
         <ResultRow label={t('scan.merchant')} value={result.merchantName ?? t('scan.notDetected')} />
         <ResultRow label={t('scan.date')} value={result.purchaseDate ? formatExpenseDate(result.purchaseDate, language) : t('scan.notDetected')} />
-        <ResultRow label={t('scan.total')} value={result.totalAmount !== null ? formatRinggit(result.totalAmount) : t('scan.notDetected')} />
+        <ResultRow label={t('scan.total')} value={result.totalAmount !== null ? formatRinggit(result.totalAmount) : t('scan.notDetected')} numeric={result.totalAmount !== null} />
         {result.warnings.length > 0 && <View style={styles.textBlock}>
           <Text style={[styles.cardLabel, { color: tokens.brandCyan }]}>{t('scan.warnings')}</Text>
           {result.warnings.map((warning, index) => <Text key={`${index}-${warning}`} style={[styles.note, { color: tokens.cardMutedText }]}>{t(warningKeys[warning] ?? 'scan.warningOther')}</Text>)}
@@ -141,6 +142,7 @@ export default function ScanReceiptScreen() {
         <Text style={[styles.section, styles.reviewTitle, { color: tokens.screenText }]}>{t('scan.reviewTitle')}</Text>
         <Text style={[styles.helper, { color: tokens.mutedText }]}>{t('scan.reviewHelper')}</Text>
         <ExpenseForm
+          suggestCategory
           initial={{ title: result.merchantName ?? '', amount: result.totalAmount === null ? '' : String(result.totalAmount), category: null, expenseDate: result.purchaseDate ?? '', notes: '' }}
           onSave={saveExpense}
           submitKey="scan.saveExpense"
@@ -160,9 +162,11 @@ export default function ScanReceiptScreen() {
   </KeyboardAvoidingView>;
 }
 
-function ResultRow({ label, value }: { label: string; value: string }) {
+function ResultRow({ label, value, numeric = false }: { label: string; value: string; numeric?: boolean }) {
   const { tokens } = useAppearance();
-  return <View style={[styles.resultRow, { borderTopColor: tokens.border }]}><Text style={[styles.cardLabel, { color: tokens.cardMutedText }]}>{label}</Text><Text style={[styles.resultValue, { color: tokens.cardText }]}>{value}</Text></View>;
+  // Only a detected total uses the finance number style; merchant, date, and "not detected" stay normal text.
+  const Value = numeric ? FinanceNumber : Text;
+  return <View style={[styles.resultRow, { borderTopColor: tokens.border }]}><Text style={[styles.cardLabel, { color: tokens.cardMutedText }]}>{label}</Text><Value style={[styles.resultValue, { color: tokens.cardText }]}>{value}</Value></View>;
 }
 
 const styles = StyleSheet.create({

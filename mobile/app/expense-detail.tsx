@@ -8,6 +8,7 @@ import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { categoryIcons } from '@/components/wallet/ExpenseHistoryRow';
 import { radius, spacing, typography } from '@/constants/theme';
 import { useExpenseRecord } from '@/hooks/useExpenseRecord';
+import { FinanceNumber } from '@/components/FinanceNumber';
 import { formatExpenseDate, formatRinggit } from '@/lib/expenseHistory';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/providers/AuthProvider';
@@ -72,7 +73,7 @@ export default function ExpenseDetailScreen() {
           <Text style={[styles.category, { color: tokens.brandCyan }]}>{t(`expense.category.${expense.category}`)}</Text>
         </View>
         <Text style={[styles.cardTitle, { color: tokens.cardText }]}>{expense.title}</Text>
-        <Text style={[styles.amount, { color: tokens.cardText }]}>{amount}</Text>
+        <FinanceNumber fit style={[styles.amount, { color: tokens.cardText }]}>{amount}</FinanceNumber>
         <View style={[styles.divider, { backgroundColor: tokens.border }]} />
         <View style={styles.infoRow}><Ionicons name="calendar-outline" size={20} color={tokens.brandCyan} /><Text style={[styles.infoText, { color: tokens.cardMutedText }]}>{date}</Text></View>
         {expense.notes?.trim() ? <View style={styles.notes}><Text style={[styles.label, { color: tokens.cardMutedText }]}>{t('expense.detailNotes')}</Text><Text style={[styles.noteText, { color: tokens.cardText }]}>{expense.notes.trim()}</Text></View> : null}

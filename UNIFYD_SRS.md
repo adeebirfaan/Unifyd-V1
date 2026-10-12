@@ -101,14 +101,29 @@ The Phase 1 receipt backend implements the protected OCR endpoint and draft extr
 | SRS-FR-408 | The system shall cancel pending task reminders when the related task is completed or deleted. | Must | Test |
 | SRS-FR-409 | A student shall be able to choose active curated Faculty of Computing subjects for an academic session and semester, or enter a custom subject. This is personal planning, not official registration. | Must | Test |
 | SRS-FR-410 | A student shall be able to view, edit, and delete their own semester subject selections without changing existing task subjects. | Must | Test |
-| SRS-FR-411 | The semester view shall total only verified known credits, identify unknown values, and give a non-blocking warning above 19 known credits. | Should | Test |
+| SRS-FR-411 | The semester view shall total only verified known credits, identify unknown values, and give a non-blocking warning above 19 known credits. Any positive load is valid, including fewer than 12 credits: there is no minimum-credit rule, warning, or prerequisite. | Should | Test |
 | SRS-FR-412 | A task form shall offer selected semester subjects as shortcuts while leaving its plain-text subject editable. | Must | Test |
 
 **Module 5, Phase 2 status:** The project owner reports that the `public.tasks` migration has been applied. The authenticated Planner now creates, lists, views, edits, completes, reopens, and deletes owned academic tasks (SRS-FR-401 through SRS-FR-406). New tasks default to pending; completed tasks record a completion time, while reopened tasks clear it. Pending and ongoing tasks appear first by nearest deadline, followed by recently completed tasks. Past active deadlines are marked overdue. Required title, subject, and valid local deadline date/time are checked before saving. Owner-only RLS remains the security boundary. Reminder behaviour in SRS-FR-407 and SRS-FR-408 is reserved for a later phase.
 
 **Module 7, Phase 1 course foundation:** A local, unexecuted migration defines an active-only, authenticated read-only UMPSA course catalogue and private student semester subject selections. Catalogue entries carry academic session, semester, faculty code, optional campus, course code/name, optional positive credit hours, and an approved-source label. A student selection may link to a catalogue entry or use a custom course name without one. The catalogue is a convenience reference, not UMPSA's official registration system; availability, sections, capacity, and final registration remain subject to UMPSA/faculty processes. A later UI may offer catalogue selection or manual custom entry and a configurable credit-load warning; offerings, timetable sections, conflict checks, prerequisites, and registration integration remain future work.
 
+**Credit-load rule (correction, 2026-10-09):** Unifyd has no minimum credit-hour requirement. A student may save any positive credit load, for example 13 credits or fewer than 12. A minimum load can matter for UMPSA recognition such as Dean's List eligibility, but Unifyd never uses it for validation, progress, or as a timetable prerequisite. The 19-credit figure is only a visible, non-blocking academic-load warning.
+
 **Module 7, Phase 2:** A reviewed seed, applied by the project owner on 2026-10-08, curates Faculty of Computing degree offerings for academic session `2026/2027` (the current source session) from the local UMPSA Student Course Catalog, PDF pages 393–434. It includes 169 offering rows, 92 Semester 1 and 77 Semester 2, covering 105 distinct course/campus entries. The PDF supplies no explicit credit-hour values, so all seeded credits remain unknown and are never inferred from course codes. My Semester supports owned catalogue/custom selections, editing, deletion, code/name search, and non-blocking known-credit feedback (the source guidelines cite a 19-credit semester limit). A student can always add a custom subject or type a task subject manually. The Task form can copy a selected subject (`CODE — Name`) into its editable text field; tasks store that text as their own snapshot, so deleting a semester subject never changes an existing task. This feature does not register a student at UMPSA. Timetables, sections, conflict checks, prerequisites, and official registration remain future work.
+
+**Module 7, Phase 3: personal timetable (implemented locally; migration awaiting review):**
+- **What it is.** My timetable is a student's own weekly plan of recurring classes for one academic session and semester. It is not official UMPSA registration, and Unifyd never reads the UMPSA portal.
+- **Manual entry.** The student can add, edit, and delete classes. Each class has a required class name, day (Monday–Sunday), start time, and end time. The end time must come after the start time. Course code, location, and section are optional.
+- **Import.** The student uploads a PNG, JPEG, or PDF of up to 5 MB. For a PDF, only the first three pages are read. The Unifyd server checks the sign-in, reads the text with Google Vision, and turns it into draft classes using fixed rules. No AI model, prediction, or outside timetable service is involved.
+- **Mandatory review, partial save.** Nothing is saved automatically. Every draft class appears in an editable review list. Complete drafts start ticked, and the student can untick any to leave it out. Incomplete drafts show what is missing and cannot be ticked until completed; they never block saving the others. Details the document does not show are left blank, never guessed. The student can also remove drafts, add classes, and leave without saving. Save stores only the complete, ticked classes. For example, of five candidates, three can be saved while one wrong one is removed and one incomplete one is left out.
+- **Subject links.** A class can be linked to a My Semester subject only by the student's choice. A draft whose course code exactly matches a selected subject (ignoring case and spaces) shows that subject as a suggestion only.
+- **Clashes.** Two classes clash when they fall on the same day and their times overlap. Classes that only touch, such as 10:00–11:00 and 11:00–12:00, do not clash. Clashes are warnings: they never block saving.
+- **Partial and empty timetables are valid.** A timetable may be empty, hold a single class, or have no classes on several or all days. The week view lists all seven days and marks free days with a neutral “No classes”. Nothing reports a missing class, and no other Unifyd feature requires a timetable.
+- **Manual entry** validates only the class being saved: class name, day, start time, and end time. The student can cancel without creating a class, and need not add every subject or session.
+- **Next class.** It is worked out from saved classes only, using the device's local time. It appears on My timetable and in Planner. With no upcoming class it shows the neutral note “No upcoming classes in your timetable”, not an error. Planner hides the note only if the timetable could not be loaded.
+- **No file kept.** The uploaded file, its raw text, and the unsaved draft are never stored. Saved classes keep their own course code/name snapshot, so deleting a My Semester subject only removes the link.
+- **Not included:** attendance, calendar sync, notifications, automatic task creation, and timetable scraping.
 
 ### 5.6 Reminder notifications
 
@@ -183,6 +198,48 @@ The authenticated server recalculates the same facts from the database and sends
 
 Pull-to-refresh and a summary refresh button are provided, and each panel has an empty state (SRS-FR-710). The AI text is labelled as AI-written and secondary to the figures.
 
+### 5.9 Finance planning: subscription reminders and split bills
+
+Added at the project owner's request on 2026-10-12. Both features are private, manual planning and tracking records. They are not verified charges or debts, and they never move money.
+
+| ID | Requirement | Priority | Verification |
+|---|---|---:|---|
+| SRS-FR-801 | The system shall let a student create, view, edit, pause/resume, and delete their own subscription records with a name, positive amount, optional Wallet category, billing frequency (weekly, monthly, quarterly, or yearly), next billing date, reminder timing (0–30 days before), a notification toggle, and optional notes. | Should | Test |
+| SRS-FR-802 | The system shall require confirmation before deleting a subscription. | Should | Test |
+| SRS-FR-803 | The system shall advance a subscription's next billing date by exactly one billing cycle only after the student confirms "Mark as renewed". It shall keep the amount and reminder settings and never renew automatically when the date passes. | Should | Test |
+| SRS-FR-804 | The system shall list upcoming renewals (active subscriptions due within 30 days, including passed dates) and show a monthly equivalent only when it can be calculated from active subscriptions. | Should | Test |
+| SRS-FR-805 | The system shall schedule at most one local device reminder per active, reminder-enabled subscription at 09:00 on the next billing date minus the reminder days. It shall skip past times, and update or cancel the reminder after edit, pause, renewal, or deletion. | Should | Test/Demonstration |
+| SRS-FR-806 | The system shall request notification permission only when the student saves or resumes a subscription with reminders on. A denied or unavailable permission shall not block subscription tracking. Notification text shall never include notes. | Should | Test/Demonstration |
+| SRS-FR-807 | The system shall not create, change, or include any expense because of a subscription. | Must | Test |
+| SRS-FR-808 | The system shall let a student create, view, edit, and delete their own split bill with a title, positive total, bill date, optional category, optional notes, and 2–20 people including "You". Other people are plain names and need no Unifyd account. | Should | Test |
+| SRS-FR-809 | The system shall include "You" automatically as one participant, settled from the start because the student paid the bill. | Should | Test |
+| SRS-FR-810 | The system shall split a bill equally in integer cents so that the shares add up to the total exactly. Leftover cents go one each to the first participants, starting with "You". A split that would give anyone a zero share is not allowed. | Should | Test |
+| SRS-FR-811 | The system shall support custom amounts, show the amount left to assign or over the total, and block saving until every share is positive and all shares equal the total exactly. | Should | Test |
+| SRS-FR-812 | The system shall let the student mark another participant as fully paid or unpaid. Partial payments are not supported. | Should | Test |
+| SRS-FR-813 | The system shall calculate the outstanding amount as the sum of unsettled shares belonging to other people, and show a bill as Settled only when every other participant is settled. | Should | Test |
+| SRS-FR-814 | The system shall not contact participants, send payment requests, invitations, or messages, or give participants any access. | Must | Inspection/Test |
+| SRS-FR-815 | Wallet shall show a compact summary of renewals in the next 7 days and the total still owed, linked to each screen. These records shall not be included in spending totals. | Should | Test |
+
+**Status (2026-10-12):** Implemented locally and covered by unit and Expo Web E2E tests with the new tables mocked. The migration `20261012_001_finance_subscriptions_split_bills.sql` was applied per project owner on 2026-10-12, and live database checks pass. Reminder delivery, the permission prompt, and tapping a reminder still need a physical-device check.
+
+### 5.10 Smart expense category suggestion
+
+Added as a formal scope decision by the project owner on 2026-10-13. It is a narrow exception to the "no custom ML" exclusion. The system predicts only an expense's category from its title, never spending, grades, or mood.
+
+| ID | Requirement | Priority | Verification |
+|---|---|---:|---|
+| SRS-FR-901 | The system shall suggest at most one existing expense category for a draft expense title, using a Multinomial Naive Bayes classifier trained only on the signed-in student's own saved expense titles and categories. | Should | Test |
+| SRS-FR-902 | The classifier shall train on at most the student's latest 500 labelled expenses, rebuilt in memory for each request and never stored. | Should | Inspection/Test |
+| SRS-FR-903 | The system shall offer a suggestion only when the student has at least 15 usable labelled expenses across at least 2 categories, the title contains at least one word seen in training, the top confidence is at least 0.70, and it leads the second category by at least 0.15. Otherwise it shall return a typed `not_enough_data` or `low_confidence` result. | Should | Test |
+| SRS-FR-904 | The suggestion endpoint shall verify the Supabase access token, take the user ID only from the verified token, accept only `{ title }` (1–120 characters), apply a per-session rate limit, and never log tokens, titles, history, or vocabulary. | Must | Test |
+| SRS-FR-905 | The manual Add Expense form shall request a suggestion only for titles of at least 3 characters, after a short debounce, and show it as an optional card with "Use {category}" and "Choose myself". | Should | Test |
+| SRS-FR-906 | "Use {category}" shall only fill the category field. A suggestion shall never save an expense, lock the field, or override a category the student chose. | Must | Test |
+| SRS-FR-907 | The OCR review form shall request a suggestion using only the draft title, never raw OCR text, while keeping OCR extraction and the explicit save unchanged. | Should | Test |
+| SRS-FR-908 | When data is insufficient, the system shall show a friendly translated note. Low-confidence results show no suggestion. | Should | Test |
+| SRS-FR-909 | The project shall provide a deterministic evaluation utility reporting accuracy, per-category precision, recall, F1, macro F1, and a confusion matrix for labelled fixtures. | Should | Test |
+
+**Status (2026-10-13):** Implemented locally. The server and mobile unit tests and the Expo Web E2E tests pass with the endpoint mocked in E2E. A live call with the test account (0 expenses) returned `not_enough_data`. No migration, Groq/LLM call, remote ML API, or model storage is used.
+
 ## 6. Non-functional requirements
 
 | ID | Requirement | Priority | Verification |
@@ -211,6 +268,9 @@ Pull-to-refresh and a summary refresh button are provided, and each panel has an
 | Student Semester Course | `id`, `user_id`, nonblank `academic_session` and `course_name`, `semester` (1 or 2), nullable `catalog_course_id`, optional `course_code` and positive `credit_hours`, `is_custom`, timestamps. Each row is private to its student; custom rows have no catalogue link. |
 | Reminder | Reminder ID, user ID, task ID, scheduled time, delivery status, history timestamp |
 | Mood Entry | `id`, `user_id`, `mood_level` and `stress_level` (both 1–5), optional nonblank `note`, `recorded_at`, `created_at`, `updated_at` |
+| Subscription | `id`, `user_id`, nonblank `name`, positive `amount` (`numeric(12,2)`), optional Wallet `category`, `billing_frequency` (`weekly`, `monthly`, `quarterly`, `yearly`), `next_billing_date`, `reminder_days_before` (0–30, default 3), `notifications_enabled`, `is_active`, optional nonblank `notes`, timestamps |
+| Split Bill | `id`, `user_id`, nonblank `title`, positive `total_amount` (`numeric(12,2)`), `bill_date` (default today), optional Wallet `category`, optional nonblank `notes`, timestamps |
+| Split Bill Participant | `id`, `split_bill_id` (cascade delete), nonblank `participant_name`, positive `share_amount`, `is_self` (at most one per bill, always settled), `is_settled`, `settled_at` (set exactly when settled), timestamps. There is no `user_id`; access is through the owned parent bill only. |
 
 The manual expense category codes are `food`, `transport`, `academic_materials`, `personal`, and `other`. `entry_source` defaults to `manual`; `ocr` is reserved for a later reviewed receipt workflow. The expense date defaults to the current date when no date is supplied.
 
@@ -220,10 +280,11 @@ Budget data rules: a weekly budget's `period_start` is a Monday, and a monthly b
 
 - The system is an individual student prototype, not a banking, university-portal, or clinical service.
 - OCR accuracy depends on receipt image quality, lighting, format, and readable text; student confirmation is mandatory before saving.
-- The system does not train a custom machine-learning model.
+- The system does not train a custom machine-learning model, except the owner-approved category suggester in §5.10: an in-memory Multinomial Naive Bayes model over the student's own expense titles that only suggests a category. Nothing is stored, and the student always decides.
 - The system does not predict future spending, grades, academic performance, or mood.
 - AI-generated insight text is descriptive assistance only and must have a rule-based fallback.
 - The system does not include bank/e-wallet integration, investment tracking, LMS/timetable integration, counselling, emergency intervention, social features, or shared accounts.
+- Subscriptions and split bills are private planning records. The system does not process payments, transfers, DuitNow/QR payments, or payment links. It does not verify subscriptions, collect debts, invite or contact participants, share bills between accounts, or create expenses automatically.
 
 ## 9. Initial test-traceability map
 
@@ -237,4 +298,6 @@ Budget data rules: a weekly budget's `period_start` is a Monday, and a monthly b
 | SRS-FR-501 to SRS-FR-507 | Reminder scheduling, preferences, tapping, dismissal, history |
 | SRS-FR-601 to SRS-FR-610 | Private mood/stress check-ins, multiple entries per day, history, future trend rules and disclaimer |
 | SRS-FR-701 to SRS-FR-710 | Dashboard accuracy, AI relevance, invalid-response and service-failure fallback, low-mood rule |
+| SRS-FR-801 to SRS-FR-815 | Subscription CRUD, renewal confirmation, local reminder reconcile, permission denial, no automatic expense; equal/custom split rules, You as settled, paid/unpaid outstanding totals, settled status, Wallet summary |
+| SRS-FR-901 to SRS-FR-909 | Classifier thresholds and tokenisation, authenticated endpoint and privacy, optional suggestion in Add Expense and OCR review, insufficient-data note, evaluation metrics |
 | SRS-NFR-001 to SRS-NFR-010 | Security, secret handling, usability, app operation, maintainability, progress tracking |

@@ -1,10 +1,12 @@
 import { DarkTheme, Stack, ThemeProvider, router } from 'expo-router';
+import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
-import { colors, spacing, typography } from '@/constants/theme';
+import { colors, fonts, spacing, typography } from '@/constants/theme';
+import { clearSubscriptionReminders, observeSubscriptionReminderTaps, syncSubscriptionReminders } from '@/lib/subscriptionReminders';
 import { clearTaskReminders, observeTaskReminderTaps, syncTaskReminders } from '@/lib/taskReminders';
 import { AppearanceProvider, useAppearance } from '@/providers/AppearanceProvider';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
@@ -15,8 +17,11 @@ function RootNavigator() {
   const { tokens } = useAppearance();
   const { t } = useI18n();
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  // The bundled finance-number font loads before any screen shows, so amounts never flash in another font.
+  // If it fails to load, the app continues and those numbers fall back to the system font.
+  const [fontsLoaded, fontError] = useFonts({ [fonts.financeNumber]: require('../assets/fonts/SpaceMono-Regular.ttf') });
 
-  if (gate === 'loading') {
+  if (gate === 'loading' || (!fontsLoaded && !fontError)) {
     return (
       <View style={[styles.center, { backgroundColor: tokens.screenBackground }]}>
         <ActivityIndicator size="large" color={colors.brandCyan} />
@@ -61,7 +66,15 @@ function RootNavigator() {
         <Stack.Screen name="task-detail" />
         <Stack.Screen name="edit-task" />
         <Stack.Screen name="my-semester" />
+        <Stack.Screen name="timetable" />
+        <Stack.Screen name="timetable-entry" />
+        <Stack.Screen name="timetable-import" />
         <Stack.Screen name="reminders" />
+        <Stack.Screen name="subscriptions" />
+        <Stack.Screen name="subscription-entry" />
+        <Stack.Screen name="split-bills" />
+        <Stack.Screen name="split-bill" />
+        <Stack.Screen name="split-bill-entry" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="privacy-policy" />
         <Stack.Screen name="terms-of-use" />
@@ -98,18 +111,23 @@ function TaskReminderCoordinator() {
   const userId = session?.user.id;
 
   useEffect(() => {
-    if (gate === 'signedOut') { void clearTaskReminders(); return; }
+    if (gate === 'signedOut') { void clearTaskReminders(); void clearSubscriptionReminders(); return; }
     if (gate !== 'ready' || !userId) return;
     void syncTaskReminders(userId, language);
+    void syncSubscriptionReminders(userId, language);
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') void syncTaskReminders(userId, language);
+      if (state === 'active') { void syncTaskReminders(userId, language); void syncSubscriptionReminders(userId, language); }
     });
     let active = true;
     let stopObserving: () => void = () => undefined;
+    let stopSubscriptionObserving: () => void = () => undefined;
     void observeTaskReminderTaps(userId, (taskId) => router.push({ pathname: '/task-detail', params: { id: taskId } }))
       .then((stop) => { if (active) stopObserving = stop; else stop(); })
       .catch(() => undefined);
-    return () => { active = false; appState.remove(); stopObserving(); };
+    void observeSubscriptionReminderTaps(userId, () => router.push('/subscriptions'))
+      .then((stop) => { if (active) stopSubscriptionObserving = stop; else stop(); })
+      .catch(() => undefined);
+    return () => { active = false; appState.remove(); stopObserving(); stopSubscriptionObserving(); };
   }, [gate, userId, language]);
 
   return null;

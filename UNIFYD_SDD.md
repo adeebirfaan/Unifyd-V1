@@ -102,6 +102,26 @@ Onboarding offers the initial `en` (English) or `ms` (Bahasa Melayu) choice. Set
 - **Saving.** Onboarding and Edit Profile start from the resolved ID and save it through their existing owner-scoped profile update. `refreshProfile()` then updates Home and Profile without a restart. A failed save leaves the stored and displayed avatar unchanged.
 - **Removed.** The previous DiceBear URL generator (`getAvatarUrl`, seeds, and `api.dicebear.com` image loading) was removed. No npm dependency or environment value was involved.
 
+### 4.5b Poof mascot and chat launcher
+
+- **Home presence.** Poof appears once on Home, as the chat launcher at the lower right (`mobile/components/poof/PoofLauncher.tsx`). The earlier decorative header mascot and the Home AI summary card were removed; Poof's chat now introduces itself and explains the student's data.
+- **Component.** `mobile/components/mascot/PoofMascot.tsx` owns Poof's asset reference and all animation logic. Props:
+  - `variant`, `size`, and `interactive` control animation, size, and tapping;
+  - `backdrop` is `disc` or `bubble` (the launcher's round chat bubble: a circle with a lower-left tail, drawn as one `react-native-svg` path);
+  - `onPress` runs the action;
+  - `testID`, `label`, and `hint` set the identity and accessible text.
+
+  The launcher only positions it, and the chat sheet header reuses it with the `idle` variant.
+- **Asset.** The asset is a single bundled image, `mobile/assets/mascots/poof/poof.png`: a 300 × 240 resized copy of the approved artwork, about 40 KB. The original and the storyboard (`/local-assets/`, git-ignored) stay local and are not shipped.
+- **Animation.** React Native `Animated` (the same approach as the card deck and quick actions) composes `translateY`, `rotate`, and `scale` from an idle loop value and reaction values. It uses the native driver on phones. Transforms apply to the bubble and Poof together, so the layout never shifts.
+  - A module-level flag limits the welcome to once per app session.
+  - A busy flag drops taps that arrive during a reaction.
+  - `useFocusEffect` starts the idle loop on focus and stops all animations, resetting values, on blur or unmount.
+- **Tap.** A tap plays the hop-and-wave reaction and calls `onPress` in the same handler, so the chat opens without waiting for the animation. Opening is idempotent (`setPoofOpen(true)`). The chat's backdrop ignores taps until the sheet's `onShow`, so a fast double tap cannot open and then close it.
+- **Reduced motion.** `AccessibilityInfo` reduced-motion state, and its change events, switch Poof to a static pose; a tap opens the chat with no movement.
+- **Celebration.** The `celebrate` variant is implemented but not wired. Task completion happens in Planner, and Home has no existing completion event to reuse without restructuring task CRUD.
+- **No external dependencies.** There are no network requests, external URLs, Lottie, 3D engine, analytics, or database changes. The component exposes `data-phase`, `data-reactions`, and `data-backdrop` attributes on the web for tests only.
+
 ### 4.6 Legal information pages
 
 Settings has a separate Legal card with direct links to protected `/privacy-policy` and `/terms-of-use` routes. Both routes reuse `mobile/components/profile/LegalPage.tsx` for the account heading, back action, October 2026 update line, and scrollable sections. All headings and copy use typed keys in `mobile/constants/i18n.ts` for English and Bahasa Melayu. The pages describe the academic prototype and planned optional features accurately, avoid guarantees or certifications, and do not collect consent or write to the database. They use the existing semantic Light and Dark tokens; no theme behavior or database migration changes are required.
@@ -126,6 +146,7 @@ Standard user-owned CRUD data may use Supabase directly from the mobile app, pro
 | `/health` | GET | App/developer | Confirm backend availability | Non-sensitive service status |
 | `/api/ocr/receipt` | POST | Authenticated app | Process a selected receipt image | Editable merchant, date, amount, raw extracted text/status |
 | `/api/insights/generate` | POST | Authenticated app | Body `{ language: 'en' or 'ms', timeZone }`; generate a validated descriptive summary from verified facts | `facts`, `summary` (or `null`), `source` (`ai`/`fallback`), `fallbackReason`, `generatedAt` |
+| `/api/ml/expense-category-suggestion` | POST | Authenticated app | Body exactly `{ title }` (1–120 chars); in-memory Naive Bayes over the caller's own expense titles (§7.9) | `{ available: true, category, confidence, trainingExpenseCount }` or `{ available: false, reason, trainingExpenseCount }` |
 
 ### 5.3 Backend request rules
 
@@ -228,9 +249,13 @@ erDiagram
 | `expenses` | `id`, `user_id`, `title`, `amount`, `category`, `expense_date`, `notes`, `entry_source`, `created_at`, `updated_at` | `id` is generated; `user_id` references `auth.users` with cascade delete; amount is positive `numeric(12,2)`; category and source use checks; date and timestamps have defaults |
 | `receipts` | `receipt_id`, `user_id`, image reference, extracted fields, OCR status | OCR output is draft/review data until confirmed as an expense |
 | `budgets` | `id`, `user_id`, `amount`, `period_type`, `period_start`, `created_at`, `updated_at` | Auth-owned with cascade delete; positive `numeric(12,2)` amount; weekly starts Monday and monthly starts on day 1; unique (`user_id`, `period_type`, `period_start`) |
+| `subscriptions` | `id`, `user_id`, `name`, `amount`, `category`, `billing_frequency`, `next_billing_date`, `reminder_days_before`, `notifications_enabled`, `is_active`, `notes`, timestamps | Auth-owned with cascade delete; nonblank name; positive `numeric(12,2)` amount; optional Wallet category; frequency check; reminder days 0–30 (default 3); notes null or nonblank; index (`user_id`, `is_active`, `next_billing_date`); `updated_at` trigger. Applied per project owner 2026-10-12. |
+| `split_bills` | `id`, `user_id`, `title`, `total_amount`, `bill_date`, `category`, `notes`, timestamps | Auth-owned with cascade delete; nonblank title; positive total; optional Wallet category; notes null or nonblank; index (`user_id`, `bill_date desc`); `updated_at` trigger. Applied per project owner 2026-10-12. |
+| `split_bill_participants` | `id`, `split_bill_id`, `participant_name`, `share_amount`, `is_self`, `is_settled`, `settled_at`, timestamps | Cascade-deleted with the bill; nonblank name; positive share; partial unique index for one `is_self` row per bill; self is always settled; `settled_at` is set exactly when settled; index (`split_bill_id`); `updated_at` trigger. Applied per project owner 2026-10-12. |
 | `tasks` | `id`, `user_id`, `title`, `subject`, `description`, `deadline`, `priority`, `status`, `completed_at`, `reminder_offset_minutes`, `created_at`, `updated_at` | Auth-owned with cascade delete; title/subject/deadline required; priority and status constrained; completion time matches completed status; nullable reminder offset permits 0, 60, or 1440 minutes |
 | `catalog_courses` | `id`, `academic_session`, `semester`, `faculty_code`, `campus`, `course_code`, `course_name`, `credit_hours`, `source_label`, `is_active`, timestamps | Curated reference only; nonblank identifying fields; semester 1 or 2; optional positive credit hours; unique session/semester/campus/course code, including null campus; authenticated students read only active rows |
 | `student_semester_courses` | `id`, `user_id`, `academic_session`, `semester`, `catalog_course_id`, `course_code`, `course_name`, `credit_hours`, `is_custom`, timestamps | Auth-owned with cascade delete; required session/name, semester 1 or 2, optional positive credit hours; non-custom rows link to a catalogue course and custom rows do not |
+| `timetable_entries` | `id`, `user_id`, `academic_session`, `semester`, `student_semester_course_id`, `course_code`, `course_name`, `day_of_week`, `start_time`, `end_time`, `location`, `section_label`, `entry_source`, timestamps | Auth-owned with cascade delete; nonblank session/name and optional nonblank code/location/section; semester 1 or 2; day 1 (Monday)–7 (Sunday); `end_time > start_time`; source `manual` or `timetable_import`; optional subject link set to null when the subject is deleted; overlaps allowed |
 | `reminders` | `reminder_id`, `user_id`, `task_id`, scheduled time, status | Deleted/cancelled when the task is deleted or completed |
 | `mood_entries` | `id`, `user_id`, `mood_level`, `stress_level`, `note`, `recorded_at`, `created_at`, `updated_at` | Auth-owned with cascade delete; both self-reported scales constrained to 1–5; optional note cannot be blank; multiple check-ins per day are permitted |
 
@@ -250,13 +275,72 @@ The protected `/set-budget` route calculates the current local calendar week (Mo
 
 In Phase 3, Wallet's period selector changes its route parameter and reloads both the owner-scoped current-period budget and all owned expenses with `expense_date` between the local start and end dates, inclusive. Results are paged so calculations do not silently stop at the API page limit. `mobile/lib/budgetSummary.ts` sums `numeric(12,2)` amounts in integer cents, groups the five stored categories, calculates budget use and the remaining or overspent amount, and divides spending by elapsed calendar days in the selected period with a minimum divisor of one. Older expenses remain in the separate all-time history but do not enter period metrics. A dark presentation card uses semantic cyan for a normal balance and destructive red for overspending, with translated empty states and category rows. Focus, period switches, Add/Edit/Delete returns, budget saves, and pull-to-refresh reload the period query. Expense routes carry the selected period back to Wallet. No migration, RPC, chart, or forecast was added.
 
+**Wallet home redesign (2026-10-13).** This is a presentation-only change; no query, calculation, or route changed.
+- **Sections, top to bottom:** overview → quick actions → category breakdown → conditional attention → recent expenses (design system §8).
+- **Calculations:** `calculateBudgetSummary` remains the single source of every figure. `mobile/lib/walletOverview.ts` (pure, unit-tested) only composes it:
+  - `budgetStatus` returns `noBudget`, `healthy`, `near` (≥ 80% used), or `over`;
+  - `usageFraction` clamps the ring to 0–1 while the text shows the real percentage;
+  - `topCategories` returns the top three plus the rest summed; `donutSegments` gives arc fractions;
+  - `attentionItems` returns at most two items: over → near → renewals within 7 days → split-bill amount owed.
+- **Data:** `hooks/useFinancePlans.ts` reads active subscriptions (`id,name,next_billing_date,is_active`) and split-bill participant shares, owner-filtered on focus. A failed source is `null`, so its item is omitted. Neither source is added to spending totals.
+- **Components:** the old `BudgetSummary` and `FinanceSummaryCard` were replaced by `FinanceOverviewCard`, `FinanceQuickActions`, `SpendingBreakdownCard`, and `FinanceAttentionCard`. `ExpenseHistoryRow` became a compact shared-card row.
+- **Motion:** the primary amount uses the existing `AnimatedMoneyAmount`. The donut sweeps in once per app session, and Reduce Motion draws it complete at once.
+- **Recent expenses (2026-10-13 refinement):** Wallet still loads the full owner-scoped history exactly as before (paged, newest first), but renders only the first 5 rows. `AllExpensesSheet` (a Modal over Wallet) shows the same loaded rows, so no second query is made, and offers "View all (N)" when there are more than 5. Totals, ordering, and row navigation are unchanged.
+- **Insight deck (2026-10-13):** `components/wallet/FinanceDeck.tsx` wraps the shared `components/home/CardDeck.tsx` and measures the tallest card for the deck height. It supplies the card surfaces: `colors.brandGradient` for the overview, the dark card for the others.
+  - The three Finance cards gained an `embedded` mode (no own surface); the overview's on-blue palette is white text with readable status pills.
+  - `CardDeck` gained optional props (`height`, `testID`, `dotLabel`, `backToFirstLabel`). The defaults keep Home exactly as before.
+  - Two shared fixes reach both decks:
+    - under Reduce Motion, programmatic moves are not animated;
+    - when a scroller re-mounts after its screen was hidden (width 0 on the web), it is re-aligned to the front card. This uses `useEffectEvent`, so swiping never re-triggers it.
+  - No data, calculation, attention rule, or route changed.
+- **Day groups:** both the preview and the sheet use `groupExpensesByDate` (`mobile/lib/expenseGroups.ts`, pure, tested). It groups by the stored `expense_date`, a local calendar date with no time, so one day is never split by time or time zone. Groups are newest date first, rows keep the history order, totals are integer cents per day, and loaded pages merge into one group per date. `relativeDay` gives Today or Yesterday from the device's local date. Rendering uses `SectionList`: the home headers are not sticky; the sheet's are native sticky headers.
+
+
 The Module 5 Phase 1 migration creates `public.tasks` only. It uses a generated UUID and an Auth-user foreign key with cascade deletion. Nonblank title and subject checks, a required `timestamptz` deadline, `low`/`medium`/`high` priority, and `pending`/`ongoing`/`completed` status define valid task records. New tasks default to medium priority and pending status; a named check requires `completed_at` exactly for completed tasks. There is no future-only deadline check, so overdue tasks remain representable. Authenticated users receive SELECT and DELETE plus column-scoped INSERT/UPDATE; ownership, IDs, and timestamps cannot be updated by clients. Owner-only RLS policies cover all four operations. An index on `(user_id, status, deadline)` supports status sections ordered by deadline, and a private security-invoker trigger maintains `updated_at`. The project owner reports this migration has been applied in Supabase.
 
 The Module 7 Phase 1 migration, pending review and execution, adds `public.catalog_courses` and `public.student_semester_courses` without changing `tasks` or Planner. The curated catalogue has named content and positive-credit checks, a two-semester check, and `UNIQUE NULLS NOT DISTINCT` across session, semester, campus, and course code so unknown-campus duplicates are blocked. Students get SELECT on active catalogue rows only; imports and curation require a later trusted workflow. Student choices use a nullable catalogue FK with `ON DELETE SET NULL`, a saved course name/code, and a check tying `is_custom` to the presence of the FK. A private BEFORE UPDATE trigger converts a linked selection to a custom snapshot when its catalogue entry is removed, allowing the FK action and check to coexist. Student choices have narrow authenticated column grants, owner-only RLS for all four operations, and an index on `(user_id, academic_session, semester, created_at ASC)`. Both tables have separate private security-invoker `updated_at` triggers with empty search paths and no direct client EXECUTE. There is no database credit-hour maximum. The catalogue is a convenience reference, not official UMPSA registration; availability, sections, capacity, and final registration remain subject to UMPSA/faculty processes. A future UI may select catalogue or manual custom subjects and warn against a configurable credit load without blocking a student. Offerings, timetable sections, conflict checks, prerequisites, and registration integration are outside this phase.
 
 The project owner reports that the Phase 1 tables have now been applied. Phase 2 keeps the original 2026/2027 UMPSA catalogue PDF local and outside the mobile bundle. A trusted, reviewable SQL seed curates only Faculty of Computing (`FK`) degree entries on PDF pages 393–434, with source page labels, explicit Semester I/II offerings, and source campus where meaningful (`NO TIMETABLE` is stored as `NULL`). Its 169 rows (92 Semester 1, 77 Semester 2; 105 distinct course/campus entries) are idempotent through `INSERT … ON CONFLICT ON CONSTRAINT catalog_courses_session_semester_campus_code_key DO UPDATE`. On conflict, `credit_hours` uses `COALESCE(excluded, existing)`, and the existing `source_label` is kept while preserved credits remain, so re-running the seed never erases credits verified later. Every row was checked programmatically against text extracted from those PDF pages. The PDF does not explicitly supply credit hours; the seed stores `NULL` rather than inferring them from course codes. Adding a later session means adding a new reviewed seed; the app lists every active session and defaults only when exactly one exists. The project owner applied the seed on 2026-10-08.
 
-The protected `/my-semester` route reads active catalogue sessions and courses through the authenticated client, filters by chosen session and semester, searches code/name locally, and stores an owned snapshot in `student_semester_courses`. A custom subject keeps a null catalogue link. The client checks for an existing identical catalogue selection before insertion; without a database uniqueness rule for student choices, concurrent duplicate requests on separate devices remain possible. Edit changes only subject code/name/credits; delete targets the owned row and leaves `tasks` untouched. Known credits are summed without imputing unknown values, with a non-blocking notice (semantic warning colour plus icon) above 19. The selected session/semester is stored locally per user for convenience. Add/Edit Task reads those selected subjects and copies the chosen code/name into the existing editable `tasks.subject` text; tasks retain this text after a semester selection is removed. Official UMPSA registration, availability, sections, capacity, timetable conflicts, prerequisites, and calendar integration are outside this phase.
+The protected `/my-semester` route reads active catalogue sessions and courses through the authenticated client, filters by chosen session and semester, searches code/name locally, and stores an owned snapshot in `student_semester_courses`. A custom subject keeps a null catalogue link. The client checks for an existing identical catalogue selection before insertion; without a database uniqueness rule for student choices, concurrent duplicate requests on separate devices remain possible. Edit changes only subject code/name/credits; delete targets the owned row and leaves `tasks` untouched. Known credits are summed without imputing unknown values, with a non-blocking notice (semantic warning colour plus icon) above 19. There is deliberately no minimum-credit check: any positive load, including fewer than 12 credits, is valid. The selected session/semester is stored locally per user for convenience. Add/Edit Task reads those selected subjects and copies the chosen code/name into the existing editable `tasks.subject` text; tasks retain this text after a semester selection is removed. Official UMPSA registration, availability, sections, capacity, timetable conflicts, prerequisites, and calendar integration are outside this phase.
+
+**Module 7, Phase 3: personal timetable.**
+
+*Database.* The local migration `20261009_002_timetable_entries.sql` creates `public.timetable_entries` (applied per project owner; verified 2026-10-12).
+- Students get SELECT, column-scoped INSERT, and DELETE.
+- UPDATE excludes `user_id`, `entry_source`, IDs, and timestamps, so ownership and source cannot change after saving.
+- Owner-only RLS covers all four operations with `(select auth.uid()) = user_id`.
+- An index on `(user_id, academic_session, semester, day_of_week, start_time)` supports the weekly view.
+- A private security-invoker trigger with an empty search path maintains `updated_at`.
+- Overlaps are deliberately allowed at database level.
+
+*Routes.* The protected `/timetable`, `/timetable-entry`, and `/timetable-import` routes are reached from Planner.
+- My timetable shares the per-user session/semester choice with My Semester.
+- The weekly view is a grid (`components/timetable/WeekGrid.tsx`): days across with a class count each, hours down. Each class is a block sized by its times and coloured per course. Overlapping classes sit side by side with a red edge. Every free hour has a + button that opens Add class with that day and hour (HH:00–HH:50) filled in. Saturday and Sunday appear only when used, and the grid scrolls sideways if the columns would get too narrow.
+- It shows the Next class card and any clash pairs, and each class opens for editing.
+
+*Pure logic.* `mobile/lib/timetable.ts` holds the rules and is unit-tested without the app.
+- Times are validated as `H:MM`/`HH:MM` (dots accepted) and stored as `HH:MM`.
+- Draft validation, insert-row mapping, and exact normalised course-code suggestions.
+- Clash rule: same day and `startA < endB && startB < endA`, so touching times do not clash.
+- Next class: the earliest start strictly after the current device-local time, wrapping to the same weekday next week. With no saved classes, `NextClassCard` shows the neutral “No upcoming classes in your timetable”.
+- Partial and empty timetables are valid. The week view always lists Monday–Sunday and marks free days “No classes”. Manual entry validates only the class being saved and offers Cancel.
+
+*Import.* The client sends one multipart `file` part with the bearer token to `POST /api/timetable/import`.
+- The student picks from **Photos** (Expo ImagePicker; iOS returns its compatible JPEG form instead of HEIC) or from **Files** (Expo DocumentPicker, for PDFs and images). On iOS, DocumentPicker opens only the Files app, which cannot reach the Photos library, so both options are needed.
+- Web uses the picker's `File`; native uses Expo's file uploader. The picker's cached copy is deleted on native after the upload.
+- `server/src/app.ts` verifies the token before reading the upload. It checks the type (PNG, JPEG, or PDF), the file signature, and the 5 MiB limit. It refuses encrypted or truncated PDFs before OCR.
+- `server/src/timetable-vision.ts` calls Vision `documentTextDetection` for images. For PDFs it calls `batchAnnotateFiles` with the bytes inline, so there is no temporary file or Cloud Storage object.
+- `server/src/timetable-parser.ts` reads up to three pages with fixed rules. List layouts use course-code context with day and section carry-over.
+- Grid layouts (such as UMPSA's "Slot/Day" table) are read from word positions, not Vision's text blocks, which often mix neighbouring cells.
+  - Pieces Vision splits apart (`08` `:` `00-08` `:` `50`, `BZ -` `01-` `085`) are rejoined into lines.
+  - Each word goes to its nearest day column, and lines are stacked into cells by the gaps between them. A line starting a new course code also starts a new cell.
+  - Each cell takes the time rows whose labels it spans.
+  - UMPSA's `CODE(NAME)/SECTION/(TYPE)/ROOM` cell format gives the code, name, section, and room. Back-to-back slots of the same class merge into one entry (08:00–08:50 + 09:00–09:50 → 08:00–09:50).
+- Each candidate has a confidence label. Missing fields stay `null`.
+- The response holds candidates, warnings (always `REVIEW_REQUIRED`; also `NO_CLASSES_FOUND`, `INCOMPLETE_DETAILS`, `PAGES_TRUNCATED`), and page counts. It never includes raw OCR text.
+
+*Review and save.* The review screen turns candidates into editable drafts, shown as one-line summaries (code · name, day and time, room, section). Details open on tap; only incomplete drafts start open. Each card has an “Add to my timetable” checkbox: complete drafts start ticked, and incomplete drafts show their missing fields and cannot be ticked. `draftsToSave` (in `lib/timetable.ts`) keeps only complete drafts the student has not left out, so an incomplete or unwanted candidate never blocks the rest. Clash warnings consider only kept drafts and saved classes, and never block saving. One explicit Save inserts the kept drafts; if none are kept, Save is disabled and a neutral note explains why. The student may also discard the review without saving. Extracted drafts are saved with `entry_source = 'timetable_import'`. Classes the student adds by hand during review are saved with `manual`.
 
 In Module 5 Phase 2, the protected Planner tab pages through the current user's task rows and sorts pending then ongoing by ascending deadline; completed tasks follow by descending `completed_at`. A dedicated Add route validates trimmed title and subject, local date and time, priority, and status, then inserts only the columns granted to authenticated clients; database defaults supply pending status and null completion time. If a student chooses an initial ongoing or completed status, a separate owner-scoped UPDATE uses the granted status columns; a failed second step attempts to remove the new row and reports a safe save error. Protected Detail and Edit routes fetch one ID with the current `user_id` filter, with RLS as the ownership boundary. Edit changes only title, subject, description, deadline, priority, status, and `completed_at`. Completing sets the current timestamp; reopening clears it. Delete requires explicit confirmation. Mutations check for a returned owned row, then return to Planner, whose focus reload plus pull-to-refresh update the list. Form date/time is interpreted in local time before conversion to the `timestamptz` ISO instant. Reminder and notification services remain outside this phase.
 
@@ -274,6 +358,9 @@ Required policy behaviours:
 - Insert policies must require the inserted `user_id` to equal `auth.uid()`.
 - The backend uses a verified authenticated context or carefully scoped server access; it must still enforce ownership before reading user data.
 - Receipt images, if stored in Supabase Storage, must use user-owned paths and matching storage access policies.
+- `split_bill_participants` has no `user_id`. Its select, insert, update, and delete policies require `exists (select 1 from split_bills where split_bills.id = split_bill_participants.split_bill_id and split_bills.user_id = (select auth.uid()))`. The delete policy also excludes the `is_self` row, which is removed only by the bill cascade. No policy uses participant names, and participants have no account access.
+- Column grants: clients cannot set IDs or timestamps. Clients cannot change `user_id` after insert, or a participant's `split_bill_id` or `is_self`. Each new table has its own `unifyd_private` `updated_at` trigger function (security invoker, `search_path = ''`) with client EXECUTE revoked.
+- Live checks (`mobile/e2e/financeLive.spec.ts`, 2026-10-12) confirm with the test account that RLS rejects another `user_id` and bills the student does not own, that column grants reject client-set IDs, timestamps, `user_id`, `split_bill_id`, and `is_self`, that the check constraints hold, that the You row cannot be unsettled, duplicated, or deleted alone, that bill deletion cascades, and that signed-out (anon) requests are denied. A second student account has not been tested.
 
 ## 7. Module design
 
@@ -376,7 +463,7 @@ sequenceDiagram
 
 **Low-mood rule:** mood ≤ 2 on at least 3 different local days in the last 7. It is defined by constants in both modules.
 
-`insight-summary.ts` builds the aggregate-only payload and calls Groq's OpenAI-compatible chat completions. It uses model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, a 15-second timeout, and a strict `json_schema` with exactly `finance`, `academic`, and `wellness` strings. For gpt-oss models it sends `reasoning_effort: low` and `include_reasoning: false` to stay within free-tier token limits. A Groq `json_validate_failed` reply is retried once; rate limits and other errors are not retried. Failures log only the HTTP status and Groq error code. Malay requests must be written in Malay; a reply containing several common English words is rejected. Identical facts reuse a summary for 10 minutes per user. The mobile app requests a summary on first view, then at most every 5 minutes, or when the student refreshes. Without `GROQ_API_KEY`, the endpoint still returns facts with `fallbackReason: not_configured`.
+`insight-summary.ts` builds the aggregate-only payload and calls Groq's OpenAI-compatible chat completions. It uses model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, a 15-second timeout, and a strict `json_schema` with exactly `finance`, `academic`, and `wellness` strings. For gpt-oss models it sends `reasoning_effort: low` and `include_reasoning: false` to stay within free-tier token limits. A Groq `json_validate_failed` reply is retried once; rate limits and other errors are not retried. Failures log only the HTTP status and Groq error code. Malay requests must be written in Malay; a reply containing several common English words is rejected. Identical facts reuse a summary for 10 minutes per user. The endpoint and `mobile/lib/insights.ts` are retained, but Home no longer requests or shows this summary: Poof's chat summarises the student's data instead. Without `GROQ_API_KEY`, the endpoint still returns facts with `fallbackReason: not_configured`.
 
 ### 7.7 Groq prompt and response controls
 
@@ -391,6 +478,62 @@ The server prompt must constrain Groq to:
 Before display, the backend validates that required fields are present and rejects malformed responses. If validation or the provider request fails, it returns the calculated facts with a predefined fallback summary.
 
 The validator requires each section to be 1–300 characters. Every number in the text, after removing thousands separators, must equal a supplied value or that value rounded. English and Bahasa Melayu patterns for diagnosis, disorders, therapy, medication, self-harm, prediction, guarantees, investing, links, and email addresses are rejected. Provider errors are never returned to the client.
+
+### 7.8 Finance planning: subscriptions and split bills
+
+Both features are private, owner-managed records. Neither verifies charges, moves money, contacts anyone, or creates an expense. Wallet totals and budgets never include them.
+
+*Subscriptions* (`/subscriptions`, `/subscription-entry`; rules in `mobile/lib/subscriptions.ts`):
+- Date-only maths runs on UTC calendar days. "Mark as renewed" opens a confirmation, then updates only `next_billing_date` by one cycle: weekly +7 days; monthly, quarterly, and yearly +1, 3, or 12 months, clamped to the last day of a shorter month. With no stored anchor day, a 31st can drift (31 Jan → 28 Feb → 28 Mar), and the student can edit the date.
+- A passed date shows "Renewal date passed" and is never advanced automatically.
+- The monthly equivalent sums integer cents of active plans: monthly as is, quarterly ÷ 3, yearly ÷ 12, weekly × 52 ÷ 12, rounded once. It is hidden when nothing is active or any value is unreadable.
+- **Reminders** (`mobile/lib/subscriptionReminders.ts`): local `expo-notifications` date triggers only, with no push token, server scheduler, or reminders table. `planSubscriptionReminders` gives each active, reminder-enabled subscription one reminder at 09:00 local time on `next_billing_date − reminder_days_before`, and none if that time has passed. `reconcileReminders` cancels reminders that are stale, for another user, or whose time or text changed, and schedules missing ones.
+- Sync runs on app start, on foreground, and after add, edit, pause/resume, renewal, and delete. Signing out clears these reminders. Permission is requested only when the saved or resumed subscription wants a reminder. Denial or web shows a notice, and renewals stay visible in the in-app upcoming list.
+- Notifications use the Android channel `unifyd-subscription-reminders`. They show name, amount, and date, never notes. A tap opens `/subscriptions`.
+- **Compact screen (2026-10-13):** this is presentation only; queries, the monthly-equivalent calculation, renewal, reminders, and CRUD are unchanged.
+  - The screen shows a short header with Add, the monthly overview, "Needs attention" (`attentionSubscriptions`: overdue → today → soon, at most 3), compact active rows (`SubscriptionListItem`), and a collapsed "Paused (N)" section.
+  - Row taps open `SubscriptionDetailsSheet`. Renew and delete confirm inside the sheet, because iOS can refuse a second modal while one closes. The in-sheet delete is owner-filtered, as on the edit route, and cancels the plan's reminder. Edit uses the existing route.
+  - Brand tiles follow `lib/subscriptionBrands.ts`, in order: a local Simple Icons mark (CC0 path data generated into `constants/brandMarks.generated.ts` by `scripts/generate-brand-marks.mjs`, drawn with `react-native-svg`); else an Ionicons mark; else an original category icon; else an initial. `simple-icons` is a dev dependency, and the app bundles only the copied paths, with no network use.
+  - Drag-to-close is shared with the Wallet history sheet through `hooks/useSheetDrag.ts`.
+
+*Split bills* (`/split-bills`, `/split-bill`, `/split-bill-entry`; rules in `mobile/lib/splitBills.ts`):
+- The student paid the bill. "You" is always one participant, stored with `is_self = true`, and is settled with a timestamp. Other people are names only.
+- Equal splits use integer cents: each share is `floor(total ÷ people)`, and the leftover cents (fewer than the number of people) go one each to the first participants, starting with You. A split that would give anyone 0 is blocked.
+- Custom shares show the amount left or over, and saving needs positive shares that add up to the total exactly. Names must be non-blank and distinct (case-insensitive).
+- Outstanding is the sum of unsettled shares of other people. A bill is Settled only when it has other people and all of them are settled. Mark as paid or unpaid toggles `is_settled` and `settled_at` together, with no partial payments.
+- Creating a bill inserts the bill, then all participants in one request, and removes the bill if that second insert fails.
+- **Limitation:** the Data API has no multi-request transaction, so editing runs as checked steps: delete removed people, update changed people, insert new people, then update the bill. A failure after the first write is reported as a partial save and the form reloads. The detail screen warns if saved shares no longer equal the total. The database does not enforce share-sum equality.
+- Lists, detail, and edit read the bill with embedded participants in one owner-filtered query.
+
+*Wallet summary:* `FinanceSummaryCard` shows renewals due within 7 days (including passed dates) and the total still owed, with "View subscriptions" and "View split bills" actions. If either table cannot load, that row falls back to a plain description.
+
+### 7.9 Smart expense category suggestion (Multinomial Naive Bayes)
+
+**Purpose and boundary.** The feature suggests one existing category for a draft expense title. It does not use Groq or any LLM, a remote or cloud ML service, a merchant/category keyword table, or a stored model. The student always chooses: a suggestion only fills the field when the student taps it.
+
+**Model** (`server/src/expense-classifier.ts`, pure TypeScript, no dependency):
+- Text preparation: lowercase, Unicode NFKD with accents removed, every non-letter/digit run turned into a space, whitespace collapsed. Tokens shorter than 2 characters, pure numbers, and a small fixed list of English and Malay linking words (`and`, `the`, `dan`, `di`, `ke`, `untuk`, …) are dropped.
+- Training: the class prior is P(c) = (expenses in c) ÷ (all expenses), and word counts n(w, c) are kept per category. These use only the student's latest ≤ 500 saved titles and categories; titles with no usable tokens are skipped.
+- Prediction: score(c) = log P(c) + Σ count(w) · log((n(w, c) + 1) ÷ (N(c) + |V|)), using Laplace smoothing α = 1. Words never seen in training are ignored. The scores are normalised with softmax to give P(c | title), and the top value is shown as "confidence". It is a model score, not a certainty. The fixed category order breaks ties deterministically.
+- **Thresholds** (all must hold, otherwise a typed unavailable result is returned):
+  - **Enough data:** ≥ 15 usable labelled expenses and ≥ 2 categories; otherwise `not_enough_data`.
+  - **Confident enough:** the title has at least one known word, top confidence ≥ 0.70, and a lead of ≥ 0.15 over the second category; otherwise `low_confidence`. The known-word rule stops the model from simply echoing the student's most common category.
+
+**Endpoint** `POST /api/ml/expense-category-suggestion` (`server/src/app.ts`):
+- **Checks, in order:** Bearer token verified first (401 otherwise); body exactly `{ title }`, 1–120 characters (400 `INVALID_REQUEST`, so a user ID in the body is refused); 60 requests per 10 minutes per session, keyed by a token hash (429).
+- **History:** `server/src/expense-history.ts` reads `expenses.title, category` with a client carrying the caller's token (RLS applies), filtered by the user ID from `auth.getUser(token)`, newest first, limit 500. Notes, amounts, dates, OCR text, and every other table are never read.
+- **Responses:** `{ available: true, category, confidence, trainingExpenseCount }` or `{ available: false, reason: 'not_enough_data' | 'low_confidence', trainingExpenseCount }`. Failures return safe codes (`AUTH_UNAVAILABLE`, `HISTORY_UNAVAILABLE`, `SUGGESTION_UNAVAILABLE`).
+- Nothing is cached or logged.
+
+**App.**
+- `lib/categorySuggestion.ts` sends only the trimmed draft title.
+- `hooks/useCategorySuggestion.ts` waits for ≥ 3 characters and a 600 ms debounce, and the newest title always wins.
+- `components/wallet/CategorySuggestion.tsx` shows a loading line, the optional card ("Suggested category · Food · 82% confidence", "Use Food", "Choose myself"), or the not-enough-data note. Low confidence shows nothing; a failure shows a short "choose yourself" note.
+- `ExpenseForm` takes an opt-in `suggestCategory` setting, used by Add Expense and OCR review (OCR checks its draft title once on open). The suggestion hides once a category is chosen or the card is dismissed. A category the student picks and saves becomes future training data naturally.
+
+**Evaluation** (`evaluateClassifier`, `holdOutSplit`): a deterministic train/test split (every k-th example held out) reporting accuracy, per-category precision, recall, F1, support, macro F1 over present categories, and a confusion matrix.
+- It runs only on fictional fixtures in automated tests, never automatically on real students' data. A real evaluation needs enough labelled examples, gathered with consent.
+- Small or inconsistent personal histories and titles with unseen words lower accuracy. The fixture hold-out scored 0.25 for exactly that reason, which is why the thresholds refuse weak predictions.
 
 ## 8. Error-handling design
 
@@ -426,6 +569,8 @@ The validator requires each section to be 1–300 characters. Every number in th
 | SRS-FR-501 to 507 | Sections 4.1, 5.1, and 7.4 |
 | SRS-FR-601 to 610 | Sections 4.1, 6.1–6.3, and 7.5 |
 | SRS-FR-701 to 710 | Sections 5.1–5.3 and 7.6–7.7 |
+| SRS-FR-801 to 815 | Sections 6.2–6.3 and 7.8 |
+| SRS-FR-901 to 909 | Sections 5.2 and 7.9 |
 | SRS-NFR-001 to 010 | Sections 2, 4.2–4.3, 6.3, 8, and 9 |
 
 ## 11. Implementation guardrails

@@ -140,7 +140,8 @@ export async function observeTaskReminderTaps(userId: string, openTask: (taskId:
   }
   const listener = Notifications.addNotificationResponseReceivedListener(handle);
   const initial = Notifications.getLastNotificationResponse();
-  if (initial) {
+  // Clear only task taps so a subscription reminder tap can still be handled by its own observer.
+  if (initial && isTaskData(initial.notification.request.content.data)) {
     handle(initial);
     Notifications.clearLastNotificationResponse();
   }

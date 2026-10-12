@@ -79,7 +79,7 @@ export const SUMMARY_SCHEMA = {
 
 // Phrases that would turn a description into diagnosis, prediction, or advice.
 // English and Bahasa Melayu forms are matched case-insensitively.
-const BLOCKED = [
+export const BLOCKED_PHRASES = [
   /diagnos/i, /depress/i, /disorder/i, /illness/i, /clinical/i, /therap/i, /medicat/i, /suicid/i, /self[- ]?harm/i,
   /predict/i, /forecast/i, /will (likely|probably)/i, /guarantee/i, /invest/i,
   /kemurungan/i, /gangguan mental/i, /penyakit/i, /terapi/i, /ubat/i, /bunuh diri/i, /ramal/i, /pasti akan/i,
@@ -106,7 +106,7 @@ function allowedNumbers(payload: ReturnType<typeof groqPayload>): Set<string> {
 }
 
 // Common English words that should not appear in a Bahasa Melayu summary.
-const ENGLISH_MARKERS = /\b(you|your|the|and|this|have|over|last|with|tasks?)\b/gi;
+export const ENGLISH_MARKERS = /\b(you|your|the|and|this|have|over|last|with|tasks?)\b/gi;
 
 /** Returns a safe summary, or null when the response must fall back to facts only. */
 export function validateSummary(raw: string, payload: ReturnType<typeof groqPayload>, language: SummaryLanguage = 'en'): InsightSummary | null {
@@ -123,7 +123,7 @@ export function validateSummary(raw: string, payload: ReturnType<typeof groqPayl
     if (typeof text !== 'string') return null;
     const trimmed = text.trim().replace(/\s+/g, ' ');
     if (!trimmed || trimmed.length > MAX_SECTION_LENGTH) return null;
-    if (BLOCKED.some((pattern) => pattern.test(trimmed))) return null;
+    if (BLOCKED_PHRASES.some((pattern) => pattern.test(trimmed))) return null;
     if (language === 'ms' && (trimmed.match(ENGLISH_MARKERS)?.length ?? 0) >= 2) return null;
     // Thousands separators are removed; every remaining number must be a supplied fact.
     const numbers = trimmed.replace(/(\d),(?=\d{3}\b)/g, '$1').match(/\d+(?:\.\d+)?/g) ?? [];
@@ -140,8 +140,12 @@ export class GroqError extends Error {
   constructor(public readonly status: number, public readonly code: string) { super(`Groq request failed (${status} ${code}).`); }
 }
 
+export type GroqMessage = { role: 'system' | 'user'; content: string };
+export type GroqResponseFormat = { name: string; schema: object };
+const SUMMARY_FORMAT: GroqResponseFormat = { name: 'dashboard_summary', schema: SUMMARY_SCHEMA };
+
 /** Calls Groq's OpenAI-compatible endpoint with a strict JSON schema; returns the raw message content. */
-export async function requestGroqSummary(messages: ReturnType<typeof groqMessages>, config: GroqConfig): Promise<string> {
+export async function requestGroqSummary(messages: GroqMessage[], config: GroqConfig, format: GroqResponseFormat = SUMMARY_FORMAT): Promise<string> {
   // Low reasoning effort keeps gpt-oss replies fast and within free-tier token limits.
   const reasoning = config.model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low', include_reasoning: false } : {};
   const attempt = async () => {
@@ -157,7 +161,7 @@ export async function requestGroqSummary(messages: ReturnType<typeof groqMessage
           temperature: 0.2,
           max_completion_tokens: 1024,
           ...reasoning,
-          response_format: { type: 'json_schema', json_schema: { name: 'dashboard_summary', strict: true, schema: SUMMARY_SCHEMA } },
+          response_format: { type: 'json_schema', json_schema: { name: format.name, strict: true, schema: format.schema } },
         }),
         signal: controller.signal,
       });

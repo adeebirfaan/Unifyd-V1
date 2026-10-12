@@ -8,7 +8,7 @@
 |---|---|
 | Overall stage | Integrated dashboard and Groq summaries implemented locally |
 | Current phase | Phase 8 - Integrated dashboard and Groq summaries |
-| Current task | Device check of Home (AI summaries live) and My Semester |
+| Current task | Physical-device checks for subscription reminders, split bills, and timetable (finance and timetable migrations applied per project owner, verified 2026-10-12) |
 | Next milestone | Phase 9: evaluation, hardening, and thesis evidence |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
 | Custom ML / prediction | Not in scope |
@@ -108,6 +108,739 @@ The suite captures and restores the test profile around the run, including tempo
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-10-13 — Wallet: insight cards in the Home-style card deck
+
+**What changed:** presentation only. Card contents, calculations, attention rules, routes, quick actions, recent expenses, View all, and Subscriptions are unchanged.
+- The overview, by-category, and needs-attention cards now form one deck under the Wallet header (`components/wallet/FinanceDeck.tsx`). It reuses the Home `CardDeck`: native paging, peeking cards that come forward when tapped, dots, and the same stack proportions.
+  - Order: overview first and selected; by category second (with a small loading state while the period reloads, so the deck keeps its place); needs attention only when it has items.
+  - With a single card (period error), the card is shown plainly with no dots.
+- **Overview card:** sits on the Home overview's `colors.brandGradient` with white text, and the ring track is translucent white. "Close to your budget" is amber on a dark pill, and "Over budget" keeps its red pill. The other cards keep the dark surface.
+- **`CardDeck` gained optional props:** `height`, `testID` (card IDs `${testID}-card-${key}`), `dotLabel` ("Finance card N of M: {name}"), and `backToFirstLabel` (compact "Back to overview" under the dots, shown only away from the first card). The defaults keep Home's behaviour and test IDs.
+- **Shared fixes**, which affect Home too:
+  1. Under Reduce Motion, dot, peek, and back moves are instant.
+  2. When the deck's scroller re-mounts after its screen was hidden, it is re-aligned to the front card. On the web the deck had shown the old card while the scroller sat at the start, which made "Back to overview" appear to do nothing. This uses `useEffectEvent`, so swiping never triggers it.
+- The deck replaces the three stacked cards, so Recent expenses now begins within the first screen on 390 × 844.
+- New i18n (English and Malay): `wallet.deckOverview`, `deckCategories`, `deckAttention`, `deckDot`, `deckBack`.
+
+**Changed files:**
+- New: `mobile/components/wallet/FinanceDeck.tsx`.
+- Edited: `mobile/components/home/CardDeck.tsx`, `mobile/components/wallet/FinanceOverviewCard.tsx`, `SpendingBreakdownCard.tsx`, `FinanceAttentionCard.tsx` (`embedded` modes), `mobile/app/(tabs)/wallet.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/walletHome.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§8 Wallet), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 90/90.
+- E2E `walletHome.spec.ts` 15/15 (2 new, 4 updated), covering:
+  - the deck order and named dots (3 with attention, 2 without);
+  - Recent expenses above the tab bar on the first screen;
+  - swiping, with no movement past either end;
+  - a peeking edge coming forward, and Back to overview appearing only off the first card;
+  - Back to overview returning to the first card;
+  - controls on the category and attention cards still navigating, and the deck keeping its place after returning from Add expense;
+  - a single card shown plainly;
+  - Light mode with the gradient (#007AFB → #34C1FC) and white figures, while the other cards stay dark.
+- Home `home.spec.ts` and the Wallet roll spec pass unchanged. Full Expo Web suite: 66/66.
+- Screenshots of the overview front, the second card with Back to overview, and the near-budget state were checked.
+
+**Issues or decisions:** cards behind the front card are hidden from screen readers (as on Home), so the named dots are their accessible alternative; a peek label was tried and removed.
+
+**Next action:** On a phone, swipe the Wallet deck, tap a peeking card, and check the blue overview in Dark and Light.
+
+### 2026-10-13 — Subscriptions: local Simple Icons brand marks
+
+**What changed:** brand visuals only. The Subscription UI layout, data, calculations, renewal, CRUD, and navigation are unchanged.
+- **Package:** `simple-icons@^16.35.0` (CC0-1.0) added as a **dev dependency**, at the owner's request. `react-native-svg` was already installed.
+  - The package's single entry point is about 5 MB of JavaScript, which Metro would bundle whole.
+  - Instead, `scripts/generate-brand-marks.mjs` copies the 14 needed paths into `constants/brandMarks.generated.ts` (about 13 KB). A unit test checks that file against the installed package.
+- `lib/subscriptionBrands.ts` holds the one typed mapping: case-insensitive, accent- and punctuation-tolerant, whole-word aliases, with "Drive" alone mapping to Google Drive and `subscriptionBrandKey()` added. In order of preference:
+  1. a Simple Icons mark;
+  2. an Ionicons mark for brands this version no longer carries (Google One, Microsoft, Amazon);
+  3. an original category icon (OpenAI/ChatGPT, Disney+, Canva, Adobe, and others);
+  4. a neutral initial.
+- `SubscriptionBrandIcon` draws marks with `react-native-svg` in the card text colour, in the same tile as before. It is decorative and hidden from screen readers, does not animate, and makes no network requests.
+- **Not available in simple-icons 16.35.0:** OpenAI/ChatGPT, Disney+, Google One, Canva, Adobe, Microsoft/Office, Amazon/Prime Video. These use the fallbacks above. Nothing was traced, drawn, or downloaded.
+
+**Changed files:**
+- New: `mobile/scripts/generate-brand-marks.mjs`, `mobile/constants/brandMarks.generated.ts`.
+- Edited: `mobile/lib/subscriptionBrands.ts`, `mobile/components/finance/SubscriptionBrandIcon.tsx`, `mobile/tests/subscriptionBrands.test.mjs`, `mobile/e2e/subscriptions.spec.ts`, `mobile/package.json`, `mobile/package-lock.json`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§8 Subscriptions), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 90/90. The brand suite has 8 tests, covering:
+  - every required name and alias;
+  - the mark, Ionicons, and category split;
+  - case and spacing tolerance with whole-word safety ("Spotifyish", "Test drive lessons");
+  - stable initials, including for an empty name;
+  - the input record left unchanged;
+  - bundled paths equal to the installed package, with the version recorded;
+  - no URL, `simple-icons` import, image, or fetch in the component or generated file, and `simple-icons` as a dev dependency only;
+  - contrast ≥ 7:1 for marks and ≥ 4.5:1 for cyan icons in both themes.
+- E2E `subscriptions.spec.ts` 5/5, with YouTube, Spotify, and Notion marks asserted.
+- A screenshot of 12 mixed plans showed no external network requests.
+- Full Expo Web suite: 64/64.
+
+**Next action:** On a phone, check that the marks render crisply in Dark and Light.
+
+### 2026-10-13 — Subscriptions: compact, scannable redesign
+
+**What changed:** presentation only. Queries, the monthly-equivalent calculation, renewal advance, reminder rules, CRUD, routes, and user isolation are unchanged. There is no migration, API, or new dependency.
+- **Header:** "Subscriptions", a brand-blue + Add pill, and one short subtitle. The long explanation and the conversion formula were removed.
+- **Monthly overview:** "Monthly equivalent" (rolling amount), "N active subscriptions", or "No active subscriptions" with an Add link.
+- **Needs attention:**
+  - Shown only for real overdue, today, or soon renewals, at most 3, in priority order, via the new pure `attentionSubscriptions` in `lib/subscriptions.ts`.
+  - Compact rows with written status ("Overdue" / "Renews today" / "In 3 days") and icons.
+- **Active list:**
+  - Compact rows in one card (`SubscriptionListItem`): tile, one-line name, "Monthly · 21 Oct", a status chip only when attention is needed, the amount, and a chevron.
+  - Paused plans sit behind a collapsed "Paused (N)" expander.
+- **Details sheet** (`SubscriptionDetailsSheet`), opened from a row:
+  - Shows amount · frequency, next billing date, status, and reminder timing (only when reminders are on).
+  - Actions: full-width Mark as renewed, then Edit, Pause/Resume, Delete. Renew and delete confirm inside the sheet, because iOS can refuse a second modal while one is closing.
+  - Edit uses the existing route. The in-sheet delete is owner-filtered and cancels the plan's reminder.
+- **Brand tiles** (`SubscriptionBrandIcon`, `lib/subscriptionBrands.ts`):
+  - Bundled Ionicons marks only (YouTube, Apple, Google, Microsoft, Amazon).
+  - Original category icons for Spotify, Netflix, Disney+, ChatGPT, Claude, Canva, Notion, Adobe, and others.
+  - A neutral initial for every other name.
+  - Derived from the name, never stored, never fetched.
+- **Drag-to-close** now lives in the shared `hooks/useSheetDrag.ts`, also used by the Wallet "All expenses" sheet; its behaviour is unchanged.
+- Removed the unused `components/finance/SubscriptionCard.tsx`. Added 17 `subscription.*` keys in English and Malay.
+
+**Changed files:**
+- New: `mobile/lib/subscriptionBrands.ts`, `mobile/hooks/useSheetDrag.ts`, `mobile/components/finance/SubscriptionBrandIcon.tsx`, `SubscriptionListItem.tsx`, `SubscriptionDetailsSheet.tsx`, `mobile/tests/subscriptionBrands.test.mjs`.
+- Edited: `mobile/app/subscriptions.tsx`, `mobile/lib/subscriptions.ts`, `mobile/lib/expenseHistory.ts` (`formatDayMonth`), `mobile/components/wallet/AllExpensesSheet.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/subscriptions.test.mjs`, `mobile/e2e/subscriptions.spec.ts`.
+- Removed: `mobile/components/finance/SubscriptionCard.tsx`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§8 Subscriptions), `UNIFYD_SDD.md` (§7.8), `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 86/86 (5 new), covering:
+  - attention priority and the limit of 3;
+  - brand marks, category fallbacks, initials, and whole-word matching;
+  - every icon name existing in the local Ionicons glyph map.
+- E2E `subscriptions.spec.ts` 5/5 (1 new, 2 updated), covering:
+  - the compact summary with the existing calculation, and no formula text;
+  - attention order and limit;
+  - one compact row per plan, with paused plans separate and collapsed;
+  - logo, category, and initial tiles;
+  - a long name fitting at 320 px;
+  - the sheet under Reduce Motion;
+  - renew, pause, resume, and edit through the sheet, plus in-sheet delete with confirmation.
+- Full Expo Web suite: 64/64.
+- Screenshots of the list and the sheet were checked; the renew label overflow found there was fixed.
+- **Test note:** this spec freezes the browser clock, which also freezes animations, so it now runs with Reduce Motion; real devices are unaffected.
+
+**Issues or decisions:** a plan that needs attention appears both under Needs attention and in the full Active list, so the list stays complete.
+
+**Next action:** On a phone, check the list, the sheet actions, drag-to-close, and the brand tiles in Dark, Light, and Malay.
+
+### 2026-10-13 — Wallet: recent expenses grouped by day
+
+**What changed:** presentation only. Queries, stored dates, ordering, totals, the 5-row limit, View all, and sheet behaviour are unchanged.
+- `mobile/lib/expenseGroups.ts` (pure, tested):
+  - `groupExpensesByDate` groups by the stored `expense_date`. It is a local calendar date with no time, so one day is never split.
+  - Groups are newest date first, rows keep the history order, and totals are integer cents per day. Loaded pages merge into one group per date, so no date repeats and no header is ever empty.
+  - `relativeDay` gives Today or Yesterday from the device's local date.
+- `mobile/components/wallet/ExpenseDateHeader.tsx`: a light sentence-case header with Today, Yesterday, or the date ("10 Oct 2026") and the day's total in the finance number style. Its accessible label reads "Expenses for 13 October 2026, total RM 146.00" (Malay: "Perbelanjaan pada …, jumlah …").
+- **Wallet preview** (`SectionList`, non-sticky): still at most 5 rows in total, with headers only for the days those rows cover.
+- **All expenses sheet** (`SectionList`): every day, with native sticky headers on the sheet background.
+- Each day's rows sit in their own rounded card. Rows keep their information, label, and tap behaviour.
+- New i18n: `wallet.today`, `wallet.yesterday`, `wallet.dayGroupA11y`, in English and Malay. New `formatExpenseDateLong` for screen-reader dates.
+
+**Changed files:** `mobile/lib/expenseGroups.ts`, `mobile/components/wallet/ExpenseDateHeader.tsx`, `mobile/tests/expenseGroups.test.mjs` (all new); `mobile/app/(tabs)/wallet.tsx`, `mobile/components/wallet/AllExpensesSheet.tsx`, `mobile/lib/expenseHistory.ts`, `mobile/constants/i18n.ts`, `mobile/e2e/walletHome.spec.ts`; `UNIFYD_DESIGN_SYSTEM.md` (§8 Wallet), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 81/81 (6 new), covering:
+  - same-date grouping and newest-first order;
+  - exact cent totals;
+  - pages merged without duplicate dates;
+  - a five-row preview across two days;
+  - Today/Yesterday across a month boundary;
+  - English and Malay labels.
+- E2E `walletHome.spec.ts` 11/11 (1 new), covering:
+  - a preview of 5 rows with only Today and Yesterday headers, correct totals, the accessible label, and header order;
+  - "View all (7)" opening a sheet with three days, each once, with totals;
+  - the formatted older date, and a sheet row still opening its detail.
+- Full Expo Web suite: 63/63.
+- Screenshots of the grouped preview and sheet were checked.
+
+**Issues or decisions:**
+- Rows still show "category · date" inside a dated group, because the brief asked to keep each row's existing information. It could be shortened later.
+- The row accessible label keeps its existing wording ("Open details for …"), so existing tests and behaviour are unchanged.
+- Malay layout is verified by unit tests, not by E2E.
+
+**Next action:** On a phone, check the grouped preview and sheet (sticky headers while scrolling) in Dark, Light, and Malay.
+
+### 2026-10-13 — Wallet history sheet: reopening after a drag-close
+
+**What changed:**
+- The owner found that after closing the "All expenses" sheet by dragging, tapping "View all" again showed only the dimmed backdrop. The sheet stayed off-screen until it was dismissed and opened once more.
+- Cause: after a drag-close, the sheet's translate value had been driven to the bottom by a native-driver animation. When the hidden modal unmounted, the reset on reopening could be lost on the phone.
+- Fix in `AllExpensesSheet.tsx`:
+  - every opening creates a new `Animated.Value(0)` and remounts the sheet (`key={opening}`), so no state from the previous close carries over;
+  - a drag past the threshold now calls `onClose()` immediately, and the modal's own slide-out carries the sheet down from where the finger left it, so closing never depends on an animation callback.
+
+**Changed files:** `mobile/components/wallet/AllExpensesSheet.tsx`, `mobile/e2e/walletHome.spec.ts`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. E2E `walletHome` + `unifyd`: 16/16.
+- The touch-drag test now also checks that the sheet reopens fully up after a handle drag-close and after a list drag-close.
+- Web does not use the native driver, so the original phone bug could not be reproduced here. The fix removes the cause on both platforms.
+- Not yet checked: the owner's phone.
+
+**Next action:** On the phone, drag-close the sheet, tap "View all" again, and confirm it opens fully. Repeat a few times, including after closing with ×.
+
+### 2026-10-13 — Wallet history sheet: drag-to-close fixed
+
+**What changed:**
+- The owner reported that dragging did not close the "All expenses" sheet on the phone; only the × worked. The old handler only reacted to a move inside the small handle strip, ignored touches that started there, and gave no visual feedback.
+- `AllExpensesSheet` now moves the sheet with the finger (`Animated` translateY).
+  - The handle and title area claim the touch immediately; the × button still receives its own taps.
+  - The list hands a clearly downward drag to the sheet only when it is scrolled to the top, so normal scrolling is unaffected.
+  - Release after 96 pt, or a downward flick (> 24 pt at > 1 pt/ms), animates the sheet out and closes it. Otherwise it eases back in 160 ms.
+  - Under Reduce Motion it still follows the finger, then closes or resets without animation. Each opening starts fully up.
+- An `Animated.spring` for the settle-back froze React Native Web's event loop in testing, so a timed ease-out is used instead.
+
+**Changed files:** `mobile/components/wallet/AllExpensesSheet.tsx`, `mobile/e2e/walletHome.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md` (§8 Wallet), and this file.
+
+**Tests performed:**
+- Typecheck and lint pass.
+- E2E `walletHome` + `unifyd`: 16/16. The new drag test uses real touch events (DevTools `Input.dispatchTouchEvent`, touch-enabled mobile context). It checks:
+  - the sheet follows the finger, and a slow 60 pt drag settles back;
+  - a 240 pt drag on the handle closes it;
+  - a 240 pt drag on the list at the top closes it without opening the row;
+  - × still closes it.
+- A mouse cannot reproduce phone drags reliably on React Native Web: repeated mouse drags were dropped, and releasing over a row clicked it. That is why the test uses touch.
+- Not yet checked: the owner's phone.
+
+**Next action:** On the phone, drag the sheet down from the title, and from the top of the list, then try a short drag that should spring back.
+
+### 2026-10-13 — Wallet: recent-expenses preview and full-history sheet
+
+**What changed:** presentation only. The expense query, ordering, totals, CRUD, routes, budgets, subscriptions, split bills, and category suggestion are unchanged.
+- Wallet home now shows only the **5 newest** expenses. The all-time total and count stay under the "Recent expenses" heading.
+- With more than 5 expenses, a secondary **View all (N)** link (live count; screen-reader label "View all N expenses", with a hint) opens `components/wallet/AllExpensesSheet.tsx` over Wallet, with no new route or tab. The sheet has:
+  - a drag handle (a downward drag closes it), an "All expenses" title, an "N expenses recorded" subtitle, and a 44 pt close button;
+  - the complete list in the same `ExpenseHistoryRow` rows, reusing the rows Wallet already loaded, so there is no second query;
+  - bottom safe-area padding, and Android back / Escape to close.
+- It follows the ShadePicker Modal pattern: it slides in, or opens with no movement under Reduce Motion. Its local state keeps the Wallet scroll position. Tapping a row closes the sheet and opens that expense.
+- No search or filter was added, because none existed before. With 5 or fewer expenses there is no "View all".
+- i18n: `wallet.viewAll`, `viewAllA11y`, `viewAllHint`, `allExpenses`, `closeHistory`, in English and Malay.
+
+**Changed files:** `mobile/components/wallet/AllExpensesSheet.tsx` (new), `mobile/app/(tabs)/wallet.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/walletHome.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md` (§8 Wallet), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 75/75.
+- E2E `walletHome.spec.ts` 9/9 (2 new, 2 extended), covering:
+  - 4 expenses shown in full with no View all, and the empty state with no View all;
+  - 8 expenses with 5 shown newest first and "View all (8)" plus its label;
+  - the sheet holding all 8 rows with the URL unchanged and a close button;
+  - closing restoring the exact scroll position;
+  - a sheet row opening its detail and closing the sheet;
+  - Reduce Motion with no sliding, the last row clearing the bottom on a 320 × 640 screen, and Escape closing.
+- Full Expo Web suite: 61/61.
+- Screenshots of the preview header and the open sheet were checked.
+
+**Issues or decisions:** dragging works only on the handle area, so it doesn't fight the list's own scrolling. The sheet does not follow the finger while dragging; it closes once released.
+
+**Next action:** On a phone, open View all, scroll, close by button, by drag, and by Android back, and check that the Wallet position is kept.
+
+### 2026-10-13 — Wallet home: information hierarchy and interaction polish
+
+**What changed:** presentation only. No query, calculation, route, migration, API, or AI was added or changed.
+- **New order:**
+  - compact header (title, pill Weekly/Monthly switch, secondary date range);
+  - `FinanceOverviewCard`;
+  - `FinanceQuickActions`;
+  - `SpendingBreakdownCard`;
+  - `FinanceAttentionCard` (only when actionable);
+  - compact Recent expenses.
+- **Overview:**
+  - "Available this month/week" is the largest value and rolls with the existing `AnimatedMoneyAmount`.
+  - A usage ring has the percentage written inside: cyan normal, amber ≥ 80% with "Close to your budget", red over budget with an "Over budget" pill.
+  - Budget, spent, and daily average are smaller supporting figures; the daily average shows only when there is spending.
+  - With no budget: "Spent this month", "No budget set for this period.", and a small "Set a budget" action.
+- **Quick actions:**
+  - Four tiles: Add expense (primary), Scan receipt, Budget (screen-reader label "Set budget" / "Manage budget"), Split bills.
+  - A slim Subscriptions pill sits below.
+  - These replace the old full-width Manage budget / Add expense buttons and the "Plans and shared costs" card.
+- **Breakdown:**
+  - A real-data donut with the total spent in the centre; the top three categories with amount and share; "+N more category · RM x" for the rest.
+  - One screen-reader summary. Colours come from `categoryPalette` (cyan-blue family plus grey) and always sit next to names.
+  - Empty states keep the existing hints ("Your full budget is available…", "No expenses in this period yet. Older expenses are not included.") plus "Add an expense".
+  - The donut sweeps in once per app session; Reduce Motion draws it complete.
+- **Attention:**
+  - At most two items, in priority order: over → near (≥ 80%) → renewals within 7 days → split-bill amount owed.
+  - Each opens Budget, Subscriptions, or Split bills; renewal and owed items carry the "tracked separately" note.
+  - The card is omitted when there is nothing to act on.
+- **Recent expenses:**
+  - Compact rows in one shared card: icon, one-line title, "category · date", and the amount on the trailing edge. Notes stay in the screen-reader label.
+  - The all-time total and count sit beside the heading (no longer animated).
+  - No "View all", because the list is already the full history.
+- **Composition** lives in `lib/walletOverview.ts` (pure, tested). `hooks/useFinancePlans.ts` loads renewals and amounts owed (moved from the removed `FinanceSummaryCard`). New tokens: `cardWarningText` (both themes) and `categoryPalette`.
+- **Existing test IDs are kept:** `budget-summary`, `budget-amount`, `budget-spent`, `budget-remaining` / `budget-overspent`, `budget-used`, `budget-daily-average`, `budget-category-*`. `budget-status` now marks the over/near pill.
+
+**Changed files:**
+- New: `mobile/components/wallet/FinanceOverviewCard.tsx`, `FinanceQuickActions.tsx`, `SpendingBreakdownCard.tsx`, `FinanceAttentionCard.tsx`, `mobile/lib/walletOverview.ts`, `mobile/hooks/useFinancePlans.ts`, `mobile/tests/walletOverview.test.mjs`, `mobile/e2e/walletHome.spec.ts`.
+- Edited: `mobile/app/(tabs)/wallet.tsx`, `mobile/components/wallet/ExpenseHistoryRow.tsx`, `mobile/constants/theme.ts`, `mobile/constants/i18n.ts` (30 `wallet.*` keys in English and Malay).
+- Tests rewritten or updated: `mobile/e2e/walletTotal.spec.ts` (the roll now targets the overview amount), `mobile/e2e/unifyd.spec.ts` (all-time total read and over-budget pill), `mobile/e2e/splitBills.spec.ts`, `mobile/e2e/subscriptions.spec.ts`.
+- Removed: `mobile/components/wallet/BudgetSummary.tsx`, `mobile/components/finance/FinanceSummaryCard.tsx`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§5, §8 Wallet, §10), `UNIFYD_SDD.md` (§6 Wallet), `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Mobile typecheck and lint pass. Unit tests 75/75 (5 new). `npm run web` serves the bundle.
+- E2E `walletHome.spec.ts` 7/7, covering:
+  - section order and real figures;
+  - all five shortcuts navigating, with ≥ 44 pt targets;
+  - no-budget and no-expense states, with attention omitted;
+  - near and over states, with attention priority;
+  - period error and retry;
+  - reduced-motion chart drawn complete;
+  - Light mode with dark cards, and a 320 px layout clearing the tab bar.
+- The existing budget scenario in `unifyd.spec.ts` passes unchanged in its figures.
+- Full Expo Web suite: 59/59.
+- Screenshots checked: Dark 390 px with data, the empty state, and near-budget at 320 px.
+- Not yet checked: a physical device, and Malay layout on a small phone.
+
+**Issues or decisions:**
+- At 390 × 844 with an attention card showing, Recent expenses begins about one short scroll below the first screen. Without attention items it starts within the first screen.
+- Quick-action labels may wrap to two lines at 320 px.
+
+**Next action:** On a phone, check the Wallet in Dark, Light, and Malay, with and without a budget, and tap each shortcut.
+
+### 2026-10-13 — Finance: smart expense category suggestion (Multinomial Naive Bayes)
+
+**Requirements implemented:** SRS-FR-901 to SRS-FR-909 (new §5.10). This is a formal scope decision by the project owner on 2026-10-13, a narrow exception to the "no custom ML" rule.
+
+**What changed:**
+- **Classifier** `server/src/expense-classifier.ts`: pure TypeScript with no dependency.
+  - Normalisation and tokenisation (lowercase, accents removed, punctuation to spaces, tokens of ≥ 2 characters, no pure numbers, a small English/Malay linking-word list).
+  - Multinomial Naive Bayes with Laplace α = 1 and softmax posterior.
+  - Thresholds: ≥ 15 usable labelled expenses, ≥ 2 categories, at least one known title word, confidence ≥ 0.70, and margin ≥ 0.15. Results are typed: `available: true`, or `not_enough_data` / `low_confidence`.
+  - Training uses the latest ≤ 500 rows, rebuilt in memory per request and never stored.
+  - Evaluation utilities `holdOutSplit` and `evaluateClassifier`: accuracy, per-category precision/recall/F1/support, macro F1, and confusion matrix.
+- **History loader** `server/src/expense-history.ts`: selects only `title,category` with the caller's own token (RLS), filters by the user ID from `auth.getUser`, newest first, limit 500.
+- **Endpoint** `POST /api/ml/expense-category-suggestion` in `server/src/app.ts`, wired in `index.ts`:
+  - verifies the token first;
+  - accepts exactly `{title}` (1–120 characters), so extra fields such as a user ID are refused;
+  - rate limit 60 per 10 min per token hash;
+  - safe error codes; nothing logged or cached;
+  - CORS as for the other app endpoints.
+- **App:**
+  - `lib/categorySuggestion.ts` sends only the trimmed draft title.
+  - `hooks/useCategorySuggestion.ts` applies a ≥ 3 character minimum and a 600 ms debounce; the latest title wins.
+  - `components/wallet/CategorySuggestion.tsx` shows a loading line, the optional card ("Use {category}" / "Choose myself"), the not-enough-data note, or the unavailable note. Low confidence shows nothing.
+  - `ExpenseForm` takes an opt-in `suggestCategory` setting, used by `add-expense` and `scan-receipt` (OCR checks its draft title once on open). Edit is unchanged.
+  - A suggestion only fills the field, never saves, and hides once a category is chosen.
+- **i18n:** 8 `suggest.*` keys in English and Malay.
+
+**Changed files:**
+- Server (new): `src/expense-classifier.ts`, `src/expense-history.ts`, `src/expense-classifier.test.ts`, `src/category-suggestion.test.ts`.
+- Server (edited): `src/app.ts`, `src/index.ts`, `README.md`.
+- Mobile (new): `lib/categorySuggestion.ts`, `hooks/useCategorySuggestion.ts`, `components/wallet/CategorySuggestion.tsx`, `e2e/categorySuggestion.spec.ts`.
+- Mobile (edited): `components/wallet/ExpenseForm.tsx`, `app/add-expense.tsx`, `app/scan-receipt.tsx`, `constants/i18n.ts`.
+- Docs: `UNIFYD_SRS.md` (§5.10, §8, §9), `UNIFYD_SDD.md` (§5.2, §7.9, §10), `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Server typecheck and build pass. Server tests 66/66 (19 new), covering:
+  - tokenisation and normalisation;
+  - training counts and probabilities;
+  - clear predictions;
+  - fewer than 15 expenses, a single category, and unknown or ambiguous titles all returning unavailable;
+  - notes, OCR text, and other users' fields having no effect;
+  - the 500-row bound;
+  - hand-computed evaluation metrics and a reproducible hold-out;
+  - 401 before any history read, the verified token reaching the loader, a body user ID refused, shape and length checks, the rate limit, a safe 503 with nothing logged, and the loader selecting only `title,category` for the verified user.
+- Mobile typecheck and lint pass. Unit tests 70/70.
+- E2E `categorySuggestion.spec.ts` 4/4, covering:
+  - debounced title-only requests;
+  - "Use" filling the field without a save;
+  - manual change still possible;
+  - "Choose myself" dismissing;
+  - not-enough-data note, and nothing shown on low confidence;
+  - OCR sending only the draft title, never raw text, with saving still explicit.
+- Full Expo Web E2E suite: 52/52.
+- Live smoke test against the built server with the test account: 401 without a token; `not_enough_data` with 0 saved expenses; 400 for an extra `userId` field. The server log held only the startup line.
+- **Evaluation note:** the fictional fixture hold-out (16 train / 4 test) scored accuracy 0.25, because the held-out titles mostly use unseen words. This shows the small-history limitation.
+- Not yet checked:
+  - a physical device;
+  - a real labelled history of 15 or more expenses (the test account has none);
+  - a consented evaluation dataset for the thesis.
+
+**Issues or decisions:**
+- "Confidence" is the Naive Bayes posterior, a model score, not a certainty.
+- A title with no known word returns `low_confidence`, so the most common category is never just echoed back.
+- No migration, no model storage, and no Groq/LLM or remote ML API.
+
+**Next action:** On a phone (with the server restarted via `npm run build && npm start`), add 15+ categorised expenses across at least 2 categories, then type similar titles in Add Expense and scan a receipt to see the suggestion.
+
+### 2026-10-12 — Rolling amounts: play when visible, and Home cards
+
+**What changed:**
+- The roll now waits until the amount can be seen. The owner did not see the Wallet roll, because the ALL-TIME SPENT card sits below the fold and the roll had already finished.
+- `AnimatedMoneyAmount` gains `play`. While it is off, the digits hold the previous value and nothing is remembered as shown. A started roll is latched and always finishes. Afterwards the columns collapse into one plain `FinanceNumber` text run of the same size and position, which keeps text queries and copying correct.
+- **Wallet:** the card's real position comes from `measureInWindow`, compared with the window above the tab bar (68 pt + bottom inset). It is re-checked on scroll, on card layout, and on header layout, because anything that moves the card resizes the header.
+  - Two traps found while testing:
+    - On the web, `onLayout` does not report position changes.
+    - The FlatList's `onLayout` reported the empty-state card's frame.
+  - The window-based check avoids both.
+- **Home:** the Overview and Money "Spent this month" amounts use the component. `CardDeck` now passes `front` to each card. Overview rolls on load; Money waits until it is brought to the front.
+- New labels: `home.monthSpentAmount` ("Spent this month, {amount}"), in English and Malay.
+- **Overview replays on return** (owner request, same day). `replayOnShow` rolls the Overview amount again from RM 0.00 each time the card comes back to the front of the deck, for example after Studies or Wellbeing. It does not replay when switching bottom tabs while Overview stays in front. E2E `home` + `walletTotal`: 15/15.
+
+**Changed files:** `mobile/components/AnimatedMoneyAmount.tsx`, `mobile/app/(tabs)/wallet.tsx`, `mobile/components/home/CardDeck.tsx` (`front` in `DeckControls`), `mobile/components/home/DeckCards.tsx`, `mobile/app/(tabs)/index.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/walletTotal.spec.ts`, `mobile/e2e/home.spec.ts` (new roll test), `UNIFYD_DESIGN_SYSTEM.md` §5, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 70/70.
+- E2E `walletTotal`, `unifyd`, and `home`: 21/21. The new checks cover:
+  - no movement below the fold, then a smooth roll after scrolling into view;
+  - plain text after settling;
+  - the Money card waiting behind the front card, then rolling when shown;
+  - no replay on returning to Home.
+- Full Expo Web E2E suite: 48/48.
+- Not yet checked: a physical device.
+
+**Next action:** On a phone, reload Expo Go, then:
+- watch Overview roll on Home;
+- swipe to Money;
+- scroll Wallet down to ALL-TIME SPENT.
+
+### 2026-10-12 — Wallet: rolling all-time total
+
+**What changed:**
+- **Reference.** I studied `local-assets/money move.mp4` (2.4 s) from frames saved in the session scratchpad. In it, the amount drops through intermediate values from above while the old value slides out below, and the decimals stay still. The video was not copied, bundled, or committed.
+- **New component** `components/AnimatedMoneyAmount.tsx`, used only for Wallet's ALL-TIME SPENT amount (Wallet has no "balance"; this is its primary total).
+  - Built with RN `Animated` (the project convention), native driver on phones, and no new dependency.
+  - Each changed digit is a clipped column of `FinanceNumber` glyphs. Sliding it down reveals each next digit from above, through the digits in between: upwards for a rising total, downwards for a falling one.
+  - "RM", unchanged characters, and separators are static. Duration 850 ms, `Easing.out(cubic)`.
+- **Rules** in `lib/moneyRoll.ts` (pure, tested): columns align from the right and always take the target's length, so the layout is final from the first frame. New leading positions appear from blank. Numbers keep 2 decimals, `en-MY` thousands separators, and a leading minus.
+- **Behaviour:**
+  - The first value in a session rolls from RM 0.00.
+  - Later values roll from the last value shown; a session map keyed by user survives Wallet remounting on focus.
+  - An unchanged value never replays.
+  - A new value mid-roll replaces the running animation, so animations never overlap.
+  - **Plays when seen** (owner request, same day). The card sits below the fold, so the roll first finished unseen. Wallet now tracks, on scroll and layout, whether the card is at least 60% on screen and passes `play` to the component. Until then the digits wait on the previous value, and nothing is remembered as shown. A roll that has started is latched and always finishes.
+  - Reduced motion shows the final value at once.
+  - Large amounts shrink to the card width (minimum 0.6×), as `FinanceNumber fit` does.
+  - One accessible label carries the final value ("All-time spent, RM 1,234.50" / "Jumlah semua perbelanjaan, …"). The glyphs are hidden from screen readers.
+- `FinanceNumber.tsx` now exports its font metrics. Wallet's totals calculation, CRUD, budgets, and every other amount are unchanged.
+
+**Changed files:** `mobile/components/AnimatedMoneyAmount.tsx` and `mobile/lib/moneyRoll.ts` (new), `mobile/components/FinanceNumber.tsx` (exports), `mobile/app/(tabs)/wallet.tsx`, `mobile/constants/i18n.ts` (`wallet.totalLabel`), `mobile/tests/moneyRoll.test.mjs` and `mobile/e2e/walletTotal.spec.ts` (new), `mobile/e2e/unifyd.spec.ts` (the total is now read from `aria-label`), `UNIFYD_DESIGN_SYSTEM.md` §5, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 70/70 (4 new).
+- E2E `walletTotal.spec.ts` 3/3. Frame-by-frame sampling shows:
+  - no movement while the card is below the fold, then, after scrolling it into view, many intermediate positions, settling under 1.1 s and ending at exactly 0 offset;
+  - card size, amount box, and label position constant throughout;
+  - no replay on refocus with the same total;
+  - a decrease rolling from the previous value;
+  - RM 1,234,567.89 fitting a 320 px phone;
+  - reduced motion with no movement.
+- Regression E2E `unifyd`, `home`, `splitBills`, and `subscriptions`: 26/26.
+- Screenshots of mid-roll, final, and 320 px frames were checked.
+- Not yet checked: a physical device (native driver smoothness, Reduce Motion, TalkBack/VoiceOver reading).
+
+**Issues or decisions:**
+- When the budget panel above finishes loading, it can push the whole card down once. That is existing Wallet behaviour, and nothing inside the card moves.
+
+**Next action:** On a phone, scroll down to ALL-TIME SPENT after a reload, or after adding or deleting an expense, and watch it roll. Repeat with Reduce Motion on.
+
+### 2026-10-12 — Migrations applied: timetable and finance
+
+**What changed:**
+- The project owner reports that both migrations are applied in Supabase.
+- `20261009_002_timetable_entries.sql` had been applied earlier. A re-run failed harmlessly with `42P07 relation already exists`. A read-only catalogue check then passed all 9 items: RLS, 15 columns, 4 policies, the index, the trigger and its function, no anon access, and the `entry_source` insert-only grant.
+- `20261012_001_finance_subscriptions_split_bills.sql` was applied on 2026-10-12.
+- New live test `mobile/e2e/financeLive.spec.ts` uses the configured test account and cleans up its uniquely prefixed rows. It checks:
+  - owner CRUD on subscriptions and split bills, and the embedded participant read;
+  - RLS rejects another `user_id` and a bill the student does not own;
+  - grants reject client-set `id`, `created_at`, `user_id`, `split_bill_id`, and `is_self`;
+  - every check constraint;
+  - `settled_at` must move with `is_settled`;
+  - the You row cannot be unsettled, duplicated, or deleted on its own;
+  - deleting a bill cascades to its participants;
+  - anon requests are denied on all three tables.
+
+**Changed files:** `mobile/e2e/financeLive.spec.ts` (new), `UNIFYD_SRS.md` (§5.9 status), `UNIFYD_SDD.md` (§4/§6.2/§6.3 status), `CLAUDE.md`, and this file.
+
+**Tests performed:** `npx playwright test e2e/financeLive.spec.ts`: 3/3 passed against the live database.
+
+**Issues or decisions:**
+- No second student account was available, so two-account isolation is checked indirectly: the other `user_id` is rejected, and so is a bill the student does not own.
+- The UI E2E specs still use mocks, so they stay deterministic.
+
+**Next action:** On a physical phone, check:
+- the subscription reminder permission prompt, delivery at 09:00, and tapping the reminder;
+- split-bill create, mark paid, and edit;
+- timetable import with real data.
+
+### 2026-10-12 — Finance module: subscription reminders and personal split bills
+
+**Requirements implemented:** SRS-FR-801 to SRS-FR-815 (new §5.9, added at the project owner's request on 2026-10-12).
+
+**Scope:** Private, manual planning and tracking only. There are no payments, transfers, DuitNow/QR, or payment links; no bank, e-wallet, or finance APIs; no AI or Groq; no participant accounts, invitations, groups, or shared access; and no automatic expense creation. Existing expense, OCR, Planner, Mind, Profile, auth, course, and timetable behaviour is unchanged.
+
+**What changed:**
+- **One migration:** `supabase/migrations/20261012_001_finance_subscriptions_split_bills.sql` creates `subscriptions`, `split_bills`, and `split_bill_participants`.
+  - Constraints: non-blank text, positive `numeric(12,2)` amounts, Wallet categories only, and notes null or non-blank.
+  - Subscriptions: frequency `weekly|monthly|quarterly|yearly`; reminder 0–30 days (default 3).
+  - Participants: one `is_self` row per bill (partial unique index); self is always settled; `settled_at` is set exactly when settled.
+  - Security: owner-only RLS; participants are reachable only through the owned parent bill, and the self row can be deleted only by the bill cascade. Grants are narrow and column-level for insert and update. Each table has its own private `updated_at` trigger function with client EXECUTE revoked.
+  - Indexes: `(user_id, is_active, next_billing_date)`, `(user_id, bill_date desc)`, and `(split_bill_id)`.
+  - **NOT applied, awaiting owner review.** E2E tests mock all three tables.
+- **Subscriptions** (`/subscriptions`, `/subscription-entry`):
+  - CRUD, pause/resume, and delete with confirmation.
+  - "Mark as renewed" asks for confirmation, then advances the date by one cycle, clamped at month end.
+  - Upcoming renewals cover the next 30 days plus passed dates. The monthly equivalent is integer cents over active plans.
+  - Local reminder at 09:00 on billing date − days, via a pure `planSubscriptionReminders` + `reconcileReminders`, on the Android channel `unifyd-subscription-reminders`. Notes are never shown in a notification.
+  - Permission is requested only when the saved or resumed plan wants a reminder.
+  - `taskReminders.ts` now clears only task taps from the cold-start response; task behaviour is unchanged.
+- **Split bills** (`/split-bills`, `/split-bill`, `/split-bill-entry`):
+  - You plus 1–19 named people. Equal split in cents, with leftover cents going to You first. Custom amounts show what is left or over, and saving is blocked until the shares match the total exactly.
+  - Names must be distinct. The detail screen has mark paid/unpaid, outstanding total, Settled/Open status, edit, and delete with confirmation.
+  - Edits run as checked steps, because there is no multi-request transaction. A partial failure is reported, and a shares/total mismatch is flagged on detail.
+- **Wallet:** the "Plans and shared costs" card shows renewals in the next 7 days and the total still owed, with "View subscriptions" and "View split bills". It is labelled as not included in spending totals.
+- **i18n:** 206 keys (`subscription.*`, `split.*`, `finance.*`) in English and Malay.
+
+**Changed files:**
+- New: `supabase/migrations/20261012_001_finance_subscriptions_split_bills.sql`, `mobile/lib/subscriptions.ts`, `mobile/lib/subscriptionReminders.ts`, `mobile/lib/splitBills.ts`.
+- New: `mobile/components/finance/` (`ConfirmDialog`, `SubscriptionForm`, `SubscriptionCard`, `SplitBillForm`, `SplitBillRow`, `FinanceSummaryCard`).
+- New: `mobile/app/subscriptions.tsx`, `subscription-entry.tsx`, `split-bills.tsx`, `split-bill.tsx`, `split-bill-entry.tsx`.
+- New tests: `mobile/tests/subscriptions.test.mjs`, `mobile/tests/splitBills.test.mjs`, `mobile/e2e/subscriptions.spec.ts`, `mobile/e2e/splitBills.spec.ts`.
+- Edited: `mobile/app/_layout.tsx`, `mobile/app/(tabs)/wallet.tsx`, `mobile/lib/taskReminders.ts`, `mobile/constants/i18n.ts`, `UNIFYD_SRS.md` (§5.9, §7, §8, §9), `UNIFYD_SDD.md` (§6.2, §6.3, §7.8, §10), `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- Mobile typecheck and lint pass. Mobile unit tests 66/66 (22 new).
+- Server typecheck, tests 47/47, and build pass (server unchanged). `npm run web` serves the bundle with no errors, and `git diff --check` is clean.
+- E2E `subscriptions.spec.ts` 4/4 and `splitBills.spec.ts` 5/5.
+- Full Expo Web E2E suite: 41/41, covering Wallet, budgets, OCR, Planner, reminders, Mind, Home, Poof, avatar, My Semester, timetable, subscriptions, and split bills.
+- Not yet checked: a physical device (permission prompt, delivery and tap, the Android channel), Light mode and Malay layout screenshots, and two-account RLS against the real tables, because the migration is not applied.
+
+**Issues or decisions:**
+- Share-sum equality is enforced by the app, not the database.
+- Month-end renewal can drift, because no anchor day is stored.
+- Participants are ordered with You first, then by name.
+
+**Next action:** The owner reviews and applies `20261012_001_finance_subscriptions_split_bills.sql` and reports back. Then run the finance E2E without mocks, plus a two-account RLS check, and test reminders on a phone.
+
+### 2026-10-12 — Finance number typography
+
+**What changed:**
+- Finance display numbers now use **Space Mono**, matching the owner's monospace reference. It was already in the project (`mobile/assets/fonts/SpaceMono-Regular.ttf`, SIL Open Font License) but unused, so no font was downloaded and no dependency was added.
+- **Loading.** `app/_layout.tsx` loads the font with `expo-font` `useFonts` and keeps the existing "Opening your space…" screen until it is ready, so amounts never flash in another font. If loading fails, the app continues with a fallback: the system monospace on the web, the system font on native.
+- **Component.** `components/FinanceNumber.tsx` is the one place this style is defined:
+  - regular weight, tabular figures, −0.5 letter spacing;
+  - a fixed line height of 1.25 × size, because Space Mono's natural line height of about 1.48 would push layouts down;
+  - optional `fit` to keep large amounts on one line. Phones use `adjustsFontSizeToFit`; the web calculates the size exactly from the 0.612 em glyph width, because React Native Web ignores that prop.
+- **Applied to** Wallet (all-time total, budget amount, spent, over or remaining amount, % used, daily average, category amounts), expense history rows, expense detail, the OCR-detected total, and the Home Money card (spent amount and category %) and Overview spent amount.
+- **Not applied to** labels, titles, category names, dates, editable amount inputs, numbers inside translated sentences, or any non-finance screen (Planner, Mind, Profile, My Semester, Timetable, Poof, authentication).
+- **No such screens yet:** subscriptions and split-bill screens do not exist in the app, so there was nothing to change. The app has no chart value labels.
+
+**Changed files:** `mobile/components/FinanceNumber.tsx` (new), `mobile/constants/theme.ts` (`fonts`), `mobile/app/_layout.tsx`, `mobile/app/(tabs)/wallet.tsx`, `mobile/app/expense-detail.tsx`, `mobile/app/scan-receipt.tsx`, `mobile/components/wallet/BudgetSummary.tsx`, `mobile/components/wallet/ExpenseHistoryRow.tsx`, `mobile/components/home/DeckCards.tsx`, `UNIFYD_DESIGN_SYSTEM.md`, `CLAUDE.md`, and this file.
+
+**Tests performed:**
+- TypeScript and Expo lint pass; mobile unit tests 44/44.
+- Expo Web E2E: 19/19 (`unifyd.spec.ts`, covering Wallet CRUD, budgets, and OCR; `home.spec.ts`; `poof.spec.ts`).
+- Screenshots with mocked data were checked: Wallet, history, expense detail, OCR review, and the Home Money card in Dark and Light at 390 px, plus Dark at 320 px with RM 12,345.67 values. No clipping remains after the web fit fix.
+- A probe confirmed the font is loaded at Home's first paint.
+- Not yet checked: a physical device.
+
+**Issues or decisions:**
+- A pre-existing Home Overview overflow was found and left unchanged. When both the over-budget sentence and the next-deadline title wrap to two lines, the chips crowd the swipe hint. The same screenshot with the old font shows it too.
+
+**Next action:** Check finance numbers on a physical phone. Then decide whether to fix the Overview overflow.
+
+### 2026-10-12 — Poof launcher: round chat bubble
+
+**What changed:**
+- The Home Poof launcher's backdrop changed from a rounded-rectangle speech bubble with a lower-right tail to a round chat bubble with a short lower-left tail, matching the owner's reference icon.
+- It is drawn as one outlined `react-native-svg` path (already installed), so the border flows unbroken into the tail. The circle is about 69 pt across. After the owner's phone review, the tail was narrowed to match the reference icon (its base now spans 26° of the circle instead of 48°). The outline stays about 2.5 pt.
+- Unchanged:
+  - the Poof artwork, theme tokens, position, animation, reduced motion, and tap behaviour;
+  - chat logic, data access, and safety behaviour.
+
+**Changed files:** `mobile/components/mascot/PoofMascot.tsx`, `mobile/e2e/home.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md`, `UNIFYD_SDD.md`, and this file.
+
+**Tests performed:**
+- TypeScript and Expo lint pass.
+- Expo Web E2E: Home 11/11 and Poof 2/2. The launcher test now checks the round shape and the outline path.
+- Dark and Light close-up screenshots were checked.
+
+**Next action:** Check the bubble on a physical phone.
+
+### 2026-10-10 — Home: one Poof chat launcher
+
+**What changed:**
+- Home no longer shows the upper decorative Poof or the AI summary card. No gap remains; the greeting follows "YOUR SPACE" directly.
+- Kept: the Poof asset, the `PoofMascot` component, `mobile/lib/insights.ts`, and the `/api/insights/generate` endpoint. The chat logic, endpoint, data access, navigation actions, and safety behaviour are unchanged.
+- The lower chat launcher is now the only Poof on Home:
+  - It is slightly larger (bubble about 69 × 60 pt, up from a 56 pt circle) and sits in a speech bubble with a tail, using new semantic tokens `poofBubble`, `poofBubbleBorder`, and `poofBubbleGlow` for Dark and Light.
+  - It reuses the existing Poof animation: a welcome once per app session, then a calm idle while Home is focused.
+  - A tap hops and opens the chat in the same handler. Repeated taps neither stack the hop nor open a second chat.
+  - With reduced motion it stays still and a tap opens the chat at once.
+- The chat backdrop ignores taps until the sheet has opened, so a quick double tap cannot open and then close it.
+- Added a mobile `typecheck` script (`tsc --noEmit`).
+
+**Changed files:** `mobile/app/(tabs)/index.tsx`, `mobile/components/mascot/PoofMascot.tsx`, `mobile/components/poof/PoofLauncher.tsx`, `mobile/components/poof/PoofAssistant.tsx`, `mobile/constants/theme.ts`, `mobile/e2e/home.spec.ts`, `mobile/package.json`, `UNIFYD_SDD.md`, `UNIFYD_DESIGN_SYSTEM.md`, and this file.
+
+**Tests performed:**
+- `npm run typecheck` and `npm run lint` pass. Mobile unit tests pass 44/44.
+- Expo Web E2E: Home 11/11 and Poof 2/2. New Home tests cover:
+  - a single Poof launcher with a speech-bubble backdrop, larger than 56 pt;
+  - no upper mascot, no AI summary card, and no summary request;
+  - no gap above the greeting, and no overlap with the deck, dots, centre button, tab bar, or avatar;
+  - an idle loop that does not shift the layout, and one welcome per session;
+  - tap and keyboard opening, and a double tap that opens only one chat;
+  - reduced motion.
+- Dark and Light screenshots were checked at 390×844.
+
+**Next action:** Check the launcher's float and tap feel on a physical phone.
+
+### 2026-10-10 — Poof AI Assistant (Phase 1: read-only chat)
+
+**What changed:**
+- Home has a floating Poof chat button at the lower right. The Home layout and Poof's artwork are unchanged; the chat reuses the approved image.
+- The Poof chat sheet shows:
+  - a first-time greeting (stored per account on the device) and a short hello on later visits;
+  - a summary built from Wallet, Budget, Planner, Semester/Timetable, Mind, and Profile data, with a link on each line;
+  - suggested questions, a free-text question box, and action buttons under replies.
+- Answers: on-device rules detect English and Malay questions and answer from verified figures. For non-crisis questions, the app also asks the server for an AI reply. If the AI is unavailable, offline, rate-limited, or returns an invalid reply, the rule-based answer is shown instead. Each reply is labelled "AI answer" or "Quick answer".
+- Safety:
+  - Actions only navigate to other screens; Poof never creates, edits, deletes, submits, or spends anything.
+  - Crisis wording is handled on the device with Malaysian support lines (999, Befrienders KL, Talian HEAL 15555) and is never sent to the AI.
+  - Wellbeing replies include a "not a counsellor or diagnosis" note.
+  - Questions outside Unifyd's scope get a friendly limitation notice.
+- Privacy: the AI only receives aggregate numbers (no task titles, subjects, class names, notes, or names). The server accepts only that exact shape and rejects any extra field or free text. It also rejects replies that contain numbers not in the facts, diagnosis or guarantee wording, or claims of having changed data. Requests need sign-in and are rate-limited per session (30 per 10 minutes). Nothing is stored or logged.
+
+**Changed files:**
+- New (mobile): `mobile/lib/poofFacts.ts`, `mobile/lib/poofEngine.ts`, `mobile/lib/poofData.ts`, `mobile/lib/poofAi.ts`, `mobile/components/poof/PoofAssistant.tsx`, `mobile/components/poof/PoofLauncher.tsx`, `mobile/components/poof/PoofMessage.tsx`, `mobile/components/poof/PoofSummary.tsx`, `mobile/components/mascot/PoofAvatar.tsx`, `mobile/hooks/useReducedMotion.ts`, `mobile/tests/poof.test.mjs`, `mobile/e2e/poof.spec.ts`.
+- New (server): `server/src/poof-chat.ts`, `server/src/poof-chat.test.ts`.
+- Updated: `mobile/app/(tabs)/index.tsx`, `mobile/components/mascot/PoofMascot.tsx` (exports the image only), `mobile/constants/i18n.ts` (English and Malay), `server/src/app.ts`, `server/src/index.ts`, `server/src/insight-summary.ts` (shared safety patterns and response schema), `server/README.md`, and this file.
+
+**Tests performed:**
+- Mobile: TypeScript and Expo lint pass; unit tests 44/44 (10 new Poof tests).
+- Server: typecheck passes; tests 47/47 (9 new). These include a contract test that runs the mobile payload builder against the server validator.
+- Expo Web E2E: Poof 2/2 and Home 10/10.
+- Screenshots at 390×844 were checked for the launcher, summary, answer, and wellbeing support card.
+
+**Issues or decisions:**
+- No schema change. Poof reads existing tables under the student's own Row Level Security.
+- The summary is calculated on the device, so its figures are exact; the AI only writes chat replies.
+- Live Groq replies need `GROQ_API_KEY`, as for the existing summaries. Without it, Poof uses its rule-based answers.
+
+**Next action:** Restart the server, then try Poof on a phone with live Groq replies in English and Malay, including keyboard behaviour and screen reader announcements.
+
+### 2026-10-09 — Timetable: real UMPSA grid reading, weekly grid view, quicker review
+
+**Problem reported:** importing a real UMPSA timetable screenshot gave messy results, the weekly list was hard to read, and the review took too much work. The project owner shared another app's grid timetable as a reference.
+
+**Diagnosis (screenshot read through Google Vision with the owner's permission):**
+- Vision returns each time label in pieces (`07` `:` `00-07` `:` `50`), so no grid was detected and the line reader produced 4 broken candidates.
+- Vision's text blocks also mixed neighbouring cells.
+
+**Changed files:**
+- `server/src/timetable-parser.ts`: grid reading rebuilt on word positions (details in the SDD), plus the UMPSA cell format.
+- `server/src/timetable-parser.test.ts`: new test for a split UMPSA grid.
+- `mobile/components/timetable/WeekGrid.tsx` (new): grid week view.
+- `mobile/app/timetable.tsx`: grid replaces the day list; compact selectors and actions.
+- `mobile/app/timetable-entry.tsx`: day and time prefilled from a + cell.
+- `mobile/app/timetable-import.tsx`: one-line class summaries; details on tap.
+- `mobile/constants/i18n.ts`, `mobile/e2e/timetable.spec.ts`, `UNIFYD_SDD.md`, and this file.
+
+**Result on the owner's screenshot:** all 7 classes were read with the correct day, merged times, course name, section, and room. Before, it produced 4 broken candidates.
+
+**Tests performed:**
+- Server: typecheck, build, and tests 38/38.
+- Mobile: TypeScript and Expo lint pass; unit tests 34/34; timetable E2E 4/4.
+- The full suite was re-run (see the handoff).
+- Grid screenshots of the 7 classes were checked at phone width.
+
+**Note:** after pulling these changes, rebuild and restart the server (`npm run build`, then `npm start`) so the phone uses the new reader.
+
+### 2026-10-09 — Correction: partial course loads and partial or empty timetables are valid
+
+**Requirement change:** Unifyd must not require 12 credit hours, a full timetable, or classes every day. An incomplete import candidate must not block saving the others.
+
+**Changed files:**
+- `mobile/lib/timetable.ts` (new `isComplete`, `draftsToSave`) and `mobile/tests/timetable.test.mjs` (new partial-import test).
+- `mobile/app/timetable-import.tsx`: per-class “Add to my timetable” checkbox; only complete, ticked classes are saved.
+- `mobile/app/timetable.tsx`: all seven days in the week view, neutral “No classes” on free days, friendlier empty state, Next class note always shown.
+- `mobile/components/timetable/NextClassCard.tsx`: “No upcoming classes in your timetable” instead of hiding.
+- `mobile/app/timetable-entry.tsx`: Cancel button.
+- `mobile/app/(tabs)/planner.tsx`: Next class note shown once loaded, hidden only if loading fails.
+- `mobile/constants/i18n.ts`: new and reworded EN/MS strings; removed the unused “fix errors” and “No classes on {day}” strings.
+- `mobile/e2e/timetable.spec.ts`; `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and this file.
+
+**My Semester:** no code change was needed. The app never had a minimum-credit rule, and the 19-credit notice was already non-blocking. The SRS and SDD now state this explicitly.
+
+**Tests performed:** TypeScript and Expo lint pass; mobile unit tests 34/34 (new partial-import test); full Expo Web E2E 29/29. That includes 4 timetable tests: a five-candidate import where 3 are saved, 1 is removed, and 1 incomplete one is left out; an incomplete-only review that saves nothing; manual add/cancel/edit/delete; and safe import errors with the neutral Next class note. No migration was run.
+
+### 2026-10-09 — Module 7 Phase 3: personal timetable import, review, and manual builder
+
+**Changed files:**
+- **Migration** (new, not executed): `supabase/migrations/20261009_002_timetable_entries.sql`.
+- **Server:**
+  - new: `server/src/timetable-parser.ts`, `server/src/timetable-vision.ts`, `server/src/timetable-parser.test.ts`, `server/src/timetable.test.ts`;
+  - changed: `server/src/app.ts`, `server/src/index.ts`, `server/README.md`.
+- **Mobile:**
+  - new: `mobile/lib/timetable.ts`, `mobile/lib/timetableEntries.ts`, `mobile/lib/timetableImport.ts`, `mobile/components/timetable/ClassFields.tsx`, `mobile/components/timetable/NextClassCard.tsx`, `mobile/app/timetable.tsx`, `mobile/app/timetable-entry.tsx`, `mobile/app/timetable-import.tsx`, `mobile/tests/timetable.test.mjs`, `mobile/e2e/timetable.spec.ts`;
+  - changed: `mobile/app/_layout.tsx`, `mobile/app/(tabs)/planner.tsx`, `mobile/constants/i18n.ts`, `mobile/package.json` and lock file (`expo-document-picker`).
+- **Docs:** `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and this file.
+
+**What changed:**
+- **Planner** links to My timetable and shows the Next class once classes are saved.
+- **My timetable** shows the week for the chosen session/semester, with a day selector for small phones, clash warnings, and the Next class card. A note says it is not official UMPSA registration.
+- **Manual classes:** students add, edit, and delete classes, with live clash warnings while editing.
+- **Import:** a PNG, JPEG, or PDF goes to the server, then to a mandatory editable review. Suggested My Semester links appear on an exact course-code match only. Nothing is saved until the student presses Save.
+- **iPhone fix:** Choose file opened only the Files app, which cannot reach the Photos library. Import now offers **Choose from Photos** (image picker; HEIC is delivered as JPEG) and **Choose from Files** (PDFs and images).
+- **Not stored:** the uploaded file, raw OCR text, and drafts. The picker's cached copy is deleted on native after upload.
+- **Not used:** AI, predictions, or outside timetable services.
+- **Not added:** attendance, calendar sync, notifications, or automatic tasks.
+
+**Tests performed:**
+- Server: typecheck, build, and `npm test` 37/37 (13 new: parser layouts, upload validation, auth, PDF limits and protection, safe errors, inline Vision PDF request).
+- Mobile: TypeScript and Expo lint pass; unit tests 33/33 (5 new timetable logic tests).
+- E2E: 3 new Expo Web tests in `e2e/timetable.spec.ts`. They cover import → review → correction → explicit save, suggested links, clash rules, Next class, manual add/edit/delete, and safe import errors. The tests mock `timetable_entries` and the import endpoint, because the migration is not applied.
+
+**Remaining:**
+- Review and apply the migration (not executed by the assistant).
+- Live save against Supabase.
+- Real Vision reads of actual UMPSA timetable images and PDFs.
+- Native file picking and upload on a phone.
+- Second-account RLS isolation.
+
+### 2026-10-09 — Poof mascot on Home
+
+**Changed files:**
+- `mobile/components/mascot/PoofMascot.tsx` (new), `mobile/assets/mascots/poof/poof.png` (new)
+- `mobile/app/(tabs)/index.tsx`, `mobile/constants/theme.ts` (`mascotBackdrop` token), `mobile/constants/i18n.ts`
+- `mobile/e2e/home.spec.ts`, `.gitignore` (`/local-assets/`)
+- `UNIFYD_SDD.md`, `UNIFYD_DESIGN_SYSTEM.md`, and this file
+
+**What changed:** Poof, the approved mascot, appears in the Home header's top-right corner above the avatar.
+- **Behaviour.** It pops in and waves once per app session, then floats calmly while Home is focused. A tap makes it hop and wave, and overlapping taps are ignored.
+- **Reduced motion.** With reduced motion on, it is static.
+- **Asset.** Only one approved Poof image exists, so the animation uses transforms of that local image (React Native `Animated`) and the artwork is unchanged.
+- **Dark appearance.** A light backdrop disc keeps Poof's black cap visible.
+- **Celebration.** The celebration variant exists but is not wired, because Home has no task-completion event to reuse cleanly.
+- **Storyboard.** The storyboard stays local and is now git-ignored.
+
+**Tests performed:**
+- TypeScript and Expo lint pass; unit tests 28/28.
+- Full Expo Web E2E: 25/25, including 2 new Poof tests covering:
+  - the welcome → idle sequence happening once per session;
+  - the local image request only;
+  - idle movement without layout shift;
+  - no overlap with the greeting or avatar;
+  - single-reaction taps returning to idle;
+  - no repeated welcome after leaving Home;
+  - Profile still opening;
+  - static Poof under reduced motion.
+- Zoomed screenshots confirmed Poof renders whole, with no cropping.
+
+**Remaining manual checks:** animation smoothness on a physical phone; Light appearance; the device reduced-motion setting; smaller and larger screens.
+
+### 2026-10-09 — Manual verification by the project owner
+
+- **New account default avatar:** a newly created account showed the Turban girl avatar before any selection. This confirms the applied `avatar_id` default and the sign-up trigger.
+- **Cross-user data isolation:** with a second account, the project owner confirmed that one student cannot see another student's data. This is manual evidence for SRS-NFR-001; an automated two-account RLS test is still open.
 
 ### 2026-10-09 — Avatar name and default
 

@@ -53,10 +53,11 @@ async function cleanupExpenses() {
 }
 
 async function spentTotal(page: Page): Promise<number> {
-  const label = page.getByText('ALL-TIME SPENT', { exact: true }).filter({ visible: true });
-  if (!await label.isVisible()) return 0;
-  const total = await label.locator('..').getByText(/^RM /).textContent();
-  return Number(total?.replace(/[^\d.]/g, '') ?? 0);
+  // The all-time total sits beside "Recent expenses" and carries its value in one accessible label.
+  const summary = page.getByTestId('wallet-total').filter({ visible: true });
+  if (!await summary.count()) return 0;
+  const total = await summary.getAttribute('aria-label');
+  return Number(total?.split('RM')[1]?.replace(/[^\d.]/g, '') ?? 0);
 }
 
 async function expectSpent(page: Page, amount: number) {
@@ -501,7 +502,8 @@ test('current monthly and weekly budgets use only their period expenses', async 
     await expect(visibleTestId(page, 'budget-spent')).toHaveText('RM 80.00');
     await expect(visibleTestId(page, 'budget-overspent')).toContainText('Over budget');
     await expect(visibleTestId(page, 'budget-overspent')).toContainText('RM 5.00');
-    await expect(visibleTestId(page, 'budget-overspent')).toHaveCSS('background-color', 'rgb(180, 35, 24)');
+    // Over budget is written in a red status pill, never colour alone.
+    await expect(visibleTestId(page, 'budget-status')).toHaveCSS('background-color', 'rgb(180, 35, 24)');
     await expect(visibleTestId(page, 'budget-summary').getByText('Remaining', { exact: true })).toHaveCount(0);
     await expect(visibleTestId(page, 'budget-used')).toHaveText('106.7%');
 

@@ -86,6 +86,18 @@ Use the platform’s clear sans-serif typeface (for example Inter, if configured
 - Use sentence case for labels and actions.
 - Keep descriptions short; prefer one strong title and one supportive line.
 - Use tabular/monospaced numerals only where financial alignment is required.
+- **Finance display numbers** use **Space Mono** (bundled, SIL Open Font License) through the shared `components/FinanceNumber.tsx`.
+  - Scope: Wallet totals, budget amount, spent, remaining or over-budget amount, percentage used, daily average, category amounts, expense amounts in history and detail, the OCR-detected total, and the Home Money and Overview spending figures and category percentages.
+  - Everything else keeps the system font: labels, titles, category names, buttons, dates, editable amount inputs, numbers inside sentences such as "RM 350.00 left of RM 1,500.00", and every non-finance module.
+  - The font is regular weight only, with a line height of 1.25 × its size. Large values shrink to fit rather than clip.
+  - **Rolling totals:** `components/AnimatedMoneyAmount.tsx` is used for the Wallet overview's primary amount (Available, Over budget, or Spent this period) and for Home's "Spent this month" on the Overview and Money cards. The all-time total no longer rolls.
+    - Changed digits roll down into place like an odometer, passing through the digits in between, over 850 ms with ease-out.
+    - "RM", unchanged digits, separators, the card, and the label stay still. The layout is final from the first frame, because every glyph is the same width.
+    - The first roll in a session starts from RM 0.00. Later rolls start from the last value shown, and an unchanged total never replays.
+    - The roll starts only when the amount can be seen. The Wallet overview is at the top, so it rolls on load; a Home card must be the front card of the deck. Until then the digits wait on the previous value. A roll that has started always finishes, then settles into one plain text run.
+    - The Overview card (`replayOnShow`) rolls again from RM 0.00 each time it returns to the front of the deck. Other rolling amounts replay only when their value changes.
+    - Reduced motion shows the final value at once. Screen readers hear one label, such as "All-time spent, RM 125.50".
+    - Do not use it for any other amount (lists, budgets, subscriptions, split bills, inputs, OCR).
 
 ## 6. Layout, spacing, and shape
 
@@ -199,6 +211,100 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
   - **Wellbeing:** three tiles, the comparison, and the gentle low-mood notice.
 - Keep the first viewport useful: budget status, nearest deadline, and latest mood are all on the Overview card.
 
+### Wallet (Finance home)
+
+**Insight deck (2026-10-13).** The overview, "by category", and "needs attention" cards sit in one stacked, swipeable deck directly under the header, reusing the Home `CardDeck`:
+- **Interaction:** native paging, with the cards behind peeking above. Tapping a peeking edge brings that card forward.
+- **Dots:** one per card, named "Finance card N of M: {name}". Screen readers use them instead of swiping.
+- **Back to overview:** a compact control under the dots, shown only away from the first card.
+- **Overview card:** uses the Home overview's brand gradient (`colors.brandGradient`) with white text.
+  - "Close to your budget" sits on a dark pill (amber on near-black), and "Over budget" keeps its red pill, so both stay readable on blue.
+- **Other cards:** "by category" and "needs attention" keep the dark card surface. "Needs attention" is included only when it has items.
+- **Sizing:** the deck is as tall as its tallest card, measured from the content.
+- **Single card:** with only one card (for example while the period cannot load), it is shown plainly with no dots.
+- **Reduce Motion:** dots, peeks, and Back to overview switch cards without the sliding transition.
+- **Returning to Wallet** keeps the deck on the same card.
+- **Layout order:** quick actions follow the deck, then Recent expenses, which now starts within the first screen of a standard phone.
+
+The numbered list below describes each card's contents.
+
+The order is fixed and favours what a student needs first (2026-10-13 redesign):
+
+1. **Compact header.**
+   - "YOUR WALLET" and "Wallet", with a pill Weekly/Monthly switch on the right.
+   - The period's date range is a secondary label underneath.
+2. **Overview card** (`FinanceOverviewCard`):
+   - The largest value is **Available this month/week**, the budget minus spending.
+   - When over budget, it shows a red "Over budget" pill and the amount over.
+   - Beside it, a usage ring with the % used written inside. Cyan is normal; amber marks ≥ 80% used, with "Close to your budget" written out; red marks over budget.
+   - Budget, spent, and daily average are smaller supporting figures. The daily average appears only when the period has spending.
+   - With no budget, the card shows **Spent this month/week** with "No budget set for this period." and a small "Set a budget" action.
+   - The card itself never animates. Only the primary amount rolls (`AnimatedMoneyAmount`).
+3. **Quick actions** (`FinanceQuickActions`):
+   - Four icon tiles with short labels: **Add expense** (the brand-blue primary tile), **Scan receipt**, **Budget**, **Split bills**.
+   - The Budget tile's screen-reader label says "Set budget" or "Manage budget".
+   - A slim **Subscriptions** pill sits below so it stays reachable without crowding the row. Every tile is at least 44 pt.
+4. **This period by category** (`SpendingBreakdownCard`):
+   - A donut of every real category in the period, with the total spent in the centre.
+   - The top three are listed with a colour dot, icon, name, amount, and share; any others are summarised as "+N more category · RM x".
+   - Colours come from `categoryPalette` (cyan-blue family plus grey) and always sit next to a written name. Screen readers get one text summary.
+   - With no spending, a short message and "Add an expense" replace the chart.
+   - The donut sweeps in once per app session (700 ms ease-out) and draws complete under Reduce Motion, on later renders, and when the period changes.
+5. **Needs attention** (`FinanceAttentionCard`), shown only when something is actionable:
+   - At most two items, in priority order: over budget → close to budget (≥ 80%) → subscription renewals in the next 7 days → money still owed in split bills.
+   - Each item is one factual sentence with an icon and chevron, opening Budget, Subscriptions, or Split bills.
+   - Renewal and split-bill items carry "Tracked separately. Not included in your spending totals."
+6. **Recent expenses:**
+   - A preview of the **5 newest** expenses, in compact rows inside one shared card: category icon, title (one line), "category · date", and the amount on the trailing edge. Notes stay in the screen-reader label.
+   - The all-time total and count sit under the heading as a quiet summary.
+   - Rows are **grouped by day**, newest first. Each day has a light header with **Today**, **Yesterday**, or the date ("10 Oct 2026"), and that day's total on the trailing edge. Each day's rows sit in their own rounded card.
+     - The preview still shows at most 5 rows in total, with headers only for the days those rows cover.
+     - Screen readers hear one label per header, for example "Expenses for 13 October 2026, total RM 146.00".
+     - In the sheet, day headers stick to the top while their day scrolls.
+   - With more than 5 expenses, a secondary **View all (N)** link sits beside the heading. Its screen-reader label is "View all N expenses".
+   - **View all** opens `AllExpensesSheet` over Wallet, not a new route or tab. The sheet has:
+     - a near-full-height card with a drag handle. The sheet follows the finger when dragged from the handle and title area, or from the list when it is scrolled to the top. Releasing after 96 pt, or a quick downward flick, closes it; a shorter drag eases back;
+     - an "All expenses" title, the "N expenses recorded" subtitle, and a 44 pt close button;
+     - the complete list in the same rows.
+   - The sheet covers the tab bar and the + button, so nothing blocks its rows, and it pads for the bottom safe area.
+   - It follows the ShadePicker sheet pattern: it slides in, or opens with no movement under Reduce Motion.
+   - Closing returns to the same Wallet scroll position. Tapping a row closes the sheet and opens that expense.
+
+### Subscriptions
+
+The screen is compact and easy to scan (2026-10-13 redesign):
+
+1. **Header:**
+   - back, "YOUR FINANCES", and **Subscriptions**, with a brand-blue **+ Add** pill on the right;
+   - one short subtitle, "Track recurring plans and renewal dates." The long explanation and the conversion formula are no longer shown.
+2. **Monthly overview:**
+   - "Monthly equivalent", the amount (the existing calculation, rolling with `AnimatedMoneyAmount`), and "N active subscriptions";
+   - with no active plans: "No active subscriptions" and an Add link.
+3. **Needs attention:** shown only when something is overdue, renews today, or falls within the reminder window.
+   - At most three rows, in priority order: overdue → today → soonest (`attentionSubscriptions`).
+   - Each status is written out ("Overdue" in red, "Renews today" in amber, "In 3 days" in cyan) with an icon, never colour alone.
+4. **Active subscriptions:**
+   - Compact rows in one shared card: brand tile, name (one line), "Monthly · 21 Oct", a small status chip only when attention is needed, the amount on the trailing edge, and a chevron.
+   - No reminder text, notes, or action buttons appear in rows.
+5. **Paused (N):** a collapsed expander. Paused plans never appear in the active list.
+6. **Details sheet** (`SubscriptionDetailsSheet`, drag-to-close via `useSheetDrag`, Reduce Motion aware), opened by tapping a row:
+   - Contents: tile, name, amount · frequency, next billing date, status, and reminder timing (only when reminders are on).
+   - Actions: a full-width **Mark as renewed** (active plans only), then Edit, Pause/Resume, and Delete.
+   - Renew and delete confirm inside the sheet, with no second modal.
+   - Edit opens the existing edit route. Closing keeps the list position.
+
+**Brand tiles** (`SubscriptionBrandIcon`, rules in `lib/subscriptionBrands.ts`):
+- The visual is derived from the plan name each time (case-insensitive, whole words); nothing is stored and no migration is needed. Each tile shows, in order of preference:
+  1. **Local vector marks** from **Simple Icons** (open-source, CC0 vector data): Spotify, YouTube, Claude, Anthropic, Netflix, Apple Music, iCloud, Google Drive, Notion, Grammarly, Duolingo, Figma, Dropbox, Zoom.
+     - `scripts/generate-brand-marks.mjs` copies only these paths into `constants/brandMarks.generated.ts`, about 13 KB, instead of bundling the 5 MB package. `simple-icons` is a dev dependency only.
+     - They are drawn with `react-native-svg`.
+  2. **Ionicons marks** for brands this Simple Icons version no longer carries: Google One, Microsoft 365, Amazon/Prime Video.
+  3. **Original category icons** where no mark is available: ChatGPT/OpenAI (sparkles), Disney+ (film), Canva (palette), Adobe (brush), plus other music, video, AI, notes, and storage services.
+  4. **A neutral initial tile** for every other name.
+- Marks are monochrome in the card text colour (contrast ≥ 7:1 on the dark tile in both themes). Category icons and initials are cyan.
+- All four share one size and shape and are hidden from screen readers, because the name is written beside them.
+- Nothing is downloaded or loaded remotely. Marks only identify the student's own plan and imply no affiliation.
+
 ### List screens
 
 - Screen title, optional quick filter/sort control, primary list, and a helpful empty state.
@@ -214,6 +320,22 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
 
 - Use a simple original outline icon/illustration, direct sentence, and one action.
 - Example: “No expenses yet. Add your first expense to see your spending here.”
+
+### Poof chat launcher (Home)
+
+- **Design.** Poof is Unifyd's approved mascot: a bright cyan-blue fluffy cloud with dot eyes, a black smile and arm line, a raised waving arm, short legs, a black mortarboard and tassel, and a floating cyan-blue circle. The approved artwork is never redrawn, recoloured, cropped, or distorted; animation uses only movement, a small scale change, and a small tilt.
+- **One Poof on Home.** Poof appears only as the chat launcher. The header has no mascot, and Home has no separate AI summary card; the chat greets the student and explains their data.
+- **Placement.** Lower right, 16 pt from the edge and 20 pt above the tab bar. It stays clear of the card deck and dots, the centre quick-action button, the tab bar, and safe areas. It is absolutely positioned, so it adds no height.
+- **Chat bubble.** Poof (46 pt tall) sits in a round chat bubble, a circle about 69 pt across with a short tail at the lower left, like a standard chat icon. It is drawn as one outlined SVG shape (`react-native-svg`), so the border flows unbroken from the circle into the tail. It uses semantic tokens only:
+  - Dark: `poofBubble` `#E6F4FF`, a 2.5 pt `poofBubbleBorder` in brand cyan, and a soft brand-blue glow (`poofBubbleGlow`). The pale fill keeps Poof's black cap and lines visible on the dark page.
+  - Light: a white `poofBubble` with a `#0057B7` border and glow, for a 3:1 boundary contrast on the light page.
+- **Motion** (following the local storyboard):
+  - welcome once per app session: pop in (scale 0.4 → 1 with slight overshoot), then a wave and small hop;
+  - calm idle while Home is focused: about 6 pt float, 2% breathing scale, ±1.2° tilt, 3.6 s loop;
+  - tap: one hop and wave while the chat opens at once; extra taps during a reaction are ignored;
+  - celebrate: two happy hops.
+- **Reduced motion.** Poof stays still; a tap opens the chat immediately.
+- **Accessibility.** A button labelled "Chat with Poof" ("Berbual dengan Poof"), with the hint "Opens Poof, your Unifyd assistant". It works with a keyboard and screen readers.
 
 ## 9. Avatar system
 
@@ -251,7 +373,7 @@ Every student has a personal visual identity through an **original illustrated a
 |---|---|
 | Welcome/authentication | Centred Unifyd logo, confident heading, low-clutter forms, one main CTA |
 | Profile onboarding | Personal greeting, avatar picker, simple progress/required-field clarity |
-| Wallet | Gradient financial summary, high-contrast amount, receipt scan icon action, compact category chips |
+| Wallet | Overview card (available amount + usage ring), compact quick-action tiles, real-data category donut, conditional attention items, compact recent-expense rows (see §8 Wallet) |
 | Budget | Simple progress/ring or bar with semantic status; never hide total spent or remaining amount |
 | Planner | Date/deadline clarity, status chips, priority visible but restrained |
 | Mind | Calmer neutral surfaces, mood emojis or icons, low-pressure wording, no alarming graphics |

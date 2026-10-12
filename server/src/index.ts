@@ -3,8 +3,11 @@ import { createClient } from '@supabase/supabase-js';
 import vision from '@google-cloud/vision';
 
 import { createApp } from './app.js';
+import { loadExpenseHistory } from './expense-history.js';
 import { loadInsightFacts } from './insight-data.js';
 import { requestGroqSummary } from './insight-summary.js';
+import { POOF_REPLY_FORMAT } from './poof-chat.js';
+import { readTimetableWithVision } from './timetable-vision.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -36,12 +39,18 @@ const app = createApp({
     if (result.error) throw new Error('Vision detection failed.');
     return result.fullTextAnnotation?.text ?? result.textAnnotations?.[0]?.description ?? '';
   },
+  readTimetable: (file, kind) => readTimetableWithVision(visionClient as never, file, kind),
   insights: {
     loadFacts: (token, timeZone, now) => loadInsightFacts(url, publishableKey, token, timeZone, now),
     summarize: groqApiKey ? (messages) => requestGroqSummary(messages, { apiKey: groqApiKey, model: groqModel }) : null,
   },
+  poof: {
+    reply: groqApiKey ? (messages) => requestGroqSummary(messages, { apiKey: groqApiKey, model: groqModel }, POOF_REPLY_FORMAT) : null,
+  },
+  // Local Naive Bayes model only; never Groq. History is read with the caller's own token.
+  categories: { loadHistory: (token) => loadExpenseHistory(url, publishableKey, token) },
 });
 
 app.listen(port, host, () => {
-  console.info(`Unifyd service listening on ${host}:${port} (AI summaries ${groqApiKey ? 'enabled' : 'not configured'})`);
+  console.info(`Unifyd service listening on ${host}:${port} (AI summaries and Poof replies ${groqApiKey ? 'enabled' : 'not configured'})`);
 });

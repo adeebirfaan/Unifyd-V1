@@ -36,7 +36,7 @@ export default function AddExpenseScreen() {
         <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>{t('wallet.eyebrow')}</Text>
         <Text style={[styles.title, { color: tokens.screenText }]}>{t('wallet.add')}</Text>
         <Text style={[styles.helper, { color: tokens.mutedText }]}>{t('expense.helper')}</Text>
-        <ExpenseForm onSave={save} submitKey="expense.save" savingKey="expense.saving" errorKey="expense.saveError" />
+        <ExpenseForm suggestCategory onSave={save} submitKey="expense.save" savingKey="expense.saving" errorKey="expense.saveError" />
       </View>
     </ScrollView>
   </KeyboardAvoidingView>;

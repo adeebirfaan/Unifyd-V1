@@ -51,22 +51,14 @@ async function signIn(page: Page) {
   await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
 }
 
-const aiSummary = {
-  finance: 'You have spent RM 150.00 of your RM 500.00 budget this month.',
-  academic: 'You have 1 overdue task and 1 due in the next 7 days.',
-  wellness: 'You checked in 3 times this week.',
-};
-
 const front = (page: Page, key: string) => page.getByTestId(`deck-card-${key}`);
 const showCard = (page: Page, name: string) => page.getByRole('button', { name: `Show ${name} card` }).click();
 
-test('dashboard deck shows verified facts, a labelled AI summary, and opens each module', async ({ page }) => {
+test('dashboard deck shows verified facts and opens each module, with no AI summary card on Home', async ({ page }) => {
   await mockDashboardData(page, fixtures);
-  const insightRequests: { auth: string | undefined; body: unknown }[] = [];
-  await page.route('**/api/insights/generate', async (route) => {
-    insightRequests.push({ auth: route.request().headers().authorization, body: route.request().postDataJSON() });
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ facts: {}, summary: aiSummary, source: 'ai', fallbackReason: null }) });
-  });
+  // Poof's chat now explains the student's data, so Home no longer requests or shows a separate AI summary.
+  const insightRequests: string[] = [];
+  await page.route('**/api/insights/generate', async (route) => { insightRequests.push(route.request().url()); await route.abort(); });
   await signIn(page);
 
   // Overview (front): budget status, nearest deadline, this week's mood, and summary chips.
@@ -89,14 +81,8 @@ test('dashboard deck shows verified facts, a labelled AI summary, and opens each
     await expect(wellbeing).toContainText(text);
   }
 
-  await expect(page.getByText('AI summary', { exact: true })).toBeVisible();
-  await expect(page.getByText(aiSummary.finance)).toBeVisible();
-  await expect(page.getByText(aiSummary.academic)).toBeVisible();
-  await expect(page.getByText(aiSummary.wellness)).toBeVisible();
-  await expect(page.getByText('Written by AI from your recorded numbers.', { exact: false })).toBeVisible();
-  expect(insightRequests).toHaveLength(1);
-  expect(insightRequests[0].auth).toMatch(/^Bearer .+/);
-  expect(insightRequests[0].body).toEqual({ language: 'en', timeZone: zone });
+  await expect(page.getByText('AI summary', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Refresh summary' })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'Open Mind' }).click();
   await expect(page).toHaveURL(/\/mind/);
@@ -108,10 +94,9 @@ test('dashboard deck shows verified facts, a labelled AI summary, and opens each
   await showCard(page, 'Studies');
   await page.getByRole('button', { name: 'Open Planner' }).click();
   await expect(page).toHaveURL(/\/planner/);
-  // Returning within five minutes reloads facts but does not request another summary.
   await page.getByRole('tab', { name: 'Home' }).click();
-  await expect(page.getByText(aiSummary.finance)).toBeVisible();
-  expect(insightRequests).toHaveLength(1);
+  await expect(front(page, 'overview')).toContainText('RM 150.00');
+  expect(insightRequests).toHaveLength(0);
 });
 
 test('the deck moves by swipe, peeking cards, dots, and the overview button', async ({ page }) => {
@@ -156,16 +141,9 @@ test('the deck moves by swipe, peeking cards, dots, and the overview button', as
   await expect(page.getByRole('button', { name: 'Back to overview' })).toHaveCount(1);
 });
 
-test('facts stay visible when the AI service fails, and the summary can be retried', async ({ page }) => {
+test('empty data shows explicit empty states, never invented figures', async ({ page }) => {
   await mockDashboardData(page, { ...fixtures, mood_entries: [], tasks: [], expenses: [], budgets: [] });
-  let mode: 'down' | 'fallback' | 'ai' = 'down';
-  await page.route('**/api/insights/generate', async (route) => {
-    if (mode === 'down') return route.abort();
-    const body = mode === 'fallback'
-      ? { facts: {}, summary: null, source: 'fallback', fallbackReason: 'invalid_response' }
-      : { facts: {}, summary: aiSummary, source: 'ai', fallbackReason: null };
-    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
-  });
+  await page.route('**/api/insights/generate', (route) => route.abort());
   await signIn(page);
 
   // Empty data shows explicit empty states, never invented figures.
@@ -180,15 +158,6 @@ test('facts stay visible when the AI service fails, and the summary can be retri
   await expect(front(page, 'wellbeing')).toContainText('No check-ins in the last 7 days.');
   await expect(front(page, 'wellbeing')).not.toContainText('low mood');
 
-  const fallback = page.getByText('An AI summary isn’t available right now. Your figures above are up to date.');
-  await expect(fallback).toBeVisible();
-  mode = 'fallback';
-  await page.getByRole('button', { name: 'Refresh summary' }).click();
-  await expect(fallback).toBeVisible();
-  mode = 'ai';
-  await page.getByRole('button', { name: 'Refresh summary' }).click();
-  await expect(page.getByText(aiSummary.finance)).toBeVisible();
-  await expect(fallback).toHaveCount(0);
 });
 
 test('dashboard loads the signed-in student’s real records without errors', async ({ page }) => {
@@ -343,4 +312,155 @@ test('module card colours can be changed and are remembered; Overview keeps its 
   await page.goto('/');
   await expect(page.getByText('YOUR OVERVIEW')).toBeVisible();
   await expect.poll(() => background('money')).toBe('rgb(13, 34, 48)');
+});
+
+// Records every animation phase the Poof chat launcher reports, from the first render onward.
+async function recordPoofPhases(page: Page) {
+  await page.addInitScript(() => {
+    const seen: string[] = [];
+    (window as unknown as { __poofPhases: string[] }).__poofPhases = seen;
+    new MutationObserver(() => {
+      const phase = document.querySelector('[data-testid="poof-launcher"]')?.getAttribute('data-phase');
+      if (phase && seen[seen.length - 1] !== phase) seen.push(phase);
+    }).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-phase'] });
+  });
+  return () => page.evaluate(() => (window as unknown as { __poofPhases: string[] }).__poofPhases);
+}
+
+type Box = { x: number; y: number; width: number; height: number };
+const overlaps = (a: Box, b: Box) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+test('Home shows one Poof: the chat launcher in a speech bubble, clear of the cards, centre button, and tab bar', async ({ page }) => {
+  await mockDashboardData(page, fixtures);
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  await signIn(page);
+
+  // The upper decorative mascot is gone; the launcher is the only Poof.
+  await expect(page.getByTestId('poof-mascot')).toHaveCount(0);
+  const launcher = page.getByTestId('poof-launcher');
+  await expect(launcher).toHaveCount(1);
+  await expect(launcher).toHaveAttribute('aria-label', 'Chat with Poof');
+  await expect(launcher).toHaveAttribute('data-backdrop', 'bubble');
+  // Measure once the welcome pop-in has finished.
+  await expect(launcher).toHaveAttribute('data-phase', 'idle', { timeout: 5000 });
+
+  // A round chat bubble with a tail (one outlined shape), larger than the old 56 pt button.
+  const bubble = launcher.locator('> div').first();
+  const bubbleBox = (await bubble.boundingBox())!;
+  expect(Math.abs(bubbleBox.width - bubbleBox.height)).toBeLessThan(6);
+  expect(bubbleBox.width).toBeGreaterThan(56);
+  expect(bubbleBox.height).toBeGreaterThan(56);
+  const shape = bubble.getByTestId('poof-bubble-shape');
+  await expect(shape).toHaveCount(1);
+  expect(await shape.locator('path').getAttribute('d')).toMatch(/A 31 31/);
+  expect(await launcher.locator('img').count()).toBe(1);
+
+  // No gap where the upper Poof was: the greeting follows the eyebrow directly.
+  const eyebrow = (await page.getByText('YOUR SPACE').boundingBox())!;
+  const greeting = (await page.getByText(/^Good (morning|afternoon|evening),/).boundingBox())!;
+  expect(greeting.y - (eyebrow.y + eyebrow.height)).toBeLessThan(16);
+
+  // The launcher does not cover the deck, its dots, the centre button, the tab bar, or the avatar.
+  const launcherBox = (await launcher.boundingBox())!;
+  const others = [
+    await page.getByTestId('card-deck').boundingBox(),
+    await page.getByRole('button', { name: 'Show Overview card' }).boundingBox(),
+    await page.getByTestId('quick-fab').boundingBox(),
+    await page.getByRole('button', { name: 'Open profile' }).boundingBox(),
+    ...await Promise.all((await page.getByRole('tab').all()).map((tab) => tab.boundingBox())),
+  ];
+  for (const other of others) expect(overlaps(launcherBox, other!)).toBe(false);
+  const tabTop = Math.min(...(await Promise.all((await page.getByRole('tab').all()).map(async (tab) => (await tab.boundingBox())!.y))));
+  expect(launcherBox.y + launcherBox.height).toBeLessThan(tabTop);
+});
+
+test('the Poof launcher welcomes once per session, idles without moving the layout, and opens one chat per tap', async ({ page }) => {
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  const phases = await recordPoofPhases(page);
+  await signIn(page);
+  const launcher = page.getByTestId('poof-launcher');
+
+  // Welcome plays first, then Poof settles into the idle loop.
+  await expect(launcher).toHaveAttribute('data-phase', 'idle', { timeout: 5000 });
+  expect(await phases()).toEqual(['pending', 'welcome', 'idle']);
+
+  // The idle float moves the bubble without moving anything around it.
+  const bubble = launcher.locator('> div').first();
+  const deck = page.getByTestId('card-deck');
+  const before = { deck: await deck.boundingBox(), launcher: await launcher.boundingBox(), transform: await bubble.evaluate((el) => getComputedStyle(el).transform) };
+  await page.waitForTimeout(900);
+  expect(await bubble.evaluate((el) => getComputedStyle(el).transform)).not.toBe(before.transform);
+  expect(await deck.boundingBox()).toEqual(before.deck);
+  expect(await launcher.boundingBox()).toEqual(before.launcher);
+
+  // A tap hops once and opens the chat straight away; a quick second tap neither stacks the hop nor opens a second chat.
+  await launcher.click();
+  await launcher.click({ force: true }).catch(() => undefined);
+  await expect(page.getByTestId('poof-assistant')).toHaveCount(1);
+  await expect(launcher).toHaveAttribute('data-reactions', '1');
+  await page.waitForTimeout(600);
+  await expect(page.getByTestId('poof-assistant')).toHaveCount(1);
+  await page.getByTestId('poof-close').click();
+  await expect(page.getByTestId('poof-assistant')).toHaveCount(0);
+  await expect(launcher).toHaveAttribute('data-phase', 'idle', { timeout: 3000 });
+
+  // Coming back to Home in the same session goes straight to idle, without another welcome.
+  await page.getByRole('tab', { name: 'Wallet' }).click();
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await expect(launcher).toHaveAttribute('data-phase', 'idle');
+  expect((await phases()).filter((phase) => phase === 'welcome')).toHaveLength(1);
+
+  // The keyboard can open the chat too.
+  await launcher.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('poof-assistant')).toBeVisible();
+});
+
+test('with reduced motion the Poof launcher stays still and opens the chat immediately', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.route('**/api/insights/generate', (route) => route.abort());
+  const phases = await recordPoofPhases(page);
+  await signIn(page);
+  const launcher = page.getByTestId('poof-launcher');
+  await expect(launcher).toHaveAttribute('data-phase', 'static');
+  const bubble = launcher.locator('> div').first();
+  const first = await bubble.evaluate((el) => getComputedStyle(el).transform);
+  await page.waitForTimeout(1200);
+  expect(await bubble.evaluate((el) => getComputedStyle(el).transform)).toBe(first);
+  await launcher.click();
+  await expect(page.getByTestId('poof-assistant')).toBeVisible({ timeout: 2000 });
+  await expect(launcher).toHaveAttribute('data-reactions', '0');
+  expect(await phases()).not.toContain('welcome');
+});
+
+test('Home spent amounts roll into place, and the Money card waits until it is in front', async ({ page }) => {
+  await mockDashboardData(page, fixtures);
+  await signIn(page);
+  // Overview is in front, so it rolls at once and settles into plain text with the final value.
+  const overview = page.getByTestId('overview-spent');
+  await expect(overview).toHaveAttribute('aria-label', 'Spent this month, RM 150.00');
+  await expect(overview.getByTestId('overview-spent-roll')).toHaveCount(0);
+  await expect(overview).toContainText('RM 150.00');
+
+  // The Money card waits behind the deck instead of rolling unseen.
+  const money = page.getByTestId('money-spent');
+  await expect(money).toHaveAttribute('aria-label', 'Spent this month, RM 150.00');
+  await page.waitForTimeout(1200);
+  expect(await money.getByTestId('money-spent-roll').count(), 'still waiting behind the front card').toBeGreaterThan(0);
+  await showCard(page, 'Money');
+  await expect(money.getByTestId('money-spent-roll')).toHaveCount(0);
+  await expect(front(page, 'money')).toContainText('RM 150.00');
+
+  // Coming back to the Overview card from another card rolls its amount again from RM 0.00.
+  await showCard(page, 'Wellbeing');
+  await page.getByRole('button', { name: 'Back to overview' }).click();
+  await expect.poll(() => overview.getByTestId('overview-spent-roll').count(), { timeout: 2000, intervals: [20] }).toBeGreaterThan(0);
+  await expect(overview.getByTestId('overview-spent-roll')).toHaveCount(0);
+  await expect(overview).toContainText('RM 150.00');
+
+  // Returning to Home from another tab, with Overview still in front and the same total, does not replay.
+  await page.getByRole('tab', { name: 'Wallet' }).click();
+  await page.getByRole('tab', { name: 'Home' }).click();
+  await expect(page.getByTestId('overview-spent')).toHaveAttribute('aria-label', 'Spent this month, RM 150.00');
+  await expect(page.getByTestId('overview-spent').getByTestId('overview-spent-roll')).toHaveCount(0);
 });

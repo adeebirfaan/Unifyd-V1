@@ -1,3 +1,5 @@
 # Local source documents are reference material, not app assets or seed inputs.
 /local data/
 /local-data/
+# Local design references (e.g. the Poof storyboard); never committed or bundled.
+/local-assets/

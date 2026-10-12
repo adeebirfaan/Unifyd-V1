@@ -9,6 +9,16 @@ export const colors = {
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 
+// Spending-category colours for small chart marks. They stay within the cyan-blue family plus neutrals
+// (no competing accents) and always appear next to a written category name, never as the only cue.
+export const categoryPalette = {
+  food: '#34C1FC',
+  transport: '#007AFB',
+  academic_materials: '#9BE3FF',
+  personal: '#5B8DEF',
+  other: '#98A2B3',
+} as const;
+
 // The approved dark palette is preserved verbatim. Light changes only the page
 // surface and colours that sit directly on that page.
 export const semanticThemes = {
@@ -25,6 +35,8 @@ export const semanticThemes = {
     cardText: colors.textPrimary,
     cardMutedText: colors.textSecondary,
     cardErrorText: colors.danger,
+    // Cards stay dark in both themes, so the amber warning reads the same on each.
+    cardWarningText: colors.warning,
     modalScrim: 'rgba(0,0,0,0.7)',
     border: colors.border,
     navigationBackground: colors.surface,
@@ -32,6 +44,12 @@ export const semanticThemes = {
     primaryButtonBorderWidth: 0,
     actionInk: colors.background,
     homeAvatarOutline: colors.border,
+    // A soft light disc keeps Poof's black cap and lines visible on the dark page.
+    mascotBackdrop: '#E6F4FF',
+    // Poof's chat-launcher speech bubble: a pale fill keeps Poof's dark outlines clear, with a cyan edge and blue glow.
+    poofBubble: '#E6F4FF',
+    poofBubbleBorder: colors.brandCyan,
+    poofBubbleGlow: colors.brandBlue,
     destructiveBackground: '#B42318',
     destructiveForeground: colors.white,
     brandBlue: colors.brandBlue,
@@ -51,6 +69,8 @@ export const semanticThemes = {
     cardText: colors.textPrimary,
     cardMutedText: colors.textSecondary,
     cardErrorText: colors.danger,
+    // Cards stay dark in both themes, so the amber warning reads the same on each.
+    cardWarningText: colors.warning,
     modalScrim: 'rgba(0,0,0,0.7)',
     border: colors.border,
     navigationBackground: colors.surface,
@@ -58,12 +78,24 @@ export const semanticThemes = {
     primaryButtonBorderWidth: 1,
     actionInk: colors.background,
     homeAvatarOutline: colors.textTertiary,
+    // The light page already shows Poof clearly, so no disc is drawn.
+    mascotBackdrop: 'transparent',
+    // On the light page the bubble is white with the darker accent edge, which keeps a 3:1 boundary contrast.
+    poofBubble: colors.white,
+    poofBubbleBorder: '#0057B7',
+    poofBubbleGlow: '#0057B7',
     destructiveBackground: '#B42318',
     destructiveForeground: colors.white,
     brandBlue: colors.brandBlue,
     brandCyan: colors.brandCyan,
     brandGradient: colors.brandGradient,
   },
+} as const;
+
+// Finance display numbers use Space Mono, a bundled monospace font (SIL Open Font License) loaded in
+// app/_layout.tsx. Use it only through components/FinanceNumber.tsx; every other text keeps the system font.
+export const fonts = {
+  financeNumber: 'UnifydFinanceNumber',
 } as const;
 
 export const spacing = {

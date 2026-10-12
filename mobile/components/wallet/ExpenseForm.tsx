@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { SelectionField } from '@/components/profile/SelectionField';
+import { CategorySuggestion } from '@/components/wallet/CategorySuggestion';
 import { ExpenseDatePicker } from '@/components/wallet/ExpenseDatePicker';
 import { ExpenseTextField } from '@/components/wallet/ExpenseTextField';
 import type { TranslationKey } from '@/constants/i18n';
 import { radius, spacing, typography } from '@/constants/theme';
+import { useCategorySuggestion } from '@/hooks/useCategorySuggestion';
 import { EXPENSE_CATEGORIES, isValidISODate, localDateISO, parseExpenseAmount } from '@/lib/expenseForm';
 import type { ExpenseCategory, ExpenseInput } from '@/lib/expenseForm';
 import { useAppearance } from '@/providers/AppearanceProvider';
@@ -15,8 +17,10 @@ import { useI18n } from '@/providers/LanguageProvider';
 type FieldErrors = Partial<Record<'title' | 'amount' | 'category' | 'date', string>>;
 export type ExpenseFormInitial = { title: string; amount: string; category: ExpenseCategory | null; expenseDate: string; notes: string };
 
-export function ExpenseForm({ initial, onSave, submitKey, savingKey, errorKey }: {
+export function ExpenseForm({ initial, onSave, submitKey, savingKey, errorKey, suggestCategory = false }: {
   initial?: ExpenseFormInitial;
+  /** Offer an optional category suggestion from the student's own past expenses (never applied automatically). */
+  suggestCategory?: boolean;
   onSave: (input: ExpenseInput) => Promise<boolean>;
   submitKey: TranslationKey;
   savingKey: TranslationKey;
@@ -33,6 +37,15 @@ export function ExpenseForm({ initial, onSave, submitKey, savingKey, errorKey }:
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const categoryOptions = EXPENSE_CATEGORIES.map((id) => ({ id, label: t(`expense.category.${id}`) }));
+  const { state: suggestionState, request: requestSuggestion, clear: clearSuggestion } = useCategorySuggestion();
+  const [suggestionDismissed, setSuggestionDismissed] = useState(false);
+  const [initialTitle] = useState(initial?.title ?? '');
+  const [initialCategory] = useState(initial?.category ?? null);
+
+  // An OCR draft arrives with a title already filled in, so it is checked once on open.
+  useEffect(() => {
+    if (suggestCategory && !initialCategory) requestSuggestion(initialTitle, 0);
+  }, [suggestCategory, initialCategory, initialTitle, requestSuggestion]);
 
   async function save() {
     if (saving) return;
@@ -59,8 +72,15 @@ export function ExpenseForm({ initial, onSave, submitKey, savingKey, errorKey }:
   }
 
   return <View style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
-    <ExpenseTextField label={t('expense.title')} value={title} onChangeText={(value) => { setTitle(value); setErrors((current) => ({ ...current, title: undefined })); }} placeholder={t('expense.titlePlaceholder')} maxLength={120} error={errors.title} />
+    <ExpenseTextField label={t('expense.title')} value={title} onChangeText={(value) => {
+      setTitle(value);
+      setErrors((current) => ({ ...current, title: undefined }));
+      if (suggestCategory) { clearSuggestion(); if (!category && !suggestionDismissed) requestSuggestion(value); }
+    }} placeholder={t('expense.titlePlaceholder')} maxLength={120} error={errors.title} />
     <ExpenseTextField label={t('expense.amount')} value={amountText} onChangeText={(value) => { setAmountText(value); setErrors((current) => ({ ...current, amount: undefined })); }} placeholder="0.00" prefix="RM" keyboardType="decimal-pad" error={errors.amount} />
+    {suggestCategory && !category && !suggestionDismissed && <CategorySuggestion state={suggestionState}
+      onUse={(id) => { setCategory(id); setErrors((current) => ({ ...current, category: undefined })); clearSuggestion(); }}
+      onDismiss={() => { setSuggestionDismissed(true); clearSuggestion(); }} />}
     <SelectionField label={t('expense.category')} labelOnCard value={category} placeholder={t('expense.categoryPlaceholder')} options={categoryOptions} onSelect={(id) => { setCategory(id as ExpenseCategory); setErrors((current) => ({ ...current, category: undefined })); }} error={errors.category} />
     <ExpenseDatePicker value={expenseDate} onChange={(value) => { setExpenseDate(value); setErrors((current) => ({ ...current, date: undefined })); }} error={errors.date} />
     <ExpenseTextField label={t('expense.notes')} value={notes} onChangeText={setNotes} placeholder={t('expense.notesPlaceholder')} multiline maxLength={1000} />

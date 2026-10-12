@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react';
-import { useCallback, useState } from 'react';
-import { Animated, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useEffectEvent, useState } from 'react';
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import { radius, spacing } from '@/constants/theme';
+import { radius, spacing, typography } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
-export type DeckControls = { goTo: (index: number) => void };
+export type DeckControls = { goTo: (index: number) => void; front: boolean };
 export type DeckCard = { key: string; name: string; render: (controls: DeckControls) => ReactNode };
 
 export const DECK_CARD_HEIGHT = 404;
@@ -28,7 +29,18 @@ const webSnapPage = (isWeb ? { scrollSnapAlign: 'start', scrollSnapStop: 'always
  * Swipe, tap a peeking edge, or use the dots. Only the front card is interactive
  * or visible to screen readers.
  */
-export function CardDeck({ cards }: { cards: DeckCard[] }) {
+export type DeckOptions = {
+  /** Card height (default: the Home deck's 404 pt). */
+  height?: number;
+  /** Test ID of the deck; each card is `${testID}-card-${key}` (default: Home's `card-deck` / `deck-card-${key}`). */
+  testID?: string;
+  /** Accessible names for the dots, which are also the screen-reader alternative to swiping (default: Home's "Show {name} card"). */
+  dotLabel?: (card: DeckCard, position: number, total: number) => string;
+  /** A compact control under the dots, shown only away from the first card, that returns to it. */
+  backToFirstLabel?: string;
+};
+
+export function CardDeck({ cards, height = DECK_CARD_HEIGHT, testID, dotLabel, backToFirstLabel }: { cards: DeckCard[] } & DeckOptions) {
   const { tokens } = useAppearance();
   const { t } = useI18n();
   const [width, setWidth] = useState(0);
@@ -38,11 +50,19 @@ export function CardDeck({ cards }: { cards: DeckCard[] }) {
   const [scroller, setScroller] = useState<ScrollView | null>(null);
   const attachScroller = useCallback((node: unknown) => setScroller(node as ScrollView | null), []);
 
+  const reduceMotion = useReducedMotion();
   const goTo = (target: number) => {
     const clamped = Math.max(0, Math.min(cards.length - 1, target));
-    scroller?.scrollTo({ x: clamped * width, animated: true });
+    // Under Reduce Motion the chosen card comes forward without the sliding transition.
+    scroller?.scrollTo({ x: clamped * width, animated: !reduceMotion });
   };
-  const controls: DeckControls = { goTo };
+
+  // The scroller only exists while the deck has a width. Hidden screens (for example a tab on the web)
+  // measure 0, so returning creates a new scroller at offset 0. Whenever a scroller mounts or the width
+  // changes, put it back on the front card so the drawing, dots, and offset agree. The effect event reads
+  // the latest index, so swiping (which changes the index) never re-runs this.
+  const realign = useEffectEvent(() => { if (scroller && width) scroller.scrollTo({ x: index * width, animated: false }); });
+  useEffect(() => { realign(); }, [scroller, width]);
 
   const onScroll = Animated.event([{ nativeEvent: { contentOffset: { x: scrollX } } }], {
     useNativeDriver: useNative,
@@ -53,13 +73,13 @@ export function CardDeck({ cards }: { cards: DeckCard[] }) {
     },
   });
 
-  const pageHeight = DECK_CARD_HEIGHT + PEEK * STACK_DEPTH;
+  const pageHeight = height + PEEK * STACK_DEPTH;
   return (
     // Deck text is not selectable: on the web a drag would otherwise select text.
     <View style={styles.noSelect}>
       <View style={{ height: pageHeight }} onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}>
         {width > 0 && (
-          <Animated.ScrollView ref={attachScroller} testID="card-deck" horizontal pagingEnabled={!isWeb} showsHorizontalScrollIndicator={false}
+          <Animated.ScrollView ref={attachScroller} testID={testID ?? 'card-deck'} horizontal pagingEnabled={!isWeb} showsHorizontalScrollIndicator={false}
             onScroll={onScroll} scrollEventThrottle={16} decelerationRate="fast" style={[styles.scroller, webSnapScroller]}>
             {cards.map((card, position) => {
               // p < 0: card is waiting behind the front; p = 0: front; p > 0: sliding out to the left.
@@ -73,10 +93,10 @@ export function CardDeck({ cards }: { cards: DeckCard[] }) {
               return (
                 // box-none: the transparent page lets taps reach the peeking edge of the card behind.
                 <View key={card.key} pointerEvents="box-none" style={[styles.page, webSnapPage, { width, height: pageHeight, zIndex: cards.length - position }]}>
-                  <Animated.View testID={`deck-card-${card.key}`} aria-hidden={!front} importantForAccessibility={front ? 'auto' : 'no-hide-descendants'}
+                  <Animated.View testID={testID ? `${testID}-card-${card.key}` : `deck-card-${card.key}`} aria-hidden={!front} importantForAccessibility={front ? 'auto' : 'no-hide-descendants'}
                     accessibilityElementsHidden={!front} pointerEvents={front ? 'auto' : 'box-none'}
-                    style={[styles.card, { opacity, transform: [{ translateX }, { translateY }, { scale }], transformOrigin: 'top' }]}>
-                    <View pointerEvents={front ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>{card.render(controls)}</View>
+                    style={[styles.card, { height, opacity, transform: [{ translateX }, { translateY }, { scale }], transformOrigin: 'top' }]}>
+                    <View pointerEvents={front ? 'auto' : 'none'} style={StyleSheet.absoluteFill}>{card.render({ goTo, front })}</View>
                     {/* The peeking edge of a waiting card brings it to the front. */}
                     {peeking && <Pressable style={styles.peek} onPress={() => goTo(position)} />}
                   </Animated.View>
@@ -90,13 +110,17 @@ export function CardDeck({ cards }: { cards: DeckCard[] }) {
         {cards.map((card, position) => {
           const active = position === index;
           return (
-            <Pressable key={card.key} accessibilityRole="button" accessibilityLabel={t('home.showCard', { name: card.name })}
+            <Pressable key={card.key} accessibilityRole="button" accessibilityLabel={dotLabel ? dotLabel(card, position, cards.length) : t('home.showCard', { name: card.name })}
               accessibilityState={{ selected: active }} aria-selected={active} onPress={() => goTo(position)} style={styles.dotTarget}>
               <View style={[styles.dot, { width: active ? 22 : 8, backgroundColor: active ? tokens.pageAccent : tokens.subtleText }]} />
             </Pressable>
           );
         })}
       </View>
+      {backToFirstLabel && index > 0 && <Pressable testID={testID ? `${testID}-back` : undefined} accessibilityRole="button" accessibilityLabel={backToFirstLabel} onPress={() => goTo(0)}
+        style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
+        <Text style={[styles.backText, { color: tokens.pageAccent }]}>{backToFirstLabel}</Text>
+      </Pressable>}
     </View>
   );
 }
@@ -105,9 +129,11 @@ const styles = StyleSheet.create({
   noSelect: { userSelect: 'none' },
   scroller: { flex: 1, overflow: 'visible' },
   page: { paddingTop: PEEK * STACK_DEPTH },
-  card: { height: DECK_CARD_HEIGHT, borderRadius: radius.radiusLg, overflow: 'hidden' },
+  card: { borderRadius: radius.radiusLg, overflow: 'hidden' },
   peek: { position: 'absolute', left: 0, right: 0, top: 0, height: PEEK + spacing.space2 },
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing.space1 },
   dotTarget: { minWidth: 28, minHeight: 28, alignItems: 'center', justifyContent: 'center' },
   dot: { height: 8, borderRadius: radius.radiusFull },
+  back: { minHeight: 44, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: spacing.space3 }, pressed: { opacity: 0.7 },
+  backText: { ...typography.label, fontWeight: '700' },
 });

@@ -5,6 +5,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { TranslationKey } from '@/constants/i18n';
 import { colors, radius, spacing, typography } from '@/constants/theme';
+import { AnimatedMoneyAmount } from '@/components/AnimatedMoneyAmount';
+import { FinanceNumber } from '@/components/FinanceNumber';
 import { formatPercentage } from '@/lib/budgetSummary';
 import type { DashboardFacts, Direction } from '@/lib/dashboardFacts';
 import { formatRinggit } from '@/lib/expenseHistory';
@@ -21,7 +23,7 @@ function useFormat() {
 }
 
 /** The Overview card keeps the Unifyd gradient so it is always the most prominent. */
-export function OverviewCard({ facts }: { facts: DashboardFacts }) {
+export function OverviewCard({ facts, front, memoryKey }: { facts: DashboardFacts; front: boolean; memoryKey: string }) {
   const { language, t, outOfFive } = useFormat();
   const { finance, academic, wellness } = facts;
   const used = finance.budgetCents ? Math.min(1, finance.spentCents / finance.budgetCents) : null;
@@ -31,7 +33,7 @@ export function OverviewCard({ facts }: { facts: DashboardFacts }) {
         <Text style={styles.overviewLabel}>{t('home.overview')}</Text>
         <View>
           <Text style={styles.overviewCaption}>{t('home.monthSpent')}</Text>
-          <Text style={styles.overviewAmount}>{ringgit(finance.spentCents)}</Text>
+          <AnimatedMoneyAmount testID="overview-spent" cents={finance.spentCents} memoryKey={memoryKey} play={front} replayOnShow accessibilityLabel={t('home.monthSpentAmount', { amount: ringgit(finance.spentCents) })} style={styles.overviewAmount} />
           <Text style={styles.overviewLine}>{finance.remainingCents === null ? t('home.noBudget')
             : finance.remainingCents >= 0 ? t('home.budgetLeft', { amount: ringgit(finance.remainingCents), budget: ringgit(finance.budgetCents ?? 0) })
               : t('home.budgetOver', { amount: ringgit(-finance.remainingCents), budget: ringgit(finance.budgetCents ?? 0) })}</Text>
@@ -105,8 +107,9 @@ const Note = ({ children, tone = 'muted' }: { children: ReactNode; tone?: 'muted
   <Text style={[styles.note, tone === 'warning' && { color: colors.warning }]}>{children}</Text>;
 
 type ModuleProps = { facts: DashboardFacts; shade: string; onOverview: () => void; onCustomise: () => void; onOpen: () => void };
+type MoneyProps = ModuleProps & { front: boolean; memoryKey: string };
 
-export function MoneyCard({ facts, shade, onOverview, onCustomise, onOpen }: ModuleProps) {
+export function MoneyCard({ facts, shade, onOverview, onCustomise, onOpen, front, memoryKey }: MoneyProps) {
   const { t } = useFormat();
   const { finance } = facts;
   const over = finance.remainingCents !== null && finance.remainingCents < 0;
@@ -115,7 +118,7 @@ export function MoneyCard({ facts, shade, onOverview, onCustomise, onOpen }: Mod
     <ModuleCard title={t('home.panelMoney')} icon="wallet-outline" shade={shade} onOverview={onOverview} onCustomise={onCustomise} openLabel={t('home.openPanel', { name: t('tab.wallet') })} onOpen={onOpen}>
       <View>
         <Text style={styles.caption}>{t('home.monthSpent')}</Text>
-        <Text style={styles.amount}>{ringgit(finance.spentCents)}</Text>
+        <AnimatedMoneyAmount testID="money-spent" cents={finance.spentCents} memoryKey={memoryKey} play={front} accessibilityLabel={t('home.monthSpentAmount', { amount: ringgit(finance.spentCents) })} style={styles.amount} />
         <Text style={[styles.line, over && styles.danger]}>{finance.remainingCents === null ? t('home.noBudget')
           : !over ? t('home.budgetLeft', { amount: ringgit(finance.remainingCents ?? 0), budget: ringgit(finance.budgetCents ?? 0) })
             : t('home.budgetOver', { amount: ringgit(-(finance.remainingCents ?? 0)), budget: ringgit(finance.budgetCents ?? 0) })}</Text>
@@ -134,7 +137,7 @@ export function MoneyCard({ facts, shade, onOverview, onCustomise, onOpen }: Mod
             <View key={category} style={styles.categoryRow}>
               <Text style={[styles.rowLabel, styles.categoryLabel]} numberOfLines={1}>{t(`expense.category.${category}`)}</Text>
               <View style={[styles.track, styles.categoryTrack]}><View style={[styles.bar, { width: `${percent}%`, backgroundColor: colors.brandCyan }]} /></View>
-              <Text style={styles.rowValue}>{formatPercentage(percent)}</Text>
+              <FinanceNumber style={styles.rowValue}>{formatPercentage(percent)}</FinanceNumber>
             </View>
           ))}
         </View>

@@ -26,3 +26,18 @@ export function formatExpenseDate(isoDate: string, language: LanguagePreference)
   return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' })
     .format(new Date(`${isoDate}T00:00:00Z`));
 }
+
+/** Full date for screen-reader labels, e.g. "13 October 2026" / "13 Oktober 2026". */
+export function formatExpenseDateLong(isoDate: string, language: LanguagePreference): string {
+  const locale = language === 'ms' ? 'ms-MY' : 'en-MY';
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
+    .format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+/** Short day and month ("21 Oct"), adding the year only when it is not the current year. */
+export function formatDayMonth(isoDate: string, language: LanguagePreference, todayISO: string): string {
+  const locale = language === 'ms' ? 'ms-MY' : 'en-MY';
+  const sameYear = isoDate.slice(0, 4) === todayISO.slice(0, 4);
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', ...(sameYear ? {} : { year: 'numeric' }), timeZone: 'UTC' })
+    .format(new Date(`${isoDate}T00:00:00Z`));
+}

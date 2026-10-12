@@ -1,6 +1,6 @@
 # Unifyd service
 
-This local Node.js/Express service accepts one signed-in student's receipt image and returns an OCR draft for review. It also produces the Home dashboard's optional AI summary. It does not save images, OCR output, expenses, or summaries.
+This local Node.js/Express service accepts one signed-in student's receipt image and returns an OCR draft for review. It also reads an uploaded class timetable into editable draft classes, and produces the Home dashboard's optional AI summary. It does not save images, PDFs, OCR output, expenses, timetables, or summaries.
 
 ## Run locally
 
@@ -21,6 +21,19 @@ The success response contains only `merchantName`, `purchaseDate`, `totalAmount`
 
 Run `npm run typecheck`, `npm test`, and `npm run build` to verify the service. Automated tests inject a fake verifier and OCR result, so they do not use network access or Google credentials.
 
+## Timetable import
+
+`POST /api/timetable/import` requires the same bearer token and one `multipart/form-data` file in field `file`.
+
+- **Accepted files:** PNG, JPEG, or PDF, up to 5 MiB. The file signature must match the declared type.
+- **Checks before OCR:** the token is verified before the upload is read. Password-protected (encrypted) PDFs return `422 PDF_PROTECTED`. Truncated or unreadable PDFs return `422 INVALID_DOCUMENT`.
+- **Other errors:** `401 UNAUTHORIZED`, `400 MISSING_FILE`, `413 FILE_TOO_LARGE`, `415 UNSUPPORTED_FILE`, and `502 OCR_UNAVAILABLE`. Error messages contain no provider details, file contents, or tokens.
+- **Reading:** images use Google Vision document text detection. PDFs are sent to Vision `batchAnnotateFiles` inline from memory, so no temporary file or Cloud Storage object is created. Only the first three pages are parsed; a longer PDF adds the `PAGES_TRUNCATED` warning.
+- **Parsing:** fixed rules turn the text into candidate classes. Each has course code/name, day, start/end time, location, section, and a `high`/`medium`/`low` confidence. Anything the document does not show is `null`; nothing is guessed. No AI model or outside timetable service is used.
+- **Response:** `{ candidates, warnings, pagesProcessed, totalPages }`. `warnings` always contains `REVIEW_REQUIRED` and may contain `NO_CLASSES_FOUND` or `INCOMPLETE_DETAILS`. Raw OCR text is never returned.
+- **Nothing is stored:** the upload stays in memory for the request only, and no class is saved. The app requires the student to review the draft and then save it to their own `timetable_entries` rows.
+- **OCR limitations:** results depend on image quality and layout. Merged grid cells, handwriting, rotated pages, or unusual time formats may produce incomplete or misplaced candidates. That is why review is mandatory.
+
 ## Dashboard insights
 
 `POST /api/insights/generate` requires the same bearer token and a JSON body `{ "language": "en" | "ms", "timeZone": "Asia/Kuala_Lumpur" }`.
@@ -31,3 +44,26 @@ Run `npm run typecheck`, `npm test`, and `npm run build` to verify the service. 
 4. It returns the facts plus a validated summary, or `summary: null` with a `fallbackReason`.
 
 To enable summaries, create a key at console.groq.com and set `GROQ_API_KEY` in the ignored `server/.env`. `GROQ_MODEL` defaults to `openai/gpt-oss-20b`. Without a key, the endpoint returns facts with `fallbackReason: "not_configured"`, and the app shows its fallback message. The startup log states whether AI summaries are enabled. Automated tests use fake data loaders and a fake Groq client; they never call Groq.
+
+## Poof chat
+
+`POST /api/poof/chat` requires the same bearer token and a JSON body `{ "language": "en" | "ms", "message": "...", "facts": { ... } }`.
+
+1. `message` is the student's question, at most 500 characters.
+2. `facts` is the aggregate-only snapshot built by the app (`poofAiPayload` in `mobile/lib/poofFacts.ts`). It holds only amounts, counts, percentages, and fixed category labels. The service accepts this exact shape only, so task titles, notes, names, or other free text are rejected with `400 INVALID_REQUEST`.
+3. Crisis wording is never sent to Groq; the response is a `safety` fallback, and the app shows support contacts.
+4. Groq replies with `{ reply, actions, scope }` under a strict schema. A reply is rejected (`invalid_response`) if it contains a number not in the facts, diagnosis or guarantee wording, or a claim to have changed data. Actions are limited to known in-app navigation IDs.
+5. The response is `{ source: "ai", reply, actions, scope }` or `{ source: "fallback", fallbackReason }`. On any fallback, the app answers with its built-in rules.
+
+Each signed-in session may send 30 questions per 10 minutes (`429 RATE_LIMITED`). Questions, facts, and replies are not stored or logged. Poof is read-only: it never creates, changes, or deletes any record.
+
+## Expense category suggestion
+
+`POST /api/ml/expense-category-suggestion` requires the same bearer token and a JSON body of exactly `{ "title": "..." }` (1–120 characters).
+
+1. The token is verified first. The service then reads only that student's latest 500 expense titles and categories, using their own token, so row-level security applies. The user ID comes from the verified token, never from the request.
+2. It trains a small Multinomial Naive Bayes model in memory (`src/expense-classifier.ts`) and discards it after the request. No model is stored.
+3. It returns `{ available: true, category, confidence, trainingExpenseCount }` only when there are ≥ 15 usable labelled expenses across ≥ 2 categories, the title has a known word, confidence is ≥ 0.70, and the lead over the second category is ≥ 0.15. Otherwise it returns `{ available: false, reason: "not_enough_data" | "low_confidence", trainingExpenseCount }`.
+4. Errors: `401 UNAUTHORIZED`, `400 INVALID_REQUEST` (any other field, such as a user ID, is refused), `429 RATE_LIMITED` (60 per 10 minutes per session), and `503 AUTH_UNAVAILABLE`, `HISTORY_UNAVAILABLE`, or `SUGGESTION_UNAVAILABLE`.
+
+No Groq or other LLM, remote model, or keyword table is used. Titles, history, vocabulary, and tokens are not stored or logged. The app treats a suggestion as optional and never saves an expense because of one. Automated tests use fictional fixtures and a fake history loader.

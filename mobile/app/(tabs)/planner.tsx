@@ -5,12 +5,16 @@ import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Tex
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
+import { NextClassCard } from '@/components/timetable/NextClassCard';
 import { radius, spacing, typography } from '@/constants/theme';
 import { isReminderOffset, reminderLabelKey } from '@/lib/reminderMath';
+import { readSemesterChoice } from '@/lib/semesterCourses';
 import { formatTaskDeadline, isOverdue, sortTasks } from '@/lib/tasks';
 import type { TaskRecord } from '@/lib/tasks';
 import { supabase } from '@/lib/supabase';
 import { syncTaskReminders } from '@/lib/taskReminders';
+import type { TimetableEntry } from '@/lib/timetable';
+import { loadTimetableEntries } from '@/lib/timetableEntries';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
@@ -32,6 +36,8 @@ export default function PlannerScreen() {
   const [statusError, setStatusError] = useState(false);
   const [localReminderIssue, setLocalReminderIssue] = useState<string | null>(null);
   const version = useRef(0);
+  // null while unknown or unavailable: the summary is then hidden rather than shown as an error.
+  const [classes, setClasses] = useState<TimetableEntry[] | null>(null);
 
   const loadTasks = useCallback(async (refresh = false) => {
     const request = ++version.current;
@@ -62,6 +68,15 @@ export default function PlannerScreen() {
     void loadTasks();
     return () => { ++version.current; };
   }, [loadTasks]));
+
+  // The next class comes from the semester last chosen in My semester or My timetable.
+  // It is a convenience: any failure simply hides the summary.
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    if (userId) void readSemesterChoice(userId).then((choice) => choice ? loadTimetableEntries(userId, choice) : [])
+      .then((rows) => { if (active) setClasses(rows); }).catch(() => { if (active) setClasses(null); });
+    return () => { active = false; };
+  }, [userId]));
 
   async function toggle(task: TaskRecord) {
     if (!userId || busyId) return;
@@ -99,7 +114,9 @@ export default function PlannerScreen() {
       <Text style={[styles.helper, { color: tokens.mutedText }]}>{t('task.helper')}</Text>
       <PrimaryButton onPress={() => router.push('/add-task')}>{t('task.add')}</PrimaryButton>
       <Pressable accessibilityRole="button" onPress={() => router.push('/my-semester')} style={[styles.semesterLink, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}><Ionicons name="book-outline" size={20} color={tokens.brandCyan} /><Text style={[styles.semesterLinkText, { color: tokens.cardText }]}>{t('semester.title')}</Text><Ionicons name="chevron-forward" size={19} color={tokens.cardMutedText} /></Pressable>
+      <Pressable accessibilityRole="button" onPress={() => router.push('/timetable')} style={[styles.semesterLink, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}><Ionicons name="grid-outline" size={20} color={tokens.brandCyan} /><Text style={[styles.semesterLinkText, { color: tokens.cardText }]}>{t('timetable.title')}</Text><Ionicons name="chevron-forward" size={19} color={tokens.cardMutedText} /></Pressable>
       <Pressable accessibilityRole="button" onPress={() => router.push('/reminders')} style={[styles.semesterLink, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}><Ionicons name="notifications-outline" size={20} color={tokens.brandCyan} /><Text style={[styles.semesterLinkText, { color: tokens.cardText }]}>{t('reminders.title')}</Text><Ionicons name="chevron-forward" size={19} color={tokens.cardMutedText} /></Pressable>
+      {classes && <View style={styles.nextClass}><NextClassCard entries={classes} testID="planner-next-class" /></View>}
       {feedback && <Text style={[styles.feedback, { color: tokens.successText }]} accessibilityRole="alert">{feedback}</Text>}
       {statusError && <Text style={[styles.feedback, { color: tokens.errorText }]} accessibilityRole="alert">{t('task.statusError')}</Text>}
       {reminderMessage && <Text style={[styles.feedback, { color: tokens.errorText }]} accessibilityRole="alert">{reminderMessage}</Text>}
@@ -132,5 +149,6 @@ const styles = StyleSheet.create({
   feedback: { ...typography.label, marginTop: spacing.space4 }, card: { borderRadius: radius.radiusLg, borderWidth: 1, padding: spacing.space6, gap: spacing.space4 }, cardTitle: { ...typography.sectionTitle }, muted: { ...typography.body, lineHeight: 23 },
   taskCard: { borderRadius: radius.radiusLg, borderWidth: 1, marginBottom: spacing.space3, overflow: 'hidden' }, taskMain: { padding: spacing.space5, gap: spacing.space2, minHeight: 118 }, cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.space2 }, taskTitle: { ...typography.sectionTitle, flex: 1 }, subject: { ...typography.body }, meta: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.space2, marginTop: spacing.space2 }, badge: { ...typography.label, borderRadius: radius.radiusFull, paddingHorizontal: spacing.space3, paddingVertical: spacing.space1, overflow: 'hidden' }, deadline: { ...typography.label, marginTop: spacing.space2 },
   complete: { borderTopWidth: 1, minHeight: 54, paddingHorizontal: spacing.space5, flexDirection: 'row', alignItems: 'center', gap: spacing.space2 }, completeText: { ...typography.label }, reminderRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2 }, reminderText: { ...typography.label },
+  nextClass: { marginTop: spacing.space3 },
   semesterLink: { minHeight: 54, borderWidth: 1, borderRadius: radius.radiusMd, flexDirection: 'row', alignItems: 'center', gap: spacing.space3, paddingHorizontal: spacing.space4, marginTop: spacing.space3 }, semesterLinkText: { ...typography.body, fontWeight: '600', flex: 1 },
 });

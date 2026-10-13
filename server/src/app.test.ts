@@ -58,8 +58,9 @@ test('missing, multiple, wrong-field, invalid-type and oversized uploads fail sa
 
 test('parser leaves uncertain values empty with review warnings', () => {
   assert.deepEqual(parseReceiptText('Unreadable'), {
+    // A lone word that does not read as a business is kept but flagged, never presented as a confident merchant.
     merchantName: 'Unreadable', purchaseDate: null, totalAmount: null, rawText: 'Unreadable',
-    warnings: ['Purchase date needs review.', 'Total amount needs review.'],
+    warnings: ['Merchant name needs review.', 'Purchase date needs review.', 'Total amount needs review.'],
   });
   assert.equal(parseReceiptText('Shop\n31/02/2026\nTOTAL RM 7.00').purchaseDate, null);
 });

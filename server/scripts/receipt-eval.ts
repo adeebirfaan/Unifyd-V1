@@ -10,21 +10,31 @@ import { join } from 'node:path';
 import { FIELDS, groupBy, parseLabelsCsv, scoreReceipt, summarize } from '../src/receipt-eval.js';
 import type { GroupStats, ScoredReceipt } from '../src/receipt-eval.js';
 import { parseReceiptText } from '../src/receipt-parser.js';
+import { LABELS, OCR } from './receipt-eval-paths.js';
 
-const ROOT = 'local-data/receipt-eval';
-const LABELS = join(ROOT, 'labels.csv');
 const final = process.argv.includes('--final');
 const json = process.argv.includes('--json');
 
 if (!existsSync(LABELS)) {
-  console.error(`Copy scripts/receipt-labels.template.csv to server/${LABELS} and fill it in.`);
+  console.error('No labels.csv yet. Run "npm run eval:receipts:run" to create it.');
   process.exit(1);
 }
-const labels = parseLabelsCsv(readFileSync(LABELS, 'utf8'));
+let parsed: ReturnType<typeof parseLabelsCsv>;
+try {
+  parsed = parseLabelsCsv(readFileSync(LABELS, 'utf8'));
+} catch (error) {
+  console.error(`labels.csv: ${(error as Error).message}`);
+  process.exit(1);
+}
+const { labels, pending } = parsed;
+if (!labels.length) {
+  console.log(`No labelled receipts yet (${pending.length} waiting). Fill in server/${LABELS}, then run this again.`);
+  process.exit(0);
+}
 const missing: string[] = [];
 const scored: ScoredReceipt[] = [];
 for (const label of labels) {
-  const cache = join(ROOT, 'ocr', `${label.file}.json`);
+  const cache = join(OCR, `${label.file}.json`);
   if (!existsSync(cache)) { missing.push(label.file); continue; }
   const { text } = JSON.parse(readFileSync(cache, 'utf8')) as { text: string };
   scored.push(scoreReceipt(label, parseReceiptText(text)));
@@ -39,7 +49,7 @@ const report = (receipts: ScoredReceipt[]) => ({
 });
 
 if (json) {
-  console.log(JSON.stringify({ labelled: labels.length, missingOcr: missing, dev: report(dev), ...(final ? { test: report(test) } : {}) }, null, 2));
+  console.log(JSON.stringify({ labelled: labels.length, waitingForLabels: pending.length, missingOcr: missing, dev: report(dev), ...(final ? { test: report(test) } : {}) }, null, 2));
   process.exit(0);
 }
 
@@ -58,7 +68,7 @@ const table = (title: string, receipts: ScoredReceipt[]) => {
   for (const [key, stats] of Object.entries(byCondition)) console.log(row(`  ${key}`, stats));
 };
 
-console.log(`${labels.length} labelled receipts: ${dev.length} development, ${test.length} held-out test${missing.length ? `, ${missing.length} without cached OCR` : ''}.`);
+console.log(`\n${labels.length} labelled receipts: ${dev.length} development, ${test.length} held-out test${missing.length ? `, ${missing.length} without cached OCR` : ''}${pending.length ? `; ${pending.length} still waiting for labels` : ''}.`);
 if (missing.length) console.log(`Run "npm run eval:receipts:ocr" for: ${missing.join(', ')}`);
 table('DEVELOPMENT SPLIT', dev);
 if (final) table('HELD-OUT TEST SPLIT (final score)', test);

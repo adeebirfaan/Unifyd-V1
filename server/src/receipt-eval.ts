@@ -44,31 +44,73 @@ function splitCsvLine(line: string): string[] {
   return cells.map((value) => value.trim());
 }
 
-const DATE_LABEL = /^\d{4}-\d{2}-\d{2}$/;
+export const LABELS_HEADER = 'file,type,condition,merchant,date,total';
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+// Excel often re-saves dates in the Malaysian day-first style, so DD/MM/YYYY is accepted too.
+const DAY_FIRST_DATE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
 
-/** Reads the labels CSV. Blank lines and lines starting with # are ignored. Throws on any invalid row. */
-export function parseLabelsCsv(csv: string): ReceiptLabel[] {
-  const lines = csv.split(/\r?\n/).map((line, index) => ({ line, number: index + 1 }))
-    .filter(({ line }) => line.trim() && !line.trim().startsWith('#'));
-  const [header, ...rows] = lines;
-  const expected = 'file,type,condition,merchant,date,total';
-  if (!header || splitCsvLine(header.line).join(',') !== expected) throw new Error(`The first row must be: ${expected}`);
+function labelDate(value: string): string | null {
+  const iso = ISO_DATE.exec(value);
+  const dayFirst = DAY_FIRST_DATE.exec(value);
+  const [year, month, day] = iso ? [iso[1], iso[2], iso[3]].map(Number) : dayFirst ? [dayFirst[3], dayFirst[2], dayFirst[1]].map(Number) : [];
+  if (!year || !month || !day) return null;
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month - 1 || date.getUTCDate() !== day) return null;
+  return date.toISOString().slice(0, 10);
+}
+
+const contentLines = (csv: string) => csv.replace(/^\uFEFF/, '').split(/\r?\n/).map((line, index) => ({ line, number: index + 1 }))
+  // A comment is judged by its first cell, because Excel may quote it or add trailing commas.
+  .filter(({ line }) => line.trim() && !(splitCsvLine(line)[0] ?? '').startsWith('#') && splitCsvLine(line).some(Boolean));
+
+/**
+ * Reads the labels CSV. Blank lines and lines starting with # are ignored, and a row
+ * with only a file name is waiting to be labelled. Throws on any other invalid row.
+ */
+export function parseLabelsCsv(csv: string): { labels: ReceiptLabel[]; pending: string[] } {
+  const [header, ...rows] = contentLines(csv);
+  if (!header || splitCsvLine(header.line).join(',') !== LABELS_HEADER) throw new Error(`The first row must be: ${LABELS_HEADER}`);
   const seen = new Set<string>();
-  return rows.map(({ line, number }) => {
+  const labels: ReceiptLabel[] = [];
+  const pending: string[] = [];
+  for (const { line, number } of rows) {
     const cells = splitCsvLine(line);
     const fail = (message: string): never => { throw new Error(`Line ${number}: ${message}`); };
+    // Spreadsheet apps may drop or add trailing empty columns.
+    while (cells.length > 6 && !cells[cells.length - 1]) cells.pop();
+    while (cells.length < 6 && cells.length > 0) cells.push('');
     if (cells.length !== 6) fail(`expected 6 columns, found ${cells.length}`);
     const [file, type, condition, merchant, date, total] = cells as [string, string, string, string, string, string];
     if (!file) fail('file is required');
     if (seen.has(file)) fail(`duplicate file ${file}`);
     seen.add(file);
+    if (!type && !condition && !merchant && !date && !total) { pending.push(file); continue; }
     if (!(RECEIPT_TYPES as readonly string[]).includes(type)) fail(`type must be one of ${RECEIPT_TYPES.join(', ')}`);
-    if (!(RECEIPT_CONDITIONS as readonly string[]).includes(condition)) fail(`condition must be clean or hard`);
-    if (date && !DATE_LABEL.test(date)) fail('date must be YYYY-MM-DD, or blank when the receipt shows none');
-    const amount = total ? Number(total.replace(/^RM\s*/i, '')) : null;
+    if (!(RECEIPT_CONDITIONS as readonly string[]).includes(condition)) fail('condition must be clean or hard');
+    const parsedDate = date ? labelDate(date) : null;
+    if (date && !parsedDate) fail('date must be a real date as YYYY-MM-DD or DD/MM/YYYY, or blank when the receipt shows none');
+    const amount = total ? Number(total.replace(/^RM\s*/i, '').replace(/,/g, '')) : null;
     if (amount !== null && !(Number.isFinite(amount) && amount > 0)) fail('total must be a positive number such as 12.50, or blank');
-    return { file, type: type as ReceiptType, condition: condition as ReceiptCondition, merchant: merchant || null, date: date || null, total: amount };
-  });
+    labels.push({ file, type: type as ReceiptType, condition: condition as ReceiptCondition, merchant: merchant || null, date: parsedDate, total: amount });
+  }
+  return { labels, pending };
+}
+
+const quoteCsv = (value: string) => (/[",]/.test(value) ? `"${value.replaceAll('"', '""')}"` : value);
+
+/**
+ * Adds an empty row for each image not yet listed, keeping everything already written.
+ * Starts from the template (comments and header, without its example rows) when the file is new.
+ */
+export function addPendingRows(csv: string | null, template: string, images: string[]): { csv: string; added: string[] } {
+  const base = csv ?? template.split(/\r?\n/).filter((line) => line.startsWith('#') || line.trim() === LABELS_HEADER).join('\n');
+  const [, ...rows] = contentLines(base);
+  const listed = new Set(rows.map(({ line }) => splitCsvLine(line)[0]));
+  const added = [...images].sort().filter((file) => !listed.has(file));
+  if (!added.length) return { csv: base, added };
+  const newline = base.includes('\r\n') ? '\r\n' : '\n';
+  const body = base.endsWith('\n') || !base ? base : base + newline;
+  return { csv: body + added.map((file) => `${quoteCsv(file)},,,,,`).join(newline) + newline, added };
 }
 
 /**

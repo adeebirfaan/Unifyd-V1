@@ -1,14 +1,17 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { useCallback, useRef, useState } from 'react';
+import { router, useFocusEffect, useLocalSearchParams, useNavigation } from 'expo-router';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
+import { AddSubscriptionForm } from '@/components/finance/AddSubscriptionForm';
 import { ConfirmDialog } from '@/components/finance/ConfirmDialog';
 import { SubscriptionForm } from '@/components/finance/SubscriptionForm';
 import { radius, spacing, typography } from '@/constants/theme';
+import { createSubscription, retryReminder } from '@/lib/subscriptionCreate';
 import { refreshSubscriptionReminder } from '@/lib/subscriptionReminders';
+import type { SubscriptionReminderIssue } from '@/lib/subscriptionReminders';
 import { SUBSCRIPTION_COLUMNS } from '@/lib/subscriptions';
 import type { SubscriptionInput, SubscriptionRecord } from '@/lib/subscriptions';
 import { supabase } from '@/lib/supabase';
@@ -18,7 +21,7 @@ import { useI18n } from '@/providers/LanguageProvider';
 
 type LoadState = 'loading' | 'ready' | 'error' | 'notFound';
 
-/** Add a subscription, or edit/delete one when `id` is given. */
+/** Add a subscription (`AddSubscriptionForm`), or edit/delete one when `id` is given (`SubscriptionForm`). */
 export default function SubscriptionEntryScreen() {
   const { id: idParam } = useLocalSearchParams<{ id?: string }>();
   const id = typeof idParam === 'string' && idParam ? idParam : undefined;
@@ -33,6 +36,13 @@ export default function SubscriptionEntryScreen() {
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(false);
   const requestVersion = useRef(0);
+  const navigation = useNavigation();
+
+  // On iOS 26 a rightward drag anywhere on the screen goes back (the native full-screen swipe), which took the
+  // Add form's slide-to-save gesture. Add keeps the edge swipe and the Back button; Edit has no slider.
+  useLayoutEffect(() => {
+    if (!id) navigation.setOptions({ fullScreenGestureEnabled: false });
+  }, [id, navigation]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -56,20 +66,28 @@ export default function SubscriptionEntryScreen() {
   }, [id, subscription, load]));
 
   async function save(input: SubscriptionInput): Promise<boolean> {
-    if (!userId) return false;
+    if (!userId || !subscription) return false;
     try {
-      if (subscription) {
-        const { data, error } = await supabase.from('subscriptions').update(input)
-          .eq('id', subscription.id).eq('user_id', userId).select('id').maybeSingle();
-        if (error || !data) return false;
-      } else {
-        const { error } = await supabase.from('subscriptions').insert({ user_id: userId, ...input });
-        if (error) return false;
-      }
+      const { data, error } = await supabase.from('subscriptions').update(input)
+        .eq('id', subscription.id).eq('user_id', userId).select('id').maybeSingle();
+      if (error || !data) return false;
       const reminderIssue = await refreshSubscriptionReminder(userId, language, input);
-      router.dismissTo({ pathname: '/subscriptions', params: { [subscription ? 'updated' : 'saved']: '1', reminderIssue } });
+      router.dismissTo({ pathname: '/subscriptions', params: { updated: '1', reminderIssue } });
       return true;
     } catch { return false; }
+  }
+
+  // Add: the insert and the reminder are separate steps, so a reminder failure never leads to a second insert.
+  async function insert(input: SubscriptionInput): Promise<boolean> {
+    if (!userId) return false;
+    const { error } = await supabase.from('subscriptions').insert({ user_id: userId, ...input });
+    return !error;
+  }
+  const reminder = (input: SubscriptionInput): Promise<SubscriptionReminderIssue> => userId ? refreshSubscriptionReminder(userId, language, input) : Promise.resolve('error');
+
+  if (!id) {
+    return <AddSubscriptionForm onBack={() => router.back()} onCreate={(input) => createSubscription(input, insert, reminder)} onRetryReminder={(input) => retryReminder(input, reminder)}
+      onContinue={(reminderIssue) => router.dismissTo({ pathname: '/subscriptions', params: { saved: '1', reminderIssue } })} />;
   }
 
   async function confirmDelete() {

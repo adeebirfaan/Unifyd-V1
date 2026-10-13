@@ -90,26 +90,35 @@ test('an empty list leads to adding a first subscription, with validation and no
   await expect(page.getByTestId('subscriptions-empty')).toContainText('No subscriptions yet.');
   await page.getByRole('button', { name: 'Add your first subscription' }).click();
 
-  await page.getByRole('button', { name: 'Save subscription' }).click();
+  // The Add screen saves by swipe or by its tap-to-save button; both validate first.
+  const tapSave = page.getByRole('button', { name: 'Or tap to save subscription' });
+  await tapSave.click();
   await expect(page.getByText('Enter a subscription name.')).toBeVisible();
   await expect(page.getByText('Enter the amount.')).toBeVisible();
   await page.getByRole('textbox', { name: 'Subscription name' }).fill('  Spotify  ');
   await page.getByRole('textbox', { name: 'Amount per billing' }).fill('15.905');
-  await page.getByRole('button', { name: 'Save subscription' }).click();
+  await tapSave.click();
   await expect(page.getByText('Enter an amount above RM 0.00 with up to 2 decimal places.')).toBeVisible();
   expect(writes).toEqual([]);
 
   await page.getByRole('textbox', { name: 'Amount per billing' }).fill('15.90');
-  await expect(page.getByRole('button', { name: 'Billing frequency: Monthly' })).toBeVisible();
+  await expect(page.getByRole('radio', { name: 'Monthly' })).toBeChecked();
   await page.getByRole('button', { name: /^Category \(optional\):/ }).click();
   await page.getByRole('radio', { name: 'Personal' }).click();
   await page.getByRole('button', { name: /^Next billing date:/ }).click();
   await page.getByRole('button', { name: 'Sunday, 18 October 2026' }).click();
   await expect(page.getByRole('button', { name: 'Reminder timing: 3 days before' })).toBeVisible();
   await expect(page.getByRole('switch', { name: 'Reminder notification' })).toBeChecked();
-  await page.getByRole('button', { name: 'Save subscription' }).click();
+  await tapSave.click();
 
-  await expect(page.getByText('Subscription saved.')).toBeVisible();
+  await expect(page.getByTestId('subscription-overlay-success')).toContainText('Subscription added');
+  await page.getByRole('button', { name: 'Tap anywhere to continue' }).click();
+  // The result is a brief toast over the page. Web cannot deliver local reminders, which the toast says briefly
+  // (the full sentence is its accessible label); the in-app list still shows the renewal.
+  const toast = page.getByTestId('subscriptions-toast');
+  await expect(toast).toContainText('Subscription saved.');
+  await expect(toast).toContainText('Reminders work in the mobile app');
+  await expect(toast).toHaveAttribute('aria-label', /Reminder notifications work in the mobile app, not on the web/);
   expect(writes).toEqual([{ method: 'POST', body: {
     user_id: owner, name: 'Spotify', amount: 15.9, category: 'personal', billing_frequency: 'monthly', next_billing_date: '2026-10-18',
     reminder_days_before: 3, notifications_enabled: true, is_active: true, notes: null,
@@ -117,13 +126,21 @@ test('an empty list leads to adding a first subscription, with validation and no
   expect(store).toHaveLength(1);
   // Wallet's finance summary reads only the dates it needs; the screens use the full column list.
   expect(selects.filter((select) => select !== COLUMNS && select !== 'id,name,next_billing_date,is_active')).toEqual([]);
-  // Web cannot deliver local reminders; the student is told, and the in-app list still shows the renewal.
-  await expect(page.getByText(/Reminder notifications work in the mobile app/)).toBeVisible();
   await expect(page.getByTestId('subscriptions-summary')).toContainText('RM 15.90');
   await expect(page.getByTestId('subscriptions-summary')).toContainText('1 active subscription');
   await expect(page.getByTestId('subscriptions-attention')).toContainText('Spotify');
   await expect(page.getByTestId('subscriptions-attention')).toContainText('In 6 days');
   expect(expenseWrites, 'adding a subscription never creates an expense').toEqual([]);
+
+  // The toast leaves by itself (4 s with a reminder line) and never comes back on a later visit.
+  await expect(toast).toHaveCount(0, { timeout: 6000 });
+  await page.getByTestId('subscriptions-attention').getByRole('button').first().click();
+  await page.getByTestId('subscription-details').getByRole('button', { name: 'Edit Spotify' }).click();
+  await expect(page.getByRole('textbox', { name: 'Subscription name' })).toHaveValue('Spotify');
+  await page.getByRole('button', { name: 'Go back' }).filter({ visible: true }).click();
+  await expect(page.getByTestId('subscriptions-summary')).toBeVisible();
+  await page.waitForTimeout(500);
+  await expect(page.getByTestId('subscriptions-toast')).toHaveCount(0);
 });
 
 test('renewal needs confirmation and moves only the date; pause, resume, and delete update the list', async ({ page }) => {
@@ -186,7 +203,7 @@ test('renewal needs confirmation and moves only the date; pause, resume, and del
   await expect(page.getByTestId(`subscription-row-${spotify.id}`)).toHaveCount(0);
 });
 
-test('compact layout: no formula, at most three attention rows in priority order, brand fallbacks, and delete from the sheet', async ({ page }) => {
+test('compact layout: no formula, attention rows in priority order, exactly five active rows with no View all, brand fallbacks, and delete from the sheet', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 320, height: 640 });
   const owner = await userId();
@@ -207,9 +224,11 @@ test('compact layout: no formula, at most three attention rows in priority order
   await expect(page.getByTestId('subscriptions-summary')).toContainText('Monthly equivalent');
   await expect(page.getByTestId('subscriptions-summary')).toContainText('5 active subscriptions');
 
-  // Attention: overdue, then today, then the soonest; at most three, so the fourth due plan and the later one are left out.
+  // Attention: overdue, then today, then the soonest, up to five rows; the later plan (30 Nov) is left out.
   const attention = page.getByTestId('subscriptions-attention').getByRole('button');
-  await expect(attention).toHaveCount(3);
+  await expect(attention).toHaveCount(4);
+  await expect(attention.nth(3)).toContainText('Netflix');
+  await expect(page.getByTestId('view-all-attention')).toHaveCount(0);
   await expect(attention.nth(0)).toContainText('Overdue');
   await expect(attention.nth(1)).toContainText('YouTube Premium');
   await expect(attention.nth(1)).toContainText('Renews today');
@@ -218,6 +237,7 @@ test('compact layout: no formula, at most three attention rows in priority order
   // Active list: compact rows (one each), with the paused plan kept out.
   const activeList = page.getByTestId('subscriptions-active');
   await expect(activeList.getByRole('button')).toHaveCount(5);
+  await expect(page.getByTestId('view-all-active')).toHaveCount(0);
   await expect(activeList).not.toContainText('Old plan');
   await expect(page.getByTestId('subscriptions-paused-toggle')).toHaveText(/Paused \(1\)/);
   // Icons: local Simple Icons marks for YouTube and Spotify, and a neutral initial.
@@ -246,6 +266,89 @@ test('compact layout: no formula, at most three attention rows in priority order
   await expect(sheet).toHaveCount(0);
   expect(store.map((entry) => entry.id)).not.toContain(rows[4].id);
   expect(writes.map((write) => write.method)).toEqual(['DELETE']);
+});
+
+test('overview sections show at most five rows grouped by renewal date, and View all opens every plan', async ({ page }) => {
+  const owner = await userId();
+  const base = { user_id: owner, category: null, billing_frequency: 'monthly', reminder_days_before: 3, notifications_enabled: true, notes: null, is_active: true };
+  const row = (n: number, name: string, next: string, amount = 10) => ({ ...base, id: `00000000-0000-4000-9000-0000000004${String(n).padStart(2, '0')}`, name, amount, next_billing_date: next });
+  const rows = [
+    row(1, 'Zoom', '2027-01-02'), row(2, 'Spotify', '2026-10-12'), row(3, 'Canva', '2026-10-12'), row(4, 'Notion', '2026-10-13'),
+    row(5, 'Gym club', '2026-10-09'), row(6, 'Netflix', '2026-10-14'), row(7, 'Disney+', '2026-10-15'), row(8, 'iCloud+', '2026-12-31', 4.5),
+  ];
+  const { writes } = await mockSubscriptions(page, rows);
+  await openSubscriptions(page);
+  // Totals use every plan, not the preview.
+  await expect(page.getByTestId('subscriptions-summary')).toContainText('8 active subscriptions');
+
+  // Needs attention: 6 plans, 5 shown in urgency (and so date) order, grouped by date with relative labels.
+  const attention = page.getByTestId('subscriptions-attention');
+  await expect(attention.getByRole('button')).toHaveCount(5);
+  await expect(page.getByTestId('view-all-attention')).toHaveText(/View all \(6\)/);
+  await expect(attention.getByRole('heading')).toHaveText([date('2026-10-09'), 'Today', 'Tomorrow', date('2026-10-14')]);
+  // Same date: name order, so Canva comes before Spotify.
+  await expect(attention.getByRole('button').nth(0)).toContainText('Overdue');
+  await expect(attention.getByRole('button').nth(1)).toContainText('Canva');
+  await expect(attention.getByRole('button').nth(2)).toContainText('Spotify');
+
+  // Active: by next billing date; 5 of 8 shown, with no day totals.
+  const active = page.getByTestId('subscriptions-active');
+  await expect(active.getByRole('button')).toHaveCount(5);
+  await expect(page.getByTestId('view-all-active')).toHaveText(/View all \(8\)/);
+  await expect(active).not.toContainText('Zoom');
+  await expect(active.getByRole('heading').first()).toHaveText(date('2026-10-09'));
+
+  // One accent for every identity icon (mark and initial alike); status colours are untouched.
+  const cyan = 'rgb(52, 193, 252)';
+  const fill = await active.getByTestId('subscription-mark-spotify').locator('path').first().evaluate((el) => getComputedStyle(el).fill);
+  expect(fill).toBe(cyan);
+  const initial = await active.getByTestId('subscription-icon-initial').first().evaluate((el) => getComputedStyle(el.querySelector('div') ?? el).color);
+  expect(initial).toBe(cyan);
+  const overdue = await active.getByText('Overdue').first().evaluate((el) => getComputedStyle(el).color);
+  expect(overdue).toBe('rgb(239, 68, 68)');
+
+  // View all: every active plan, grouped by date across the year boundary.
+  await page.getByTestId('view-all-active').click();
+  const sheet = page.getByTestId('all-subscriptions-sheet');
+  await expect(sheet).toContainText('All active subscriptions');
+  await expect(sheet.getByTestId('all-subscriptions-count')).toHaveText('8 subscriptions');
+  await expect(sheet.getByRole('button', { name: /next billing/ })).toHaveCount(8);
+  await expect(sheet.getByTestId('subscription-day-2026-12-31')).toHaveText(date('2026-12-31'));
+  await expect(sheet.getByTestId('subscription-day-2027-01-02')).toHaveText(date('2027-01-02'));
+  await sheet.getByTestId('all-subscriptions-close').click();
+  await expect(sheet).toHaveCount(0);
+
+  // Opening a plan from the sheet keeps detail navigation; pausing it updates the overview and the sheet.
+  await page.getByTestId('view-all-active').click();
+  await sheet.getByTestId(`subscription-sheet-row-${rows[0].id}`).click();
+  const details = page.getByTestId('subscription-details');
+  await expect(details).toContainText('Zoom');
+  await details.getByRole('button', { name: 'Pause Zoom' }).click();
+  await expect(page.getByTestId('subscriptions-toast')).toContainText(/Subscription paused/);
+  await details.getByRole('button', { name: 'Close subscription details' }).first().click();
+  await expect(page.getByTestId('subscriptions-summary')).toContainText('7 active subscriptions');
+  await expect(page.getByTestId('view-all-active')).toHaveText(/View all \(7\)/);
+  await page.getByTestId('view-all-active').click();
+  await expect(sheet.getByTestId('all-subscriptions-count')).toHaveText('7 subscriptions');
+  await expect(sheet).not.toContainText('Zoom');
+  await sheet.getByTestId('all-subscriptions-close').click();
+  expect(writes).toEqual([{ method: 'PATCH', body: { is_active: false } }]);
+
+  // The attention sheet holds all six.
+  await page.getByTestId('view-all-attention').click();
+  await expect(sheet).toContainText('All subscriptions needing attention');
+  await expect(sheet.getByTestId('all-subscriptions-count')).toHaveText('6 subscriptions');
+  await expect(sheet.getByRole('button', { name: /next billing/ })).toHaveCount(6);
+});
+
+test('one subscription shows one dated row and no View all', async ({ page }) => {
+  const owner = await userId();
+  await mockSubscriptions(page, [{ id: '00000000-0000-4000-9000-000000000501', user_id: owner, name: 'Notion', amount: 20, category: null, billing_frequency: 'yearly', next_billing_date: '2026-11-30', reminder_days_before: 3, notifications_enabled: true, notes: null, is_active: true }]);
+  await openSubscriptions(page);
+  await expect(page.getByTestId('subscriptions-attention')).toHaveCount(0);
+  await expect(page.getByTestId('subscriptions-active').getByRole('button')).toHaveCount(1);
+  await expect(page.getByTestId('subscriptions-active').getByRole('heading')).toHaveText(date('2026-11-30'));
+  await expect(page.getByTestId('view-all-active')).toHaveCount(0);
 });
 
 test('Wallet shows upcoming renewals separately from spending totals', async ({ page }) => {

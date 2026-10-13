@@ -5,6 +5,8 @@ import { ActivityIndicator, Pressable, RefreshControl, SectionList, StyleSheet, 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FinanceNumber } from '@/components/FinanceNumber';
+import { FinanceToast } from '@/components/finance/FinanceToast';
+import type { ToastMessage } from '@/components/finance/FinanceToast';
 import { AllExpensesSheet } from '@/components/wallet/AllExpensesSheet';
 import { ExpenseDateHeader } from '@/components/wallet/ExpenseDateHeader';
 import { ExpenseHistoryRow } from '@/components/wallet/ExpenseHistoryRow';
@@ -56,6 +58,7 @@ export default function WalletScreen() {
   const periodRequestVersion = useRef(0);
   const plans = useFinancePlans(userId);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [toast, setToast] = useState<ToastMessage | null>(null);
 
   const loadPeriod = useCallback(async () => {
     const version = ++periodRequestVersion.current;
@@ -139,6 +142,14 @@ export default function WalletScreen() {
     return () => { ++requestVersion.current; ++periodRequestVersion.current; };
   }, [loadWallet, loadPeriod]));
 
+  // Manage budget returns here with budgetSaved=1 only after the save was confirmed. The shared toast (the same one
+  // as "Subscription saved.") shows once, then the parameter is cleared so it never shows again.
+  useFocusEffect(useCallback(() => {
+    if (budgetSaved !== '1') return;
+    setToast({ id: Date.now(), text: t('budget.saved') });
+    router.setParams({ budgetSaved: undefined });
+  }, [budgetSaved, t]));
+
   const hasExpenses = state === 'ready' && expenses.length > 0;
   const preview = hasExpenses ? expenses.slice(0, PREVIEW_LIMIT) : [];
   // At most five rows in total, with a date header only for the days those rows cover.
@@ -182,11 +193,10 @@ export default function WalletScreen() {
       </View>
       <Text testID="wallet-period-range" style={[styles.range, { color: tokens.mutedText }]}>{formatExpenseDate(dates.start, language)} – {formatExpenseDate(dates.end, language)}</Text>
       {state === 'ready' && (saved === '1' || updated === '1' || deleted === '1') && notice(deleted === '1' ? t('wallet.deleted') : updated === '1' ? t('wallet.updated') : t('wallet.saved'))}
-      {budgetSaved === '1' && periodState === 'ready' && notice(t('budget.saved'))}
 
       {/* 2. Insight deck (same stacked, swipeable deck as Home): overview first, then by category, then
           needs attention only when there is something to act on. */}
-      <FinanceDeck cards={[
+      <FinanceDeck hint={t(attention.length ? 'wallet.deckHint' : 'wallet.deckHintCategories')} cards={[
         { key: 'overview', name: t('wallet.deckOverview'), surface: 'hero', render: (front) => <FinanceOverviewCard embedded play={front} period={selectedPeriod} summary={summary} state={periodState}
           memoryKey={`wallet-overview:${userId}:${selectedPeriod}`} onRetry={() => { void loadPeriod(); }} onSetBudget={openBudget} /> },
         // While the period reloads (for example on returning to Wallet), the category card stays in the deck with
@@ -236,6 +246,7 @@ export default function WalletScreen() {
   />
   <AllExpensesSheet visible={historyOpen} expenses={state === 'ready' ? expenses : []} onClose={() => setHistoryOpen(false)}
     onOpenExpense={(expense) => { setHistoryOpen(false); openExpense(expense); }} />
+  <FinanceToast testID="wallet-toast" toast={toast} onDone={() => setToast(null)} />
   </>;
 }
 

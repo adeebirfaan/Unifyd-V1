@@ -81,3 +81,53 @@ export function subscriptionVisual(name: string): SubscriptionVisual {
   const letter = [...normalised.replace(/[^\p{L}\p{N}]/gu, '')][0]?.toUpperCase() ?? '?';
   return { kind: 'initial', letter };
 }
+
+
+/**
+ * A small local list of well-known subscription names for the Add Subscription name field. These are name
+ * suggestions only, not verified plans: choosing one fills just the name. Prices, dates, categories, and
+ * reminders are never filled in. Icons come from `subscriptionVisual(name)`, so nothing extra is stored.
+ * `keywords` let a student find a plan by another common word for it ("office", "gpt").
+ */
+export const SUBSCRIPTION_SUGGESTIONS: readonly { name: string; keywords?: readonly string[] }[] = [
+  { name: 'Spotify' },
+  { name: 'Netflix' },
+  { name: 'YouTube Premium', keywords: ['youtube music'] },
+  { name: 'Apple Music' },
+  { name: 'Google One', keywords: ['google drive storage'] },
+  { name: 'iCloud+', keywords: ['icloud', 'apple storage'] },
+  { name: 'Microsoft 365', keywords: ['office', 'office 365'] },
+  { name: 'Canva' },
+  { name: 'Adobe Creative Cloud', keywords: ['photoshop', 'lightroom'] },
+  { name: 'ChatGPT', keywords: ['openai', 'gpt'] },
+  { name: 'Disney+', keywords: ['disney plus', 'hotstar'] },
+  { name: 'Notion' },
+];
+
+/** How many suggestions the dropdown shows at once, so it stays compact without its own scroll area. */
+export const SUGGESTION_LIMIT = 6;
+
+/**
+ * Suggestions for what has been typed, matched case-insensitively and ignoring accents and punctuation.
+ * Names that start with the text come first, then names or keywords containing it. An empty field shows the
+ * first few names. A name already typed in full is still listed, so it can be shown as selected.
+ */
+export function matchSubscriptionSuggestions(query: string, limit = SUGGESTION_LIMIT): string[] {
+  const text = normaliseSubscriptionName(query);
+  if (!text) return SUBSCRIPTION_SUGGESTIONS.slice(0, limit).map((item) => item.name);
+  const starts: string[] = [];
+  const contains: string[] = [];
+  for (const item of SUBSCRIPTION_SUGGESTIONS) {
+    const name = normaliseSubscriptionName(item.name);
+    if (name.startsWith(text)) starts.push(item.name);
+    else if (name.includes(text) || item.keywords?.some((keyword) => normaliseSubscriptionName(keyword).includes(text))) contains.push(item.name);
+  }
+  return [...starts, ...contains].slice(0, limit);
+}
+
+/** The suggestion this name already equals (ignoring case, spaces, and punctuation), or null for a custom name. */
+export function selectedSuggestion(name: string): string | null {
+  const text = normaliseSubscriptionName(name);
+  if (!text) return null;
+  return SUBSCRIPTION_SUGGESTIONS.find((item) => normaliseSubscriptionName(item.name) === text)?.name ?? null;
+}

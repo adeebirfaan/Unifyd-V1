@@ -92,7 +92,10 @@ test('rendering has no network dependency and does not bundle the whole Simple I
   assert.ok(pkg.devDependencies['simple-icons']);
 });
 
-test('marks have strong contrast on the tile in Dark and Light (tiles stay dark in both)', () => {
+test('every tile kind uses the one accent colour, with strong contrast on the tile in Dark and Light (tiles stay dark in both)', () => {
+  const component = readFileSync(new URL('../components/finance/SubscriptionBrandIcon.tsx', import.meta.url), 'utf8');
+  assert.match(component, /const ink = tokens\.brandCyan;/);
+  assert.doesNotMatch(component, /tokens\.cardText/, 'no mark is drawn in white');
   const luminance = (hex) => {
     const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -100,7 +103,6 @@ test('marks have strong contrast on the tile in Dark and Light (tiles stay dark 
   const contrast = (a, b) => { const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x); return (hi + 0.05) / (lo + 0.05); };
   for (const mode of ['dark', 'light']) {
     const theme = semanticThemes[mode];
-    assert.ok(contrast(theme.cardText, theme.cardElevated) >= 7, `${mode} mark contrast`);
-    assert.ok(contrast(theme.brandCyan, theme.cardElevated) >= 4.5, `${mode} initial/category contrast`);
+    assert.ok(contrast(theme.brandCyan, theme.cardElevated) >= 4.5, `${mode} accent contrast`);
   }
 });

@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 
 import { translate } from '@/constants/i18n';
-import type { LanguagePreference } from '@/constants/i18n';
+import type { LanguagePreference, TranslationKey } from '@/constants/i18n';
 import { colors } from '@/constants/theme';
 import { formatExpenseDate, formatRinggit } from '@/lib/expenseHistory';
 import { planSubscriptionReminders, reconcileReminders, subscriptionReminderFireTime } from '@/lib/subscriptions';
@@ -136,6 +136,15 @@ export async function observeSubscriptionReminderTaps(userId: string, openSubscr
 }
 
 export type SubscriptionReminderIssue = '' | 'past' | 'permissionDenied' | 'unsupported' | 'error';
+
+/** The full sentence for each reminder problem (the toast and success pill show the short `reminderShort` form). */
+export const REMINDER_ISSUE_TEXT: Record<Exclude<SubscriptionReminderIssue, ''>, TranslationKey> = {
+  permissionDenied: 'subscription.reminderPermission', unsupported: 'subscription.reminderWeb', past: 'subscription.reminderPast', error: 'subscription.reminderUnavailable',
+};
+
+export function isReminderIssue(value: unknown): value is Exclude<SubscriptionReminderIssue, ''> {
+  return typeof value === 'string' && value in REMINDER_ISSUE_TEXT;
+}
 type ReminderSettings = { is_active: boolean; notifications_enabled: boolean; next_billing_date: string; reminder_days_before: number };
 
 /**

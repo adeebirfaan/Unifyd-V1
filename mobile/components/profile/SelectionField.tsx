@@ -9,7 +9,11 @@ import { useI18n } from '@/providers/LanguageProvider';
 
 export type SelectionOption = { id: string; label: string };
 
-export function SelectionField({ label, value, placeholder, options, onSelect, error, labelOnCard = false }: {
+/**
+ * `variant="row"` is a compact settings-style row for grouped cards: the label on the left, the chosen value and
+ * a chevron on the right. Its accessible name is the same as the default field's.
+ */
+export function SelectionField({ label, value, placeholder, options, onSelect, error, labelOnCard = false, variant = 'field', testID }: {
   label: string;
   value: string | null;
   placeholder: string;
@@ -17,6 +21,8 @@ export function SelectionField({ label, value, placeholder, options, onSelect, e
   onSelect: (id: string) => void;
   error?: string;
   labelOnCard?: boolean;
+  variant?: 'field' | 'row';
+  testID?: string;
 }) {
   const [visible, setVisible] = useState(false);
   const insets = useSafeAreaInsets();
@@ -25,12 +31,18 @@ export function SelectionField({ label, value, placeholder, options, onSelect, e
   const selected = options.find((option) => option.id === value);
 
   return (
-    <View style={styles.field}>
-      <Text style={[styles.label, { color: labelOnCard ? tokens.cardText : tokens.screenText }]}>{label}</Text>
-      <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? placeholder}`} onPress={() => setVisible(true)} style={[styles.control, error && styles.controlError]}>
-        <Text style={[styles.value, !selected && styles.placeholder]} numberOfLines={2}>{selected?.label ?? placeholder}</Text>
-        <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
-      </Pressable>
+    <View style={variant === 'row' ? styles.rowField : styles.field}>
+      {variant === 'row' ? <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? placeholder}`} onPress={() => setVisible(true)} style={styles.row}>
+        <Text style={[styles.rowLabel, { color: tokens.cardText }]}>{label}</Text>
+        <Text style={[styles.rowValue, { color: error ? tokens.cardErrorText : tokens.cardMutedText }]} numberOfLines={1}>{selected?.label ?? placeholder}</Text>
+        <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
+      </Pressable> : <>
+        <Text style={[styles.label, { color: labelOnCard ? tokens.cardText : tokens.screenText }]}>{label}</Text>
+        <Pressable testID={testID} accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label ?? placeholder}`} onPress={() => setVisible(true)} style={[styles.control, error && styles.controlError]}>
+          <Text style={[styles.value, !selected && styles.placeholder]} numberOfLines={2}>{selected?.label ?? placeholder}</Text>
+          <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
+        </Pressable>
+      </>}
       {error && <Text style={[styles.error, { color: labelOnCard ? tokens.cardErrorText : tokens.errorText }]}>{error}</Text>}
       <Modal visible={visible} transparent animationType="slide" onRequestClose={() => setVisible(false)}>
         <View style={styles.modalRoot}>
@@ -62,6 +74,10 @@ const styles = StyleSheet.create({
   label: { ...typography.label, color: colors.textPrimary },
   control: { minHeight: 54, flexDirection: 'row', alignItems: 'center', gap: spacing.space3, paddingHorizontal: spacing.space4, paddingVertical: spacing.space3, borderRadius: radius.radiusMd, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.surfaceElevated },
   controlError: { borderColor: colors.danger },
+  rowField: { gap: spacing.space1 },
+  row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.space2 },
+  rowLabel: { ...typography.body, flex: 1 },
+  rowValue: { ...typography.body, flexShrink: 0, maxWidth: '58%', textAlign: 'right' },
   value: { ...typography.body, color: colors.textPrimary, flex: 1, lineHeight: 22 },
   placeholder: { color: colors.textTertiary },
   error: { ...typography.label, color: colors.danger },

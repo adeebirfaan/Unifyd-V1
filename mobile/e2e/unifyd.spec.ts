@@ -449,9 +449,11 @@ test('current monthly and weekly budgets use only their period expenses', async 
     await expect(visibleTestId(page, 'budget-category-personal')).toHaveCount(0);
 
     await page.getByRole('button', { name: 'Set budget' }).click();
-    await expect(page.getByRole('button', { name: 'Budget period: Monthly' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Monthly' })).toBeChecked();
     await page.getByRole('textbox', { name: 'Budget amount (RM)' }).fill('500.00');
-    await page.getByRole('button', { name: 'Save budget' }).click();
+    await page.getByRole('button', { name: 'Or tap to save budget' }).click();
+    await expect(page.getByTestId('budget-overlay-success')).toContainText(/Budget (saved|updated)/);
+    await page.getByRole('button', { name: 'Tap anywhere to continue' }).click();
     await expect(visibleTestId(page, 'budget-amount')).toHaveText('RM 500.00');
     await expect(visibleTestId(page, 'budget-spent')).toHaveText('RM 0.00');
     await expect(visibleTestId(page, 'budget-remaining')).toContainText('RM 500.00');
@@ -492,9 +494,11 @@ test('current monthly and weekly budgets use only their period expenses', async 
     await expect(visibleTestId(page, 'budget-category-personal')).toHaveCount(0);
     await expect(visibleTestId(page, 'budget-daily-average')).toHaveText(ringgit(50 / (dayNumber(dates.today) - dayNumber(dates.weekStart) + 1)));
     await page.getByRole('button', { name: 'Set budget' }).click();
-    await expect(page.getByRole('button', { name: 'Budget period: Weekly' })).toBeVisible();
+    await expect(page.getByRole('radio', { name: 'Weekly' })).toBeChecked();
     await page.getByRole('textbox', { name: 'Budget amount (RM)' }).fill('75.00');
-    await page.getByRole('button', { name: 'Save budget' }).click();
+    await page.getByRole('button', { name: 'Or tap to save budget' }).click();
+    await expect(page.getByTestId('budget-overlay-success')).toContainText('Weekly budget');
+    await page.getByRole('button', { name: 'Tap anywhere to continue' }).click();
     await expect(visibleTestId(page, 'budget-amount')).toHaveText('RM 75.00');
     await expect(visibleTestId(page, 'budget-spent')).toHaveText('RM 50.00');
     await expect(visibleTestId(page, 'budget-remaining')).toContainText('RM 25.00');

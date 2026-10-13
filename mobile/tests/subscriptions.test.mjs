@@ -130,7 +130,7 @@ test('reconcile cancels paused, deleted, edited, or other-user reminders and sch
   assert.equal(reconcileReminders('u1', scheduled, new Map()).cancel.length, 4);
 });
 
-test('attention lists only overdue, today, and soon plans, at most three, in priority order', async () => {
+test('attention lists every overdue, today, and soon plan (no cap) in priority order', async () => {
   const { attentionSubscriptions } = await import('../lib/subscriptions.ts');
   const base = { reminder_days_before: 3, is_active: true };
   const subs = [
@@ -142,6 +142,44 @@ test('attention lists only overdue, today, and soon plans, at most three, in pri
     { ...base, name: 'Soon A', next_billing_date: '2026-10-14' },
   ];
   assert.deepEqual(attentionSubscriptions(subs, '2026-10-12').map((entry) => [entry.subscription.name, entry.status]),
-    [['Overdue', 'overdue'], ['Today', 'today'], ['Soon A', 'soon']]);
+    [['Overdue', 'overdue'], ['Today', 'today'], ['Soon A', 'soon'], ['Soon B', 'soon']]);
+  assert.equal(attentionSubscriptions(subs, '2026-10-12', 2).length, 2);
   assert.deepEqual(attentionSubscriptions([{ ...base, name: 'Later', next_billing_date: '2026-11-30' }], '2026-10-12'), []);
+});
+
+test('overview grouping: sort first, take five, then group by renewal date with no empty or repeated groups', async () => {
+  const { SUBSCRIPTION_PREVIEW_LIMIT, groupSubscriptionsByDate, renewalDay, sortSubscriptions } = await import('../lib/subscriptions.ts');
+  const plan = (id, name, next) => ({ id, name, next_billing_date: next, is_active: true });
+  const subs = [
+    plan('6', 'Zoom', '2027-01-02'), plan('2', 'Spotify', '2026-12-31'), plan('5', 'Netflix', '2026-12-31'),
+    plan('4', 'Netflix', '2026-12-31'), plan('1', 'Canva', '2026-12-30'), plan('3', 'Apple Music', '2027-01-01'),
+  ];
+  const sorted = sortSubscriptions(subs);
+  // Same date and same name fall back to id, so the order never depends on how rows arrived.
+  assert.deepEqual(sorted.map((s) => s.id), ['1', '4', '5', '2', '3', '6']);
+  assert.equal(SUBSCRIPTION_PREVIEW_LIMIT, 5);
+  const groups = groupSubscriptionsByDate(sorted.slice(0, SUBSCRIPTION_PREVIEW_LIMIT));
+  // Five rows in total across groups (not five per date), crossing the year boundary in date order.
+  assert.deepEqual(groups.map((g) => [g.date, g.subscriptions.map((s) => s.id)]), [
+    ['2026-12-30', ['1']], ['2026-12-31', ['4', '5', '2']], ['2027-01-01', ['3']],
+  ]);
+  assert.equal(groups.flatMap((g) => g.subscriptions).length, 5);
+  assert.deepEqual(groupSubscriptionsByDate([]), []);
+  // Relative labels use calendar-day maths, including across a year boundary.
+  assert.equal(renewalDay('2026-12-31', '2026-12-31'), 'today');
+  assert.equal(renewalDay('2027-01-01', '2026-12-31'), 'tomorrow');
+  assert.equal(renewalDay('2026-12-31', '2027-01-01'), 'yesterday');
+  assert.equal(renewalDay('2027-01-02', '2026-12-31'), null);
+});
+
+test('attention order is also date order, so grouping it never splits or reorders a date', async () => {
+  const { attentionSubscriptions, groupSubscriptionsByDate } = await import('../lib/subscriptions.ts');
+  const base = { reminder_days_before: 3, is_active: true };
+  const subs = ['2026-10-14', '2026-10-09', '2026-10-12', '2026-10-09', '2026-10-15', '2026-10-13', '2026-10-10']
+    .map((date, i) => ({ ...base, id: String(i), name: `P${i}`, next_billing_date: date }));
+  const all = attentionSubscriptions(subs, '2026-10-12');
+  assert.equal(all.length, 7, 'the full list is kept for View all');
+  const dates = all.map((entry) => entry.subscription.next_billing_date);
+  assert.deepEqual(dates, [...dates].sort());
+  assert.deepEqual(groupSubscriptionsByDate(all.map((entry) => entry.subscription)).map((g) => g.date), ['2026-10-09', '2026-10-10', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15']);
 });

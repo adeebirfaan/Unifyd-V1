@@ -109,6 +109,216 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-13 — Wallet: Subscriptions as a standard quick-action tile in a 4-column grid
+
+**What changed (layout only; routes, subscription logic, and Wallet figures are unchanged):**
+- `IconQuickActions` is now a grid of 4 equal columns.
+  - Extra actions continue the next row in order. An incomplete row is left-aligned, padded with spacers so tiles keep the same width.
+  - Row gap is 12 pt. An optional `hint` gives the accessibility hint.
+- Every label shares one size from `quickLabelSize`: 13 pt, stepping down only so the longest word fits. Measured on web: 13 pt at 390, about 12 pt at 360, and 10 pt at 320.
+- **Wallet:** "Subscriptions" is the fifth action (`repeat-outline`, `quick-subscriptions`, with the same label and hint), first on row 2. The wide pill, its chevron, and its styles were removed.
+- **Studies:** its single row of 4 is unchanged apart from the shared label sizing.
+
+**Changed files:** `mobile/components/IconQuickActions.tsx`, `mobile/components/wallet/FinanceQuickActions.tsx`, `mobile/e2e/walletHome.spec.ts`. Docs: `UNIFYD_DESIGN_SYSTEM.md` (Wallet quick actions), `CLAUDE.md`, and this file.
+
+**Tests performed:** typecheck and lint pass; unit tests 103/103; `git diff --check` is clean. E2E 45/45 across walletHome, subscriptions, subscriptionAdd, splitBills, studies, budget, and live unifyd. The Wallet quick-actions test now checks: Subscriptions at the same width and column as row 1, on row 2, 5 buttons, opening /subscriptions; and at 320 px, the tile no taller than Scan receipt (no broken word). Screenshots were checked at 320, 360, and 390 px in Dark and Light.
+
+**Next action:** On the phone, check that the second-row Subscriptions tile lines up under Add expense and opens Subscriptions.
+
+### 2026-10-13 — Planner: Studies layout aligned with Wallet (Academic focus as the blue main card)
+
+**What changed (presentation only; task, priority, timetable, semester, and reminder logic are unchanged):**
+- **Order:** header → Studies deck → dots → the four icon shortcuts → Priority tasks, as on Wallet. Before this, the shortcuts sat above the deck.
+- **Deck order:** Academic focus (default) → Today → Semester.
+  - Academic focus now uses `surface: 'hero'` (`colors.brandGradient`, as Wallet's overview), with an on-blue palette: white text, translucent tiles and track, and filled icons for counts above 0.
+  - Its empty state is text only, because the Add task shortcut and the Priority tasks empty state follow it.
+- **Guide:** shown only on Academic focus: "Swipe or tap the cards behind for Today and Semester" (`InsightDeck` no longer uses `hintOnEveryCard` here).
+- **i18n:** `studies.deckHint` reworded; `studies.cardTasks` is now "Academic focus" / "Fokus akademik"; new `studies.focusEmpty`.
+
+**Changed files:** `mobile/app/(tabs)/planner.tsx`, `mobile/components/planner/StudiesCards.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/studies.spec.ts`. Docs: `UNIFYD_DESIGN_SYSTEM.md` (Planner), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file. Finance components are untouched.
+
+**Tests performed:** typecheck and lint pass; unit tests 103/103; `git diff --check` is clean. E2E 44/44 across studies, planner, semester, timetable, reminders, walletHome, home, and budget. The rewritten studies deck test checks the layout order, Academic focus as the default gradient card with real counts, the guide only on that card and below the progress, the same box for every card, the shortcuts never moving, dots, and no Back to overview. Screenshots were checked: Dark, Light, Malay at 320 px, and the empty state.
+
+**Next action:** On the phone, check the blue Academic focus card's contrast in sunlight, and swiping to Today and Semester.
+
+### 2026-10-13 — Planner: Studies main page revamp (icon shortcuts, Studies deck, Priority tasks)
+
+**Requirements implemented:**
+- Presentation of the Planner tab (Module 5 tasks, Module 7 semester/timetable shortcuts). Task CRUD, completion, reminders, semester, timetable, routes, schema, and RLS are unchanged. SRS-NFR-008 is preserved.
+
+**Changed files:**
+- New: `mobile/components/IconQuickActions.tsx`, `mobile/components/home/InsightDeck.tsx`, `mobile/components/planner/StudiesCards.tsx`, `mobile/components/planner/TaskRow.tsx`, `mobile/components/planner/AllTasksSheet.tsx`, `mobile/lib/studiesOverview.ts`, `mobile/tests/studiesOverview.test.mjs`, `mobile/e2e/studies.spec.ts`.
+- Edited: `mobile/app/(tabs)/planner.tsx`, `mobile/components/wallet/FinanceQuickActions.tsx` and `FinanceDeck.tsx` (now thin users of the shared components, with unchanged test IDs), `mobile/constants/i18n.ts` (`studies.*` in English and Malay; removed `task.helper`), `mobile/e2e/planner.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (new Planner section), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file.
+
+**What changed:**
+- **Removed:** the helper sentence, the large Add task button, and the My semester, My timetable, and Reminders rows.
+- **Added:** four `IconQuickActions` tiles to the same routes, and the `studies-deck` (Today next class, Academic focus, Semester) on the shared `InsightDeck`/`CardDeck stableFront`, with a guide on every card.
+- **Priority tasks:** up to 5 incomplete tasks from `priorityTasks`, with "View all (N)" opening `AllTasksSheet` (To do, then Completed).
+- **Rows:** the compact `TaskRow` keeps the complete/reopen circle. Reopening a completed task moved from the main list to the sheet.
+- **Narrow screens:** quick-action labels may use half of each gap, and the Malay tiles use shorter labels ("Semester saya", "Jadual waktu"), so 320 pt fits without broken words. The priority badge sits on the status line, so titles stay readable.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 103/103 (5 new in `studiesOverview.test.mjs`: the order rules, ties, local-day grouping, focus counts, and minutes until class).
+- E2E 44/44 across `studies` (6, new), `planner`, `semester`, `timetable`, `reminders`, `walletHome`, `home`, and `budget`. The Expo Web dev server (`npm run web`) is started by Playwright for these.
+- The new specs cover:
+  - exactly four shortcuts opening their routes;
+  - the exact preview order, 5 rows, no completed task, "View all (8)" with To do (7) and Completed (1);
+  - deck cards with mocked real data, the same position and size for every card, and nothing below moving;
+  - no Back to overview;
+  - the calm empty and all-caught-up states;
+  - 320 px Light mode with Reduce Motion and no horizontal overflow.
+- Screenshots were checked: Dark, Light, Malay at 320 px, each card, and the sheet.
+
+**Next action:** On the phone, check swiping the Studies deck, the sheet drag, the complete circle, and the Malay labels on a small screen.
+
+### 2026-10-13 — Wallet: stable Finance deck with a guide, and the shared "Budget saved." toast
+
+**Requirements implemented:**
+- Wallet presentation only (SRS-FR budget and dashboard features unchanged); SRS-NFR-008 navigation preserved.
+
+**Changed files:**
+- `mobile/components/home/CardDeck.tsx`: removed the `backToFirstLabel` option (only Wallet used it); new opt-in `stableFront`.
+- `mobile/components/wallet/FinanceDeck.tsx`: uses `stableFront`; new `hint` prop rendered at the bottom of the first card.
+- `mobile/app/(tabs)/wallet.tsx`: passes the hint; "Budget saved." moved from the inline notice to `FinanceToast`.
+- `mobile/components/finance/FinanceToast.tsx`: optional `testID` (default `subscriptions-toast`, so Subscriptions is unchanged).
+- `mobile/constants/i18n.ts`: added `wallet.deckHint`, `wallet.deckHintCategories` (English and Malay); removed `wallet.deckBack`.
+- `mobile/e2e/walletHome.spec.ts`, `mobile/e2e/budget.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (Wallet insight deck, Manage budget), `UNIFYD_SDD.md`, `CLAUDE.md`, and this file.
+
+**What changed:**
+- **No Back to overview.** Away from the first card, the Finance deck showed a "Back to overview" button under the dots. It pushed the quick actions down by 44 pt. Removed.
+- **Stable direct selection.** A swipe, a peeking edge, or a dot brings that card into the same front place and size. With `stableFront`, a card swiped past stays at 100% scale (it was 96%) and fades out over the last quarter of the slide. On a phone, the old shrunken card could otherwise stay visible in the left gutter, because the scroller is `overflow: visible`. Home's deck is unchanged.
+- **Guide.** The bottom of the overview card shows a `swap-horizontal` icon and white text: "Swipe or tap the cards behind for spending by category and items that need attention". With no attention card it says "Swipe or tap the card behind for spending by category". The owner chose Wallet-accurate wording over Home's "Money, Studies and Wellbeing", because those cards are not in the Wallet deck.
+- **Budget saved.** After a confirmed save, Manage budget returns to Wallet with `budgetSaved=1` (unchanged). Wallet now shows "Budget saved." in the same `FinanceToast` as "Subscription saved.": 2.5 s, the same animation, placement, green check, and announcement. A focus effect keyed on the parameter then clears it, so the toast never repeats. Save logic, queries, and the success overlay are untouched.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 98/98. `git diff --check` is clean.
+- `budget.spec.ts` 4/4: the toast appears after Continue, is labelled "Budget saved.", leaves within 4 s, is not shown again after switching tabs, and never appears after a failed save.
+- `walletHome.spec.ts`: the rewritten deck test passes. It checks that the guide sits inside the overview below the figures, the category and attention cards have the overview's exact box, the quick actions never move, and no Back to overview exists. The single-card test also passes.
+- `home`, `subscriptions`, `subscriptionAdd`, and live `unifyd` pass.
+- "no budget and no expenses" fails at its "deck keeps its place after returning" step. It failed 5/5 on the original committed `CardDeck`/`FinanceDeck`/`wallet.tsx` as well, so it is the order-dependent issue noted in the previous entry, not caused by this change.
+- Screenshots were checked: the guide in Dark, Light, and Malay, a mid-swipe frame, and the second card at rest.
+
+**Follow-up (same day, owner request):** the Manage budget amount input and its "RM" prefix now use the Space Mono finance font, matching the other finance pages. `FinanceNumber.tsx` exports `financeFontStyle` (the same style object) for the input, and the prefix uses `FinanceNumber`. The design system and `CLAUDE.md` record this one exception to "not for inputs". Typecheck, lint, and `budget.spec.ts` 4/4 pass, and the screenshot was checked.
+
+**Next action:** On the phone, swipe the Finance deck and check that no strip of the previous card stays at the left edge, then save a budget and check the toast. Then investigate the "deck keeps its place" failure on Wallet return (web scroller remount).
+
+### 2026-10-13 — Wallet: Manage budget redesign with the shared slide-to-save
+
+**What changed:** only the `/set-budget` UI and save flow. Budget queries, period rules (Monday weeks, 1st-of-month months), validation, create-versus-update, RLS, and the schema are unchanged.
+- **Removed:** the description paragraph (and its unused `budget.helper` string). The header is tighter.
+- **Period:** a Weekly/Monthly segmented radio control replaces the dropdown, with a read-only current-period panel that updates immediately.
+- **Amount:** a larger card with "RM", a divider, and a 28 pt system-font input. An existing budget shows "Updating this period’s budget, currently RM X".
+- **Saving:** the existing `SwipeToSave` replaces "Save budget", plus "Or tap to save". The footer is hidden while the keyboard is open, and the iOS 26 full-screen back swipe is off on this screen (the edge swipe stays).
+- **Shared overlay:** the blue success overlay was extracted from `SubscriptionSavedOverlay` into `components/finance/SaveSuccessOverlay.tsx`. Subscription now passes only its details, and its test IDs are unchanged.
+  - Budget shows "Budget saved" or "Budget updated", the amount, "Monthly budget" or "Weekly budget", the range, and "Tap anywhere to continue" (which goes to Wallet as before).
+  - Success appears only after the insert or update is confirmed. A failure restores the form, resets the slider, and allows a retry.
+- New i18n (English and Malay): `budget.slideToSave`, `tapToSave`, `tapToSaveLabel`, `savedTitle`, `updatedTitle`, `weeklyBudget`, `monthlyBudget`, `savedA11y`, `tapToContinue`, `updatingExisting`.
+
+**Changed files:**
+- New: `mobile/components/finance/SaveSuccessOverlay.tsx`, `mobile/e2e/budget.spec.ts`.
+- Edited: `mobile/app/set-budget.tsx`, `mobile/components/finance/SubscriptionSavedOverlay.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/unifyd.spec.ts` (budget steps).
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§8), `UNIFYD_SDD.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 98/98. `git diff --check` is clean.
+- E2E `budget.spec.ts` 4/4 (new, mocked budgets) covers:
+  - no description, and the Monthly and Weekly ranges (1–31 Oct, 12–18 Oct 2026);
+  - a partial swipe saving nothing, and empty or invalid amounts showing errors and focusing the field with no overlay;
+  - loading while the insert is held, then success after it; one POST, and Wallet showing RM 500.00;
+  - an existing budget giving "Manage budget", the update note, one PATCH, and no duplicate;
+  - a failure keeping the amount and resetting the slider, with the retry saving one row;
+  - the keyboard tap-to-save at 320 px in Light mode.
+- Live `unifyd.spec.ts` "current monthly and weekly budgets…" passes against the real database, with its restore.
+- `subscriptionAdd`, `subscriptions`, and `home` pass. `walletHome` passed 13/13 alone. In the combined run, its "no budget and no expenses" deck-dot test failed once, as seen earlier this session; it passes alone and on 3 repeats, so it is order-dependent and not caused by these changes.
+- Screenshots were checked: new and existing budgets in Dark, Light, 320 × 640, and the success screen.
+
+**Next action:** On the iPhone, slide to save a budget (check that it does not navigate back), check that the footer hides while typing, and check the success screen.
+
+### 2026-10-13 — Subscriptions: 5-row previews grouped by renewal date, View all sheets, one icon accent
+
+**What changed:** presentation of the Subscriptions overview only. Queries, calculations, reminders, CRUD, the summary card, Add, and the Add form are unchanged.
+- **Needs attention** and **Active subscriptions** each show at most 5 rows in total, grouped by `next_billing_date` under "Today", "Tomorrow", "Yesterday", or a date with the year.
+  - Each group is a Wallet-style card, with no day totals.
+  - "View all (N)" appears only when N > 5. Before this, attention was capped at 3, and active had no cap.
+- **Sorting:**
+  - Attention is by urgency (overdue → today → soon), which is also date order.
+  - Active is by next billing date.
+  - Ties are broken by name, then id.
+  - The limit is applied after sorting, then grouping.
+- **View all sheets:** new `AllSubscriptionsSheet`, built on Wallet's `AllExpensesSheet` structure, plus `useSheetDrag`.
+  - It shows the full count, sticky date headers, one virtualised `SectionList`, and loading, error, and empty states.
+  - Rows open the details sheet (after the sheet closes on iOS). The sheet refreshes from the screen's state after actions.
+- **Icons:** every `SubscriptionBrandIcon` kind is drawn in `brandCyan`, matching Wallet's expense icons. Brand marks were white before. All marks are vectors, so they tint cleanly; status colours are unchanged.
+- **New lib helpers:** `SUBSCRIPTION_PREVIEW_LIMIT`, `groupSubscriptionsByDate`, `renewalDay`, and a name-then-id tie-breaker. `attentionSubscriptions` now returns every match; the optional limit is kept.
+- New i18n (English and Malay): `subscription.viewAll`, `viewAllAttentionA11y`, `viewAllActiveA11y`, `viewAllHint`, `allAttention`, `allActive`, `countOne`, `countMany`, `closeAll`, `sheetEmpty`, `dayToday`, `dayTomorrow`, `dayYesterday`, `dayGroupA11y`.
+
+**Changed files:**
+- New: `mobile/components/finance/AllSubscriptionsSheet.tsx`, `SubscriptionDateHeader.tsx` (header plus `SubscriptionGroups`).
+- Edited: `mobile/app/subscriptions.tsx`, `mobile/lib/subscriptions.ts`, `mobile/components/finance/SubscriptionBrandIcon.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/subscriptions.test.mjs`, `mobile/tests/subscriptionBrands.test.mjs`, `mobile/e2e/subscriptions.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§8 Subscriptions), `UNIFYD_SDD.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 98/98: grouping across the year boundary, 5 rows in total and not per date, ties, relative labels, the uncapped attention list, and the single icon accent.
+- E2E: `subscriptions.spec.ts` 7/7. It has 2 new tests:
+  - 8 plans: 5-row previews, View all (6) and (8), headers, same-date order, the cyan icon with red status untouched, sheets listing every plan, and pausing from the sheet updating the counts and the sheet;
+  - 1 plan: one dated row and no View all.
+  - It also now checks that exactly 5 active plans show no View all. The empty state is covered by the existing first test.
+- `subscriptionAdd`, `walletHome`, and `financeLive` pass: 27/27 together with `subscriptions.spec.ts`. `git diff --check` is clean.
+- Screenshots were checked in Dark, Light, and 320 × 640.
+
+**Issues or decisions:** dark-on-dark rows inside the sheet match the All expenses sheet. Long names and metadata still truncate at 320 px, as before.
+
+**Next action:** On the iPhone, open View all, tap a row (details should open after the sheet slides away), and check that the cyan marks read well.
+
+### 2026-10-13 — Subscriptions: Add Subscription redesign with name suggestions and slide-to-save
+
+**What changed:** only the Add Subscription screen. Edit, the list, validation rules, saved columns, billing calculations, reminder rules, the schema, and navigation targets are unchanged.
+- **Layout:** `/subscription-entry` without `id` renders `components/finance/AddSubscriptionForm.tsx`.
+  - A compact header leads into these cards: Identity (name, icon preview, and suggestions), Amount, Billing (frequency radio chips plus a date row), Reminder (switch plus timing row), and More details (category and notes).
+  - Edit keeps `SubscriptionForm`. Validation is shared through the new `validateSubscription` export.
+  - `SelectionField` and `ExpenseDatePicker` gained an opt-in `variant="row"`; their defaults are unchanged.
+- **Name suggestions:** a local list of 12 names (`SUBSCRIPTION_SUGGESTIONS` in `lib/subscriptionBrands.ts`) in `SubscriptionNameField`.
+  - Matching is case-insensitive, prefix-first, with keywords. Choosing fills only the name.
+  - The icon is derived from the name each time through the existing Simple Icons, Ionicons, category, and initial fallbacks, so nothing new is stored and nothing is fetched.
+- **Slide to save:** `SwipeToSave` uses RN responder props and `Animated`; no new dependency was added.
+  - Releasing at ≥ 90% of the travel saves, and less springs back. Only sideways drags move the thumb. It saves once, then locks until reset.
+  - "Or tap to save" runs the same handler, and the slider is hidden from screen readers.
+  - Invalid input springs back, scrolls to the first invalid section, and sends nothing.
+- **Saved overlay:** `SubscriptionSavedOverlay` grows the Home overview `brandGradient` from the thumb, then shows loading.
+  - The minimal success state appears only after the insert is confirmed: check, "Subscription added", amount, and "Name · Frequency". A reminder is mentioned only when it failed, with a retry.
+  - "Tap anywhere to continue" goes to the refreshed list. A failed insert shrinks the overlay away and keeps all values.
+  - Reduce Motion skips the circle and spring.
+- **Saving logic:** `lib/subscriptionCreate.ts` keeps the insert and the reminder separate. A reminder failure never leads to a second insert, and retrying calls only the reminder.
+- **Owner-reported fixes from an iPhone:**
+  1. The iOS 26 full-screen back swipe took the slider's drag. Add mode now sets `fullScreenGestureEnabled: false`; the edge swipe and the Back button remain.
+  2. The footer rode up with the keyboard. It is now hidden while the keyboard is open (`hooks/useKeyboardVisible.ts`), and scrolling dismisses the keyboard.
+  3. The success screen was simplified at the owner's request. A reminder problem now shows as a short pill (`subscription.reminderShort.*` in English and Malay), with the full sentence as its accessible label.
+- **Subscriptions list result toast** (owner request): `components/finance/FinanceToast.tsx` replaces the static "Subscription saved." and reminder cards with one brief toast (2.5 s, or 4 s with a short reminder line). Errors stay on the page.
+  - The returning route's `saved`/`updated`/`deleted`/`reminderIssue` parameters are now cleared after being read. Before this, they reappeared on every refocus, for example after Edit → back.
+  - `REMINDER_ISSUE_TEXT` and `isReminderIssue` moved to `lib/subscriptionReminders.ts`.
+- New i18n (English and Malay): `subscription.addIntro`, `suggestionsLabel`, `suggestionsNote`, `suggestionUse`, `suggestionSelected`, `sectionBilling`, `sectionReminder`, `sectionOptional`, `slideToSave`, `tapToSave`, `tapToSaveLabel`, `fixErrors`, `added`, `tapToContinue`, `retryReminder`, `retryingReminder`, `addedA11y`.
+
+**Changed files:**
+- New: `mobile/components/finance/AddSubscriptionForm.tsx`, `SubscriptionNameField.tsx`, `SwipeToSave.tsx`, `SubscriptionSavedOverlay.tsx`; `mobile/lib/subscriptionCreate.ts`, `swipeToSave.ts`; `mobile/hooks/useKeyboardVisible.ts`; `mobile/tests/subscriptionAdd.test.mjs`; `mobile/e2e/subscriptionAdd.spec.ts`.
+- Edited: `mobile/app/subscription-entry.tsx`, `mobile/components/finance/SubscriptionForm.tsx`, `mobile/components/profile/SelectionField.tsx`, `mobile/components/wallet/ExpenseDatePicker.tsx`, `mobile/lib/subscriptionBrands.ts`, `mobile/constants/i18n.ts`, `mobile/e2e/subscriptions.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (§8 Subscriptions), `UNIFYD_SDD.md`, and this file.
+
+**Tests performed:**
+- Typecheck and lint pass. Unit tests 96/96 (6 new). `git diff --check` is clean.
+- E2E `subscriptionAdd.spec.ts` 4/4 (new) and `subscriptions.spec.ts` 5/5. The first test was updated: the toast content, its accessible label, auto-dismissal, and no reappearance after Edit → back.
+- Full Expo Web suite: 69/70. The one failure was in `walletHome.spec.ts` (deck dot selection, untouched code) and passed 13/13 when re-run alone.
+- Screenshots were checked in Dark, Light, and 320 × 640: the form, suggestions, mid-swipe, circle expansion, loading, and success.
+- On an iPhone, the owner confirmed that saving worked by tapping and reported the swipe-back and keyboard bugs, which are fixed above. The fixes have not been re-checked on a device.
+
+**Issues or decisions:**
+- The insert grant has no `id` column, so a lost response after a successful insert cannot be made idempotent without a migration (not done). A client guard blocks repeat submits instead.
+- Overlay text uses the dark action ink, because white is about 2:1 on the cyan end of the gradient.
+- Keyboard visibility cannot be tested on Expo Web.
+
+**Next action:** On the iPhone (after a full Expo Go reload), check that the swipe saves without going back, that the footer stays hidden while typing, and that it returns after scrolling. Then check Android keyboard behaviour.
+
 ### 2026-10-13 — Wallet: insight cards in the Home-style card deck
 
 **What changed:** presentation only. Card contents, calculations, attention rules, routes, quick actions, recent expenses, View all, and Subscriptions are unchanged.

@@ -1,9 +1,9 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useEffectEvent, useState } from 'react';
-import { Animated, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 
-import { radius, spacing, typography } from '@/constants/theme';
+import { radius, spacing } from '@/constants/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
@@ -36,11 +36,14 @@ export type DeckOptions = {
   testID?: string;
   /** Accessible names for the dots, which are also the screen-reader alternative to swiping (default: Home's "Show {name} card"). */
   dotLabel?: (card: DeckCard, position: number, total: number) => string;
-  /** A compact control under the dots, shown only away from the first card, that returns to it. */
-  backToFirstLabel?: string;
+  /**
+   * Cards swiped past keep their full size and fade out as they leave, instead of shrinking and staying behind at the
+   * deck's left edge. Each card then simply takes the front place, like changing slides (Wallet's Finance deck).
+   */
+  stableFront?: boolean;
 };
 
-export function CardDeck({ cards, height = DECK_CARD_HEIGHT, testID, dotLabel, backToFirstLabel }: { cards: DeckCard[] } & DeckOptions) {
+export function CardDeck({ cards, height = DECK_CARD_HEIGHT, testID, dotLabel, stableFront = false }: { cards: DeckCard[] } & DeckOptions) {
   const { tokens } = useAppearance();
   const { t } = useI18n();
   const [width, setWidth] = useState(0);
@@ -86,8 +89,8 @@ export function CardDeck({ cards, height = DECK_CARD_HEIGHT, testID, dotLabel, b
               const p = Animated.subtract(Animated.divide(scrollX, width), position);
               const translateX = p.interpolate({ inputRange: [-(STACK_DEPTH + 1), 0, 1], outputRange: [-(STACK_DEPTH + 1) * width, 0, 0], extrapolate: 'clamp' });
               const translateY = p.interpolate({ inputRange: [-STACK_DEPTH, 0, 1], outputRange: [-STACK_DEPTH * PEEK, 0, 0], extrapolate: 'clamp' });
-              const scale = p.interpolate({ inputRange: [-STACK_DEPTH, 0, 1], outputRange: [1 - STACK_DEPTH * 0.04, 1, 0.96], extrapolate: 'clamp' });
-              const opacity = p.interpolate({ inputRange: [-(STACK_DEPTH + 0.6), -STACK_DEPTH, 0, 1], outputRange: [0, 1, 1, 1], extrapolate: 'clamp' });
+              const scale = p.interpolate({ inputRange: [-STACK_DEPTH, 0, 1], outputRange: [1 - STACK_DEPTH * 0.04, 1, stableFront ? 1 : 0.96], extrapolate: 'clamp' });
+              const opacity = p.interpolate({ inputRange: [-(STACK_DEPTH + 0.6), -STACK_DEPTH, 0, 0.75, 1], outputRange: [0, 1, 1, 1, stableFront ? 0 : 1], extrapolate: 'clamp' });
               const front = position === index;
               const peeking = position > index && position <= index + STACK_DEPTH;
               return (
@@ -117,10 +120,6 @@ export function CardDeck({ cards, height = DECK_CARD_HEIGHT, testID, dotLabel, b
           );
         })}
       </View>
-      {backToFirstLabel && index > 0 && <Pressable testID={testID ? `${testID}-back` : undefined} accessibilityRole="button" accessibilityLabel={backToFirstLabel} onPress={() => goTo(0)}
-        style={({ pressed }) => [styles.back, pressed && styles.pressed]}>
-        <Text style={[styles.backText, { color: tokens.pageAccent }]}>{backToFirstLabel}</Text>
-      </Pressable>}
     </View>
   );
 }
@@ -134,6 +133,4 @@ const styles = StyleSheet.create({
   dots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: spacing.space1 },
   dotTarget: { minWidth: 28, minHeight: 28, alignItems: 'center', justifyContent: 'center' },
   dot: { height: 8, borderRadius: radius.radiusFull },
-  back: { minHeight: 44, alignSelf: 'center', justifyContent: 'center', paddingHorizontal: spacing.space3 }, pressed: { opacity: 0.7 },
-  backText: { ...typography.label, fontWeight: '700' },
 });

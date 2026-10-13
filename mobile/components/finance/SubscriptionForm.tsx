@@ -14,8 +14,31 @@ import type { BillingFrequency, SubscriptionInput, SubscriptionRecord } from '@/
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
-type FieldErrors = Partial<Record<'name' | 'amount' | 'frequency' | 'date', string>>;
-const NO_CATEGORY = 'none';
+export type SubscriptionFieldErrors = Partial<Record<'name' | 'amount' | 'frequency' | 'date', string>>;
+type FieldErrors = SubscriptionFieldErrors;
+type Translate = (key: TranslationKey, values?: Record<string, string | number>) => string;
+export type SubscriptionDraft = {
+  name: string; amountText: string; category: ExpenseCategory | null; frequency: BillingFrequency | null; nextDate: string;
+  reminderDays: number; notificationsEnabled: boolean; isActive: boolean; notes: string;
+};
+
+/** The one validation used by Add and Edit. Returns the field errors, and the input to save only when there are none. */
+export function validateSubscription(draft: SubscriptionDraft, t: Translate): { errors: FieldErrors; input: SubscriptionInput | null } {
+  const amount = parseExpenseAmount(draft.amountText);
+  const errors: FieldErrors = {
+    name: draft.name.trim() ? undefined : t('subscription.nameRequired'),
+    amount: !draft.amountText.trim() ? t('subscription.amountRequired') : amount === null ? t('subscription.amountInvalid') : undefined,
+    frequency: draft.frequency ? undefined : t('subscription.frequencyRequired'),
+    date: isValidISODate(draft.nextDate) ? undefined : t('subscription.nextDateRequired'),
+  };
+  if (Object.values(errors).some(Boolean) || amount === null || !draft.frequency) return { errors, input: null };
+  return { errors, input: {
+    name: draft.name.trim(), amount, category: draft.category, billing_frequency: draft.frequency, next_billing_date: draft.nextDate,
+    reminder_days_before: draft.reminderDays, notifications_enabled: draft.notificationsEnabled, is_active: draft.isActive, notes: draft.notes.trim() || null,
+  } };
+}
+
+export const NO_CATEGORY = 'none';
 
 export function reminderDaysLabel(days: number, t: (key: TranslationKey, values?: Record<string, string | number>) => string) {
   return (REMINDER_DAY_CHOICES as readonly number[]).includes(days) ? t(`subscription.reminderDays.${days as (typeof REMINDER_DAY_CHOICES)[number]}`) : t('subscription.reminderDaysOther', { count: days });
@@ -40,22 +63,13 @@ export function SubscriptionForm({ initial, onSave }: { initial?: SubscriptionRe
 
   async function submit() {
     if (saving) return;
-    const amount = parseExpenseAmount(amountText);
-    const next: FieldErrors = {
-      name: name.trim() ? undefined : t('subscription.nameRequired'),
-      amount: !amountText.trim() ? t('subscription.amountRequired') : amount === null ? t('subscription.amountInvalid') : undefined,
-      frequency: frequency ? undefined : t('subscription.frequencyRequired'),
-      date: isValidISODate(nextDate) ? undefined : t('subscription.nextDateRequired'),
-    };
+    const { errors: next, input } = validateSubscription({ name, amountText, category, frequency, nextDate, reminderDays, notificationsEnabled, isActive: initial?.is_active ?? true, notes }, t);
     setErrors(next);
     setSaveError(false);
-    if (Object.values(next).some(Boolean) || amount === null || !frequency) return;
+    if (!input) return;
     setSaving(true);
     try {
-      const ok = await onSave({
-        name: name.trim(), amount, category, billing_frequency: frequency, next_billing_date: nextDate,
-        reminder_days_before: reminderDays, notifications_enabled: notificationsEnabled, is_active: initial?.is_active ?? true, notes: notes.trim() || null,
-      });
+      const ok = await onSave(input);
       if (!ok) setSaveError(true);
     } catch { setSaveError(true); }
     finally { setSaving(false); }

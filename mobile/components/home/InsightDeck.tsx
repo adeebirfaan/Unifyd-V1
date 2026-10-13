@@ -25,11 +25,11 @@ const INITIAL_HEIGHT = 220;
  * (`CardDeck`: native paging, peeking cards, dots, Reduce Motion aware). The deck is as tall as its tallest card,
  * measured from the content, so every card fits on any phone and text size, and it never shrinks while cards
  * change. Cards change like slides in one fixed place (`stableFront`): there is no "back to overview" step.
- * `hint` is a quiet guide pinned to the bottom of the first card (or every card with `hintOnEveryCard`).
+ * `hint` is a quiet guide pinned to the bottom of the first card only.
  * A single card is shown as a normal card with no deck affordances.
  */
-export function InsightDeck({ cards, hint, hintOnEveryCard = false, testID, dotLabel }: {
-  cards: InsightDeckCard[]; hint?: string; hintOnEveryCard?: boolean; testID: string;
+export function InsightDeck({ cards, hint, testID, dotLabel }: {
+  cards: InsightDeckCard[]; hint?: string; testID: string;
   /** Accessible name of each dot, the screen-reader alternative to swiping. */
   dotLabel: (card: DeckCard, position: number, total: number) => string;
 }) {
@@ -55,7 +55,7 @@ export function InsightDeck({ cards, hint, hintOnEveryCard = false, testID, dotL
     stableFront
     cards={cards.map((card, position) => {
       const hero = card.surface === 'hero';
-      const showHint = !!hint && (hintOnEveryCard || position === 0);
+      const showHint = !!hint && position === 0;
       return {
         key: card.key,
         name: card.name,

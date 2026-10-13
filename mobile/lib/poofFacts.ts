@@ -12,7 +12,6 @@ export const DUE_THIS_WEEK_DAYS = 7;
 export const RECENTLY_COMPLETED_DAYS = 7;
 export const WELLNESS_WINDOW_DAYS = 7;
 export const MOOD_LOOKBACK_DAYS = 30;
-export const CHECK_IN_STALE_DAYS = 4;
 export const LOW_MOOD_MAX_LEVEL = 2;
 export const LOW_MOOD_MIN_DAYS = 3;
 export const HIGH_STRESS_AVERAGE = 4;

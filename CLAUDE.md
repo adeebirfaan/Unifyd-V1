@@ -1,6 +1,6 @@
 # Unifyd — guide for Claude sessions
 
-This file condenses every project document (Brief, PRD, SRS, SDD, Design System, Progress, server README, `mobile/AGENTS.md`) as of 2026-10-12.
+This file condenses every project document (Brief, PRD, SRS, SDD, Design System, Progress, server README, `mobile/AGENTS.md`) as of 2026-10-14.
 
 - **Rule 1:** if something is not stated here or in the code, do not assume it. Check the named source section, or ask.
 - **Rule 2:** open only the files a task needs. The long docs are listed under "Where to look".
@@ -55,7 +55,7 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
 | `mobile/plugins/` | `withUnifydNotificationLargeIcon.js`, a config plugin for the Android notification large icon. |
 | `mobile/tests/*.test.mjs` | Node unit tests that import `.ts` files directly. |
 | `mobile/e2e/*.spec.ts` | Playwright on Expo Web: `unifyd`, `avatar`, `home`, `poof`, `mind`, `planner`, `reminders`, `semester`, `timetable`, plus `global-setup`, `test-client`, and `safe-reporter`. |
-| `server/` | Node 24 Express in TypeScript (ESM; imports use `.js` suffixes). Endpoints in §5. |
+| `server/` | Node 24 Express in TypeScript (ESM; imports use `.js` suffixes). Endpoints in §5. Receipt parsing: `receipt-parser.ts` composes `receipt-merchant.ts` (with the brand list `receipt-merchants.ts`), `receipt-total.ts`, `receipt-date.ts`, and `receipt-layout.ts` (rows from Vision word boxes). OCR evaluation: `receipt-eval.ts` plus `scripts/receipt-*.ts`. |
 | `supabase/migrations/` | SQL migrations (§6). `supabase/seeds/2026_2027_fkom_catalog_courses.sql`: the course catalogue seed. |
 | Root `assets/` | Approved originals: avatars, logo, `poof-mascot.png`. The app bundles resized copies in `mobile/assets/`. |
 | `docs/design references/` | Reference screenshots only; never ship them. `/local-assets/` (storyboard) and `local data/` (UMPSA catalogue PDF) are local only and must not be shipped. |
@@ -72,9 +72,10 @@ npm run web                                           # dev server
 # server/
 npm run typecheck && npm test && npm run build        # tsx --test with injected fakes, no network
 npm run dev   |   npm run build && npm start          # 127.0.0.1:3001; set OCR_HOST=0.0.0.0 for a phone on the LAN
+npm run eval:receipts:run                             # receipt OCR evaluation: labels.csv rows, cached Vision OCR, development scores
 ```
 
-- **Last known counts:** mobile unit 75, server 66, Home e2e 11, Poof e2e 2, Subscriptions e2e 4, Split bills e2e 5, Finance live DB e2e 3, Wallet total roll e2e 3, Home roll e2e 1, category suggestion e2e 4, Wallet home e2e 9. The full e2e suite was 29 before the Poof work.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 103, server 93, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -194,7 +195,10 @@ npm run dev   |   npm run build && npm start          # 127.0.0.1:3001; set OCR_
 
 ### Server endpoints (`server/README.md` has details)
 - `GET /health`.
-- `POST /api/ocr/receipt`: one `image` part, JPEG, PNG, or WEBP, up to 5 MiB; the signature is checked. Returns `{merchantName, purchaseDate, totalAmount, rawText, warnings}`.
+- `POST /api/ocr/receipt`: one `image` part, JPEG, PNG, or WEBP, up to 5 MiB; the signature is checked. Returns `{merchantName, purchaseDate, totalAmount, rawText, warnings}` (shape unchanged since Phase 1).
+  - Parsing (2026-10-14): the endpoint passes the text **and** Vision word boxes from the same `documentTextDetection` call; the parser still works from text alone.
+  - Merchant: a general list of nationwide Malaysian brands, then "THANK YOU FOR SHOPPING AT X", fuel brands over dealer companies, then generic header rules. Total: label/amount pairing on rebuilt rows, final labels over plain "Total", never subtotal/cash/change; unpaid orders and outstanding bills return `null`. Date: English/Malay month names, label/time context, never due/expiry dates.
+  - Uncertain values reuse the three existing warning strings (the app maps them exactly).
 - `POST /api/timetable/import`: one `file` part, PNG, JPEG, or PDF; encrypted or truncated PDFs return 422. Returns `{candidates, warnings, pagesProcessed, totalPages}`. Raw text is never returned.
 - `POST /api/insights/generate`: `{language, timeZone}` returns facts plus a summary or fallback. It uses a 10-minute cache.
   - Groq model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, strict JSON schema.
@@ -252,6 +256,7 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 - **Lint:** `react-hooks/set-state-in-effect` fails the build. Load data from events, `useFocusEffect`, or a Modal's `onShow`, not from `setState` inside `useEffect`.
 - **Dependencies:** add none without asking; use `npx expo install`.
   - Dev only: `simple-icons` (CC0; used by `scripts/generate-brand-marks.mjs` and the brand test, never bundled).
+  - Never imported directly but required: `expo-symbols` (a dependency of `expo-router`), `expo-linking`, `react-native-screens`, `react-native-reanimated`, `react-native-worklets`, `react-dom`, `react-native-web`. `expo-web-browser` was removed on 2026-10-14 (unused).
   - Installed: `expo-linear-gradient`, `expo-image-picker`, `expo-document-picker`, `expo-file-system`, `expo-notifications`, `react-native-svg`, `react-native-reanimated`, AsyncStorage, Ionicons.
   - Animations use RN `Animated`.
   - Gesture Handler is deliberately avoided (it mismatches Expo Go). No Lottie, no 3D.
@@ -278,11 +283,11 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 3. **Other docs:** update `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and `UNIFYD_DESIGN_SYSTEM.md` only in the sections the change affects.
 4. **Git:** don't commit unless asked. The working tree often holds the owner's uncommitted work; never revert it.
 
-**Status:** all SRS Must and Should features are implemented locally, and Poof Phase 1 is done. Still open:
-- applying the timetable migration;
+**Status:** all SRS Must and Should features are implemented locally, and Poof Phase 1 is done. The full Expo Web e2e suite passed 82/82 on 2026-10-14. Still open:
 - checks on a physical device (Poof feel, reminders, native pickers);
 - an automated two-account RLS test (cross-user isolation has been confirmed manually by the owner);
-- Phase 9 (evaluation, UAT, thesis evidence: OCR accuracy, AI-summary samples, Likert questionnaire).
+- Phase 9 (evaluation, UAT, thesis evidence). **Started:** receipt OCR evaluation. 57 real receipts are labelled locally (42 development, 15 held out); development all-three-correct 21.4% → 78.6% after the 2026-10-14 parser work. **Pending:** a fresh 40–50-receipt final test set and one `--final` run, AI-summary samples, UAT, and the Likert questionnaire.
+- Receipt evaluation data lives only in git-ignored `server/local-data/receipt-eval/` (images, `labels.csv`, `ocr/` cache); originals are also in `local data/receipt-eval/images`. Never commit or delete them.
 
 **Environment variable names (never print values):**
 - `mobile/.env`: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_OCR_API_URL`.
@@ -298,8 +303,8 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 | Styling | NativeWind | Not installed; StyleSheet plus tokens |
 | Home AI summary | SRS FR-701–710 status text mentions a summary card and refresh button | Card removed 2026-10-10; Poof's chat replaces it |
 | Roadmap | `UNIFYD_DEVELOPMENT_ROADMAP.md` listed as a source document | The file does not exist |
-| Phase table | `PROJECT_PROGRESS.md` phase table and "Phase 0 checklist" look stale | The dated work-log entries are the source of truth |
-| Design-references path | `docs/design-references/` | `docs/design references/` (with a space) |
+| Phase table | `PROJECT_PROGRESS.md` phase table and "Phase 0 checklist" were stale | Both were annotated with a 2026-10-14 status; the dated work-log entries remain the detailed source of truth |
+| Design-references path | `docs/design-references/` | `docs/design references/` (with a space); file names fixed to single `.png` on 2026-10-14 |
 
 `UNIFYD_DESIGN_SYSTEM.md` line 1 starts with a stray `~`.
 

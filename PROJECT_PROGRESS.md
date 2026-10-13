@@ -6,12 +6,51 @@
 
 | Item | Current value |
 |---|---|
-| Overall stage | Integrated dashboard and Groq summaries implemented locally |
-| Current phase | Phase 8 - Integrated dashboard and Groq summaries |
-| Current task | Physical-device checks for subscription reminders, split bills, and timetable (finance and timetable migrations applied per project owner, verified 2026-10-12) |
-| Next milestone | Phase 9: evaluation, hardening, and thesis evidence |
+| Overall stage | All SRS Must and Should features implemented locally; full Expo Web e2e suite 82/82 (2026-10-14) |
+| Current phase | Phase 9 - Evaluation, hardening, and thesis evidence (receipt OCR evaluation started 2026-10-14) |
+| Current task | Receipt OCR: collect a fresh 40–50-receipt final test set; physical-device checks (reminders, OCR on the phone, native pickers) |
+| Next milestone | Final OCR evaluation, AI-summary samples, UAT, and the Likert questionnaire |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
-| Custom ML / prediction | Not in scope |
+| Custom ML / prediction | Prediction not in scope. One owner-approved exception (2026-10-13): the Naive Bayes expense-category suggester trained per request on the student's own titles |
+
+## Handover summary (2026-10-14)
+
+Status words: **verified** = implemented and its automated Expo Web or server tests pass; **pending device check** = native or live behaviour not yet confirmed on a phone. Evidence for each item is in the dated work log.
+
+### A. Completed work (verified)
+
+- **Account and profile:** Supabase sign-in, required onboarding, profile editing, 12 local avatars, theme and language settings, legal pages.
+- **Finance:** expense CRUD; weekly/monthly budgets (slide-to-save, shared "Budget saved." toast); subscriptions (manual renewals, local reminders); split bills; Wallet card deck and quick-action grid; receipt OCR (camera/gallery, editable review, explicit save with `entry_source = 'ocr'`); optional category suggestion.
+- **Planner:** task CRUD with completion rules; Studies page (Academic focus deck, Priority tasks, All tasks sheet); local task reminders and reminder history; My Semester subjects; personal timetable (manual and import).
+- **Mind:** mood and stress check-ins, 7/30-day trends, local ideas, low-mood notice.
+- **Home:** card deck, quick actions, Poof assistant (Phase 1, read-only).
+- **Server:** `/health`, receipt OCR, timetable import, insights, category suggestion, Poof chat.
+- **Recent:** Wallet and Studies refresh (`950d231`); receipt OCR evaluation tool and parser improvements (`e5ec4e0` to `a5280d5`); maintenance review and documentation sync (2026-10-14).
+- **Latest evidence (2026-10-14):** full Playwright e2e 82/82; mobile unit 103/103; server 93/93; typecheck, lint, and server build clean; offline OCR scoring on 42 development receipts: all three fields 78.6%, no silent errors.
+
+### B. In progress
+
+- **Phase 9 OCR evaluation:** development set done; the final evaluation on a fresh receipt set is not yet run (the 15 held-out receipts are still unscored).
+- **Physical-device verification** of recently changed screens (Wallet, budget, Studies) and of OCR with the new parser (needs a server restart: `npm run build && npm start`).
+
+### C. Pending work, limitations, and technical debt
+
+- **Not started:** AI-summary samples, UAT, and the Likert questionnaire (Phase 9); an automated two-account RLS test (isolation confirmed manually by the owner only).
+- **Pending device checks:** task and subscription reminder delivery, native date/image/document pickers, Poof animation feel, OCR on the phone.
+- **OCR limitations (flagged, not silent):** strongly tilted photos, receipts with only a subtotal or no total label, logo-only merchant names, handwritten two-digit-year dates.
+- **Test reliability:** the Wallet test "no budget and no expenses … deck keeps its place" failed intermittently on 2026-10-13 (also on the code before that day's changes); it passed in both full runs on 2026-10-14. Monitor.
+- **Technical debt:** `mobile/lib/insights.ts` and `/api/insights/generate` are unused by the app but kept for Module 8 and the Phase 9 AI-summary samples; older PRD/Brief wording is listed in `CLAUDE.md` §11. (Cleaned up 2026-10-14: `expo-web-browser` removed, design-reference file names fixed, leftover branches merged or deleted.)
+
+### D. Next development priorities
+
+1. **Commit and push** the 2026-10-14 maintenance changes after review.
+2. **Phone checks:** restart the server, scan several receipts, and run the device checklist in C. These confirm work already built and need no new code.
+3. **Final OCR evaluation:** before freezing the parser, decide whether any further tuning is wanted (on development receipts only). Then collect about 40–50 fresh receipts, label them by hand, and run `npm run eval:receipts -- --final` once. Prerequisite: no parser changes after the fresh set is collected.
+4. **Two-account RLS test:** prerequisite: a second test account added to the ignored `mobile/.env.test`.
+5. **Remaining Phase 9 evidence:** AI-summary samples (prerequisite: `GROQ_API_KEY` in `server/.env`), then UAT and the Likert questionnaire (prerequisite: participants and an approved questionnaire).
+6. **Housekeeping:** done on 2026-10-14 (see the maintenance entry). The insights module stays until the AI-summary samples are collected.
+
+New features are not a priority until B and C are closed.
 
 ## Approved project scope
 
@@ -47,7 +86,9 @@ From `mobile/`, run `npx playwright install chromium` once, then `npm run test:e
 
 The suite captures and restores the test profile around the run, including temporary onboarding preparation and preferences. Wallet titles use a unique run prefix; a final authenticated, user-scoped cleanup deletes only that prefix and verifies zero matching rows remain. The budget test also snapshots current weekly/monthly budget rows and restores their original amounts or removes only test-created rows. Screenshots, traces, and videos are disabled; any local Playwright artifacts and `.env.test` are ignored. Cross-user RLS isolation, duplicate-account registration, email confirmation, and native pull-to-refresh still require separate-account or device verification.
 
-**Latest targeted local run:** 2 OCR review E2E tests passed, 0 failed, 0 skipped. They covered editable prefill, required missing fields, safe failed-save retention, the exact reviewed insert payload, and Wallet return with mocked OCR and database responses. Mobile TypeScript and Expo lint passed; Expo Web bundled through Playwright. The prior full five-test suite and its account-state cleanup remain available. A separate earlier live Expo Web request reached the local OCR server and Google Vision with a temporary synthetic receipt; the expense count stayed unchanged.
+**Latest full run (2026-10-14, `main` at `a5280d5`):** 82 passed, 0 failed, 0 skipped (`npx playwright test`).
+
+**Earlier targeted local run:** 2 OCR review E2E tests passed, 0 failed, 0 skipped. They covered editable prefill, required missing fields, safe failed-save retention, the exact reviewed insert payload, and Wallet return with mocked OCR and database responses. Mobile TypeScript and Expo lint passed; Expo Web bundled through Playwright. The prior full five-test suite and its account-state cleanup remain available. A separate earlier live Expo Web request reached the local OCR server and Google Vision with a temporary synthetic receipt; the expense count stayed unchanged.
 
 ## Phase status
 
@@ -83,9 +124,11 @@ The suite captures and restores the test profile around the run, including tempo
 
 **Phase 2 verification:** Mobile TypeScript and Expo lint pass; Expo Web bundled and served HTTP 200. Local task ordering, overdue rules, and deadline validation assertions pass. A focused authenticated Playwright Planner test was added, but a bounded 60-second run ended with 0 executed tests and no diagnosis from the runner; live CRUD, cross-user RLS, and native-device interaction remain to be verified.
 
+> **Status as of 2026-10-14.** Legend: *Implemented, automated tests pass* = code exists and the Expo Web/server tests listed in the work log pass; *device/manual checks pending* = native or two-account behaviour not yet verified. The dated work log below remains the detailed source of truth.
+
 | Phase | Status | Summary | Evidence / notes |
 |---:|---|---|---|
-| 0. Project baseline and environment audit | In progress | Documentation prepared; source-code audit has not started | Need repository location and local run result |
+| 0. Project baseline and environment audit | Complete (superseded) | Repository audited and documented in `CLAUDE.md`; app runs on Expo Web and Expo Go | 2026-10-14 maintenance review: typecheck, lint, 103 mobile unit, 93 server, 82 e2e tests pass |
 | 1. Supabase foundation, authentication, profile, and RLS | In progress | Client, auth screens, profile gate, and onboarding implemented | Live Auth and database flow still needs testing |
 | 2. Financial tracking | In progress | Applied expense table (per project owner), manual creation, Wallet total/history, detail, edit, and confirmed delete | User reports a saved real expense; live mutation and cross-user checks pending account access |
 | 3. Budget and spending analysis | In progress | Applied budget table (per project owner), Set / Manage Budget, and current-period spending summary | Authenticated Expo Web budget test passed; native and cross-user checks remain |
@@ -94,9 +137,13 @@ The suite captures and restores the test profile around the run, including tempo
 | 6. Mood tracking and wellness rules | In progress | Applied mood table (per project owner); private check-ins, history, 7/30-day trends, and local ideas implemented | Authenticated tests and physical-device review pending for Phase 3 |
 | 7. Receipt OCR | Complete per project owner | Protected backend, mobile capture, editable OCR review, and explicit expense save | No OCR retest in this task; prior grant and live-save status were not independently rechecked |
 | 8. Integrated dashboard and Groq summaries | In progress | Home facts panels, authenticated insights endpoint, Groq summary with validation and fallback | Live Groq English/Malay summaries verified locally; phone review pending |
-| 9. Evaluation, hardening, and thesis evidence | Not started | Depends on all core phases | — |
+| 9. Evaluation, hardening, and thesis evidence | In progress | Receipt OCR evaluation tool, 57 labelled receipts, and parser improvements (development all-three-correct 21.4% → 78.6%) | Final held-out/fresh-set OCR score, AI-summary samples, UAT, and Likert questionnaire pending |
+
+Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 each is **implemented, and its automated tests pass** (full e2e 82/82); **device/manual checks are pending** for native reminders and notifications, native pickers, Poof feel on a phone, and an automated two-account RLS test (cross-user isolation was confirmed manually by the owner). Phase 7 (Receipt OCR) was re-tested on 2026-10-14: 2 OCR review e2e tests pass, and the parser was improved (see the work log); a phone re-test with the new parser is pending.
 
 ## Current phase checklist — Phase 0
+
+> Historical (2026-10-07). Overtaken by implementation: the repository, routes, versions, and environment templates are recorded in `CLAUDE.md`, and the app runs. Kept unticked for history.
 
 - [ ] Locate and inspect the existing Unifyd project repository.
 - [ ] Record the current folder structure, routes, screens, dependencies, and mock-data locations.
@@ -108,6 +155,93 @@ The suite captures and restores the test profile around the run, including tempo
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-10-14 — Maintenance: codebase review, safe cleanup, and documentation sync
+
+**Requirements implemented:**
+- None (maintenance). No behaviour, schema, API, or UI change.
+
+**Changed files:**
+- Cleanup: `mobile/constants/reminder-timing.ts` (removed unused `reminderLabel`), `mobile/lib/poofFacts.ts` (removed unused `CHECK_IN_STALE_DAYS`), `mobile/components/home/InsightDeck.tsx` (removed the `hintOnEveryCard` option no caller uses).
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md` (status, phase table, test evidence, risks, this entry), `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, `server/README.md`.
+
+**What changed:**
+- Review: `main` clean at `a5280d5`; no unused locals or parameters (`tsc --noUnusedLocals --noUnusedParameters`); no debug logging; no stray files. Only three symbols were provably unused and were removed.
+- Docs now record: the receipt parser and evaluation workflow; the applied course-library and timetable migrations (previously described as pending in the SRS/SDD); current test counts; Phase 9 as started; RISK-001 closed.
+
+**Tests performed:**
+- Before cleanup on `main`: mobile typecheck and lint clean; mobile unit 103/103; server typecheck, 93/93 tests, build; full Playwright e2e **82/82**.
+- After cleanup and the documentation edits (Phase 4 validation): mobile typecheck and lint clean; unit 103/103; server typecheck, 93/93, build; **full Playwright e2e 82/82** (second full run of the day); offline OCR scoring from the cache (no Vision call) unchanged at 78.6% all three, 0 silent; receipt data intact (57 images, 57 cached OCR results, 57 labels, 57 originals); `git diff --check` clean.
+- Not executed: native/phone tests, live Vision calls (avoided to prevent API cost), `--final` (reserved for the final evaluation).
+
+**Issues or decisions:**
+- Applied on the owner's request (same day): `expo-web-browser` uninstalled (`npm uninstall`; no imports, no dependents, no config plugin; lockfile change removes only that package). The four `docs/design references/` images renamed with `git mv` to drop a doubled extension (contents unchanged; no references to the old names). Remote branch `claude/upbeat-clarke-chzhwi` merged so its two 2026-10-13 log entries and commits are kept (server files resolved to the newer `main` versions); fully merged branches then deleted.
+- Corrected: `expo-symbols` is **not** removable. It is a regular dependency of `expo-router`, so it stays listed directly.
+- Kept deliberately: `mobile/lib/insights.ts` and `/api/insights/generate`. Home no longer uses them (2026-10-10), but they implement approved Module 8 and are needed for the pending Phase 9 AI-summary samples.
+- Not changed: about 100 exports used only within their own file (harmless).
+
+**Next action:**
+- Collect a fresh 40–50-receipt final OCR test set; run the physical-device checks.
+
+### 2026-10-14 — Phase 9: receipt OCR parser improvements (merchant, total, date)
+
+**Requirements implemented:**
+- SRS-FR-203 (extraction) and SRS-FR-206 (warnings). API response shape unchanged; the app is unchanged.
+
+**Changed files:**
+- New: `server/src/receipt-merchants.ts`, `receipt-merchant.ts`, `receipt-layout.ts`, `receipt-total.ts`, `receipt-date.ts`, and tests `receipt-merchant.test.ts`, `receipt-total.test.ts`, `receipt-date.test.ts`.
+- Edited: `server/src/receipt-parser.ts`, `app.ts` (accepts word boxes), `index.ts` (passes word boxes from the same Vision call), `scripts/receipt-eval.ts` (passes cached word boxes; scoring untouched), `app.test.ts`.
+- Commits on `main`: `e08dc76` (merchant), `de45526` (total), `a5280d5` (date).
+
+**What changed:**
+- Diagnosis of the 48 wrong development fields: 35 parsing problems (value present in the OCR text), 5 recoverable OCR misreads, 3 recognition failures, 5 cases that should be blank.
+- Merchant: general nationwide brand list; split logos; footer phrases; fuel brands over dealer companies; tight near-matches (6+ letters, flagged); generic header rules.
+- Total: rows rebuilt from Vision word boxes pair labels with amounts; final labels beat a plain total; subtotal, cash, change, rounding, item counts never used; unpaid orders and outstanding bills return no total.
+- Date: English/Malay month names; label or time context; due/expiry dates skipped; the `100CT2026` style correction only inside a date, flagged.
+
+**Tests performed:**
+- Development split (42 receipts; 15 held-out receipts never inspected, `--final` not run):
+
+| Step | Merchant | Date | Total | All three | Silent errors |
+|---|---|---|---|---|---|
+| Baseline | 57.1% | 73.8% | 54.8% | 21.4% | 23 |
+| Merchant | 90.5% | 73.8% | 54.8% | 38.1% | 5 |
+| Total | 90.5% | 73.8% | 92.9% | 59.5% | 3 |
+| Date | 90.5% | 95.2% | 92.9% | 78.6% | 0 |
+
+- No per-receipt regressions in the final state (two found during development, 032 merchant and 040 total, were fixed before each commit).
+- Correct values with a warning: merchant 11, date 10, total 7; wrong values all flagged.
+- Server typecheck, 93/93 tests (19 new), build; mobile typecheck; mobile OCR e2e 2/2.
+
+**Issues or decisions:**
+- Remaining development failures, all flagged: totals 017 (subtotal only, never used by design), 040 (heavily tilted), 051 (no total label); merchants 004, 046, 052 (recognition) and 005 (labelled blank); dates 043 and 049-hw (labelled blank).
+- Development figures are optimistic: the rules were developed against these receipts.
+
+**Next action:**
+- Fresh 40–50-receipt final set, scored once with `--final`; phone re-test after restarting the server.
+
+### 2026-10-14 — Phase 9: receipt OCR evaluation set-up with 57 real receipts
+
+**Requirements implemented:**
+- Phase 9 evidence for RISK-002 (OCR accuracy). No app behaviour changed.
+
+**Changed files:**
+- From branch `claude/upbeat-clarke-chzhwi` (written 2026-10-13), server files only: `server/package.json` (`eval:receipts*` scripts), `server/README.md`, `server/scripts/receipt-eval*.ts`, `receipt-ocr-cache.ts`, `receipt-labels.template.csv`, `server/src/receipt-eval.ts`, `receipt-eval.test.ts` (commit `e5ec4e0`).
+
+**What changed:**
+- The owner's 57 receipts (52 `.jpeg`, 5 `.jpg`; no duplicates; none over 5 MiB; three `-hw` handwritten hints) were copied, not moved, from `local data/receipt-eval/images` to the tool's git-ignored `server/local-data/receipt-eval/images`.
+- One `npm run eval:receipts:run`: `labels.csv` created with 57 empty rows; Vision OCR 57 read, 0 failed, 0 skipped; no empty OCR text.
+- The owner labelled all 57 by hand (no OCR prefill). Split by file-name hash: 42 development, 15 held out.
+
+**Tests performed:**
+- Server typecheck, 74/74 tests, build before the run. Development baseline as in the table above.
+
+**Issues or decisions:**
+- Labels, split assignments, and scoring rules are never edited to raise scores.
+
+**Next action:**
+- Parser improvements (done in the entry above).
+
 
 ### 2026-10-13 — Wallet: Subscriptions as a standard quick-action tile in a 4-column grid
 
@@ -1647,21 +1781,23 @@ Created `server/` with Node.js, Express, TypeScript, the official Google Vision 
 | 2026-10-07 | `UNIFYD_PRD.md` | Created product requirements document |
 | 2026-10-07 | `UNIFYD_SRS.md` | Created numbered software requirements specification |
 | 2026-10-07 | `UNIFYD_SDD.md` | Created software design document |
-| 2026-10-07 | `UNIFYD_DEVELOPMENT_ROADMAP.md` | Created controlled development roadmap |
+| 2026-10-07 | `UNIFYD_DEVELOPMENT_ROADMAP.md` | Created controlled development roadmap (this file is not in the repository; see `CLAUDE.md` §11) |
 | 2026-10-07 | `PROJECT_PROGRESS.md` | Created live project progress record |
 
 ## Test evidence log
 
 | Date | Phase | Requirement IDs | Test/evidence | Result | Notes |
 |---|---:|---|---|---|---|
-| — | — | — | No implementation test yet | Pending | Begin after repository audit |
+| — | — | — | No implementation test yet | Pending | Begin after repository audit (historical row) |
+| 2026-10-14 | 0–8 | All | Full Expo Web e2e suite; mobile unit; server tests | 82/82; 103/103; 93/93 | `main` at `a5280d5`; per-feature evidence is in the work log |
+| 2026-10-14 | 7, 9 | SRS-FR-203, SRS-FR-206 | Receipt OCR evaluation, 42 development receipts | All three correct 78.6% (from 21.4%); 0 silent errors | 15 held-out receipts not scored; final evaluation pending |
 
 ## Active issues and risks
 
 | ID | Status | Issue / risk | Impact | Next action |
 |---|---|---|---|---|
-| RISK-001 | Open | Current codebase baseline is not yet audited in PSM 2 | Cannot safely start implementation without verifying structure and dependencies | Complete Phase 0 audit |
-| RISK-002 | Open | OCR accuracy depends on receipt image quality and format | May require manual correction | Test a representative receipt sample set in Phase 7 |
+| RISK-001 | Closed (2026-10-14) | Current codebase baseline is not yet audited in PSM 2 | Cannot safely start implementation without verifying structure and dependencies | Audited; see `CLAUDE.md` and the 2026-10-14 maintenance entry |
+| RISK-002 | Open (mitigated) | OCR accuracy depends on receipt image quality and format | May require manual correction | 57-receipt evaluation done (development 78.6% all three, every wrong value flagged); collect a fresh final set and run `--final` once |
 | RISK-003 | Open | Groq/provider availability or invalid response | Dashboard summary may fail | Retain and test rule-based fallback in Phase 8 |
 | RISK-004 | Open | Notification delivery varies by device permission and platform conditions | Reminders may not be delivered | Test permission, scheduling, update, and cancellation flows in Phase 5 |
 

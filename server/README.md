@@ -17,7 +17,9 @@ For phone testing, start this server with `npm start` from `server/`, then start
 - `GET /health` returns `{ "status": "ok" }`.
 - `POST /api/ocr/receipt` requires `Authorization: Bearer <Supabase access token>` and one `multipart/form-data` file in field `image`. JPEG, PNG and WEBP are accepted up to 5 MiB. Other fields or files are rejected. The service verifies the token with Supabase Auth before reading the upload, checks the image signature, then calls Google Vision document text detection.
 
-The success response contains only `merchantName`, `purchaseDate`, `totalAmount`, `rawText`, and `warnings`. Missing or uncertain parsed values are `null` with review warnings. No expense is created; a student must review the draft in a later phase. Error responses use safe codes and messages without provider details, receipt contents, or tokens.
+The success response contains only `merchantName`, `purchaseDate`, `totalAmount`, `rawText`, and `warnings`. Missing values are `null`; uncertain values are returned with the review warnings `Merchant name needs review.`, `Purchase date needs review.`, or `Total amount needs review.` (the app maps these exact strings). No expense is created: the app shows an editable review form, and only the student's explicit save creates an expense.
+
+Parsing uses the text and the word boxes from the same Vision call. Word boxes rebuild printed rows so a total label is paired with the amount beside it; merchant names come from a general list of nationwide Malaysian brands, footer phrases such as "THANK YOU FOR SHOPPING AT X", or generic header rules; dates need a date label or a time to be confident. Unpaid orders and outstanding bills return no total. See `src/receipt-*.ts`. Error responses use safe codes and messages without provider details, receipt contents, or tokens.
 
 Run `npm run typecheck`, `npm test`, and `npm run build` to verify the service. Automated tests inject a fake verifier and OCR result, so they do not use network access or Google credentials.
 
@@ -84,3 +86,5 @@ The score lists accuracy for merchant, date, and total, the share of receipts wi
 About 20% of receipts are held out as a test split, chosen from a hash of the file name, so the choice is stable as receipts are added. Their results stay hidden until `npm run eval:receipts -- --final`, which should be used only for the final reported score. `--json` prints machine-readable results. Scoring rules: the parsed merchant is correct when its words begin with the labelled trading name (case, punctuation, and "Sdn Bhd" ignored); the date must match exactly; the total must match to the cent. A blank label expects no value.
 
 If Google credentials are missing, the OCR step stops with the fix: run `gcloud auth application-default login`, as for the receipt endpoint.
+
+Scoring gives the parser the cached text and word boxes, exactly as the endpoint does. Results so far (2026-10-14, 57 receipts: 42 development, 15 held out, not yet scored): development all-three-correct 21.4% before and 78.6% after the parser work, with no wrong value left without a warning. Collect a fresh set of about 40–50 receipts before the final run, and use `--final` only once.

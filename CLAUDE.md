@@ -127,7 +127,7 @@ npm run dev   |   npm run build && npm start          # 127.0.0.1:3001; set OCR_
   - Mark paid/unpaid is whole shares only. Outstanding is the unsettled shares of other people. A bill is Settled when every other person is settled.
   - Nothing is ever sent to participants.
 - **Wallet `FinanceSummaryCard`:** renewals in the next 7 days and the amount owed. Never part of spending totals.
-- **Wallet home layout** (2026-10-13): header and period switch → `FinanceDeck` (Home `CardDeck` with the cards `FinanceOverviewCard` on `colors.brandGradient`, `SpendingBreakdownCard` (donut, top 3), and `FinanceAttentionCard` (≤ 2 real items, only when present); dots "Finance card N of M", Back to overview, test IDs `finance-deck-*`) → `FinanceQuickActions` (Add expense, Scan receipt, Budget, Split bills, plus a Subscriptions pill) → compact recent rows grouped by day (`groupExpensesByDate`; newest 5 rows in total; "View all (N)" opens `AllExpensesSheet`, a Modal reusing the loaded rows, with sticky day headers). Composition lives in `lib/walletOverview.ts`; figures still come only from `calculateBudgetSummary`. The existing `budget-*` test IDs are kept.
+- **Wallet home layout** (2026-10-13): header and period switch → `FinanceDeck` (Home `CardDeck` with the cards `FinanceOverviewCard` on `colors.brandGradient`, `SpendingBreakdownCard` (donut, top 3), and `FinanceAttentionCard` (≤ 2 real items, only when present); dots "Finance card N of M", direct selection in one stable place via `CardDeck stableFront` with no Back to overview, a guide at the bottom of the overview card, test IDs `finance-deck-*`) → `FinanceQuickActions` (shared `IconQuickActions` 4-column grid: Add expense, Scan receipt, Budget, Split bills; row 2: Subscriptions tile) → compact recent rows grouped by day (`groupExpensesByDate`; newest 5 rows in total; "View all (N)" opens `AllExpensesSheet`, a Modal reusing the loaded rows, with sticky day headers). Composition lives in `lib/walletOverview.ts`; figures still come only from `calculateBudgetSummary`. The existing `budget-*` test IDs are kept.
 - **Receipt OCR** (`/scan-receipt`, camera or gallery; JPEG, PNG, or WEBP; up to 5 MiB) → server → editable review.
   - Category always starts empty, and an undetected date stays blank.
   - Saving is explicit and sets `entry_source='ocr'`.
@@ -137,6 +137,7 @@ npm run dev   |   npm run build && npm start          # 127.0.0.1:3001; set OCR_
 - **Task fields:** title and subject required, description optional, deadline (`timestamptz`), priority `low|medium|high` (default medium), status `pending|ongoing|completed`.
 - **`completed_at`** is set exactly when the task is completed; reopening clears it.
 - **Order:** active tasks by nearest deadline, then completed tasks.
+- **Studies main page** (2026-10-13): header → `InsightDeck` `studies-deck` (Academic focus on `colors.brandGradient` as the default card with the only guide, then Today next class and Semester on dark cards) → dots → `IconQuickActions` (Add task, My semester, My timetable, Reminders; shared with Wallet's `FinanceQuickActions`) → Priority tasks (≤ 5 incomplete, `priorityTasks` in `lib/studiesOverview.ts`: overdue → today → High → Medium → Low → undated) with "View all (N)" opening `AllTasksSheet`. Rows (`TaskRow`) keep complete/reopen. `InsightDeck` (`components/home/`) is the shared measured deck behind `FinanceDeck`.
 - **Reminders** are per-task `reminder_offset_minutes`: none, 0, 60, or 1440.
   - They are scheduled with local `expo-notifications` on the Android channel `unifyd-task-reminders`.
   - The app reconciles them on start, foreground, language change, and task changes, and clears them on sign-out.
@@ -258,7 +259,7 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 - **Line endings:** root Markdown files use CRLF; preserve them when editing with scripts.
 - **Finance numbers:**
   - Standalone money and percentage values in Wallet, OCR, and the Home Money and Overview cards use `components/FinanceNumber.tsx`, which applies Space Mono loaded in `app/_layout.tsx`. Use `fit` for large amounts.
-  - Never use it for inputs, labels, numbers inside sentences, or non-finance screens.
+  - Never use it for inputs, labels, numbers inside sentences, or non-finance screens. **Exception:** the Manage budget amount input and its "RM" use it (`financeFontStyle`; owner request 2026-10-13).
   - Don't set `fontFamily` directly anywhere else.
   - `components/AnimatedMoneyAmount.tsx` (an odometer roll built from `FinanceNumber` glyphs; logic in `lib/moneyRoll.ts`) is used **only** for the Wallet overview's primary amount and Home's Overview and Money "Spent this month". It rolls only when the amount is visible (`play`). The Wallet overview is at the top, and Home uses the deck's `front` flag. Overview also has `replayOnShow`, so it rolls from RM 0.00 again each time it returns to the front. After a roll it settles into plain text. Wallet e2e reads the all-time total from `aria-label` (`testID wallet-total`, beside Recent expenses).
 

@@ -216,13 +216,14 @@ Use a persistent dark bottom navigation with four destinations and a centred qui
 **Insight deck (2026-10-13).** The overview, "by category", and "needs attention" cards sit in one stacked, swipeable deck directly under the header, reusing the Home `CardDeck`:
 - **Interaction:** native paging, with the cards behind peeking above. Tapping a peeking edge brings that card forward.
 - **Dots:** one per card, named "Finance card N of M: {name}". Screen readers use them instead of swiping.
-- **Back to overview:** a compact control under the dots, shown only away from the first card.
+- **Direct selection (2026-10-13 refinement):** a swipe, a peeking edge, or a dot makes that card the front card in the same fixed place and size, like changing slides. There is no Back to overview control. A card swiped past keeps its size and fades out near the end of the slide, so it never shrinks or lingers at the deck's edge. The deck height, dots, and everything below them never move.
+- **Guide:** the bottom of the overview card has a swap icon and white label-size text naming the real cards behind it: "Swipe or tap the cards behind for spending by category and items that need attention", or "…the card behind for spending by category" when there is no attention card. It is plain text, not a control, and is not shown for a single card.
 - **Overview card:** uses the Home overview's brand gradient (`colors.brandGradient`) with white text.
   - "Close to your budget" sits on a dark pill (amber on near-black), and "Over budget" keeps its red pill, so both stay readable on blue.
 - **Other cards:** "by category" and "needs attention" keep the dark card surface. "Needs attention" is included only when it has items.
 - **Sizing:** the deck is as tall as its tallest card, measured from the content.
 - **Single card:** with only one card (for example while the period cannot load), it is shown plainly with no dots.
-- **Reduce Motion:** dots, peeks, and Back to overview switch cards without the sliding transition.
+- **Reduce Motion:** dots and peeks switch cards without the sliding transition.
 - **Returning to Wallet** keeps the deck on the same card.
 - **Layout order:** quick actions follow the deck, then Recent expenses, which now starts within the first screen of a standard phone.
 
@@ -243,7 +244,9 @@ The order is fixed and favours what a student needs first (2026-10-13 redesign):
 3. **Quick actions** (`FinanceQuickActions`):
    - Four icon tiles with short labels: **Add expense** (the brand-blue primary tile), **Scan receipt**, **Budget**, **Split bills**.
    - The Budget tile's screen-reader label says "Set budget" or "Manage budget".
-   - A slim **Subscriptions** pill sits below so it stays reachable without crowding the row. Every tile is at least 44 pt.
+   - **Subscriptions** (2026-10-13) is a standard tile (`repeat-outline`), first on the second row; the old pill and chevron are gone. Every tile is at least 44 pt.
+   - **Grid rules (shared `IconQuickActions`, also Studies):** four equal columns, with a 12 pt row gap and an 8 pt column gap. Extra actions continue the next row in order. A short last row stays left-aligned, with empty spacers keeping the tile width, so a lone tile is never stretched and nothing scrolls sideways.
+   - **Label size:** all labels share one size, 13 pt where the longest word fits its tile. The size steps down only as far as needed (11–12 pt on 360–375 pt phones, 10 pt only at 320 pt), so "Subscriptions" never breaks inside the word.
 4. **This period by category** (`SpendingBreakdownCard`):
    - A donut of every real category in the period, with the total spent in the centre.
    - The top three are listed with a colour dot, icon, name, amount, and share; any others are summarised as "+N more category · RM x".
@@ -270,6 +273,23 @@ The order is fixed and favours what a student needs first (2026-10-13 redesign):
    - It follows the ShadePicker sheet pattern: it slides in, or opens with no movement under Reduce Motion.
    - Closing returns to the same Wallet scroll position. Tapping a row closes the sheet and opens that expense.
 
+### Planner (Studies main page, 2026-10-13)
+
+The same order as Wallet: header → stable card deck → dots → icon shortcuts → a compact list with "View all".
+- **Header:** "YOUR PLANNER" and "Academic tasks". The helper sentence was removed.
+- **Studies deck:** the shared `InsightDeck` (`CardDeck stableFront`, the same as Wallet's Finance deck), in this order:
+  1. **Academic focus (default, main card):** on `colors.brandGradient`, the same surface as Wallet's overview, with white text. It has Overdue, Due today, and Upcoming tiles (translucent white, each with an icon, number, and word; the icon fills when the count is above 0, so colour is never the only cue), then a divider and "N of M tasks completed" with a white bar that only repeats the sentence. With no tasks it says "Nothing to track yet" and "No tasks yet…" (no button, because the Add task shortcut is just below).
+     - **Guide:** only here, at the bottom: a swap icon and "Swipe or tap the cards behind for Today and Semester". It is never shown on the other cards.
+  2. **Today** (dark card): the "NEXT CLASS" eyebrow with a clock icon, the course code and name, the day and time, and the location when saved. "Starts in N min" or "N h M min" appears only for a later class today. With no class, no semester, or a failed read, it says "No upcoming classes in your timetable" with a "View timetable" action.
+  3. **Semester** (dark card): "N subjects", "2026/2027 · Semester 1", and the credit total only when every subject's credits are known (otherwise "Credits not verified"), with "View subjects". With nothing selected it says "No subjects selected yet" and offers "Choose subjects". Nothing is presented as a requirement.
+  - **Dots:** named "Studies card N of 3: {name}". Each card is at least the deck's height, so nothing resizes when cards change.
+- **Shortcuts (below the dots, as on Wallet):** the shared `IconQuickActions` row: **Add task** (filled Unifyd blue), then My semester, My timetable, and Reminders (dark tiles with cyan icons). They open the same routes as before. Labels may wrap to two lines and use half of each gap, so Malay fits a 320 pt phone; the Malay tiles use the shorter "Semester saya" and "Jadual waktu", while screen readers hear the full names.
+- **Priority tasks:** a section title with a right-aligned "View all (N)" (N = every task), matching Recent expenses. At most 5 incomplete tasks in one grouped dark card with hairline dividers.
+  - **Order (`lib/studiesOverview.ts`):** overdue → due later today → High → Medium → Low (each by nearest deadline) → no readable deadline. Ties go to the higher priority, then the earlier created task, then the ID. Completed tasks never appear here.
+  - **Row:** a leading complete circle (the existing complete/reopen action, 44 pt), the title, the subject, then a wrap line with "Overdue" or "Due today" (icon and word), the priority flag badge, and the due date or "No due date", then a chevron. The rest of the row opens the task.
+  - **Empty:** "You’re all caught up" (with completed tasks) or "Your planner is ready." (none at all), with an "Add a task" button.
+- **All tasks sheet:** the Wallet history sheet pattern (`useSheetDrag`, close button, backdrop, Android back, Reduce Motion). It shows "To do (N)" in the priority order, then "Completed (N)" (most recent first, crossed through, with Reopen). It has pull to refresh, and a failed reload offers a retry.
+
 ### Subscriptions
 
 The screen is compact and easy to scan (2026-10-13 redesign):
@@ -281,12 +301,25 @@ The screen is compact and easy to scan (2026-10-13 redesign):
    - "Monthly equivalent", the amount (the existing calculation, rolling with `AnimatedMoneyAmount`), and "N active subscriptions";
    - with no active plans: "No active subscriptions" and an Add link.
 3. **Needs attention:** shown only when something is overdue, renews today, or falls within the reminder window.
-   - At most three rows, in priority order: overdue → today → soonest (`attentionSubscriptions`).
+   - In priority order: overdue → today → soonest (`attentionSubscriptions`, which returns every match).
    - Each status is written out ("Overdue" in red, "Renews today" in amber, "In 3 days" in cyan) with an icon, never colour alone.
-4. **Active subscriptions:**
-   - Compact rows in one shared card: brand tile, name (one line), "Monthly · 21 Oct", a small status chip only when attention is needed, the amount on the trailing edge, and a chevron.
+4. **Active subscriptions:** by next billing date, with overdue and nearest first.
+   - Compact rows: brand tile, name (one line), "Monthly · 21 Oct", a small status chip only when attention is needed, the amount on the trailing edge, and a chevron.
+   - **Previews and grouping (2026-10-13, Wallet Recent expenses pattern):** each of Needs attention and Active shows at most **5 rows in total**. The limit is applied after sorting, then the rows are grouped by `next_billing_date`.
+     - Each date gets a `SubscriptionDateHeader` (label 13/700, muted: Today, Tomorrow, Yesterday, or "14 Oct 2026") and one shared card per date.
+     - There is no day total, because plans with different billing frequencies do not add up to a meaningful day amount.
+     - "View all (N)" sits right-aligned beside the heading (page accent, label 13/700, chevron) only when N > 5. N is the full section count.
+     - The summary card always uses every plan.
+   - **View all sheets** (`AllSubscriptionsSheet`, a copy of Wallet's All expenses sheet): "All subscriptions needing attention" or "All active subscriptions", with the full count.
+     - It has the same handle, close button, sizing, and drag-to-close, sticky date headers, and one virtualised list.
+     - It has loading, error with retry, and empty states.
+     - A row opens its details once the sheet has closed.
    - No reminder text, notes, or action buttons appear in rows.
 5. **Paused (N):** a collapsed expander. Paused plans never appear in the active list.
+   - **Result toast** (`FinanceToast`, 2026-10-13): success after save, edit, delete, renew, or pause/resume is a pill that slides down over the top of the page (it never pushes content).
+     - It has a green badge with a dark check, the message in bold, and an optional short reminder line (full sentence as its accessible label).
+     - It leaves after **2.5 s**, or **4 s** with a reminder line, and a tap dismisses it. It is announced to screen readers and does not move under Reduce Motion.
+     - The returning route's parameters are cleared once read, so it never reappears. Errors stay as an on-page card.
 6. **Details sheet** (`SubscriptionDetailsSheet`, drag-to-close via `useSheetDrag`, Reduce Motion aware), opened by tapping a row:
    - Contents: tile, name, amount · frequency, next billing date, status, and reminder timing (only when reminders are on).
    - Actions: a full-width **Mark as renewed** (active plans only), then Edit, Pause/Resume, and Delete.
@@ -301,9 +334,50 @@ The screen is compact and easy to scan (2026-10-13 redesign):
   2. **Ionicons marks** for brands this Simple Icons version no longer carries: Google One, Microsoft 365, Amazon/Prime Video.
   3. **Original category icons** where no mark is available: ChatGPT/OpenAI (sparkles), Disney+ (film), Canva (palette), Adobe (brush), plus other music, video, AI, notes, and storage services.
   4. **A neutral initial tile** for every other name.
-- Marks are monochrome in the card text colour (contrast ≥ 7:1 on the dark tile in both themes). Category icons and initials are cyan.
+- **One accent for every tile kind (2026-10-13):** Simple Icons marks, Ionicons logos, category icons, and initials are all drawn in `brandCyan`, the accent Wallet's expense icons already use (≈ 8.6:1 on the dark tile in both themes).
+  - All four are vectors (SVG paths or font glyphs), so tinting keeps their shape and transparency.
+  - The same app looks identical in rows, sheets, the details sheet, the Add preview, and the success screen. Status icons and text keep their own colours.
 - All four share one size and shape and are hidden from screen readers, because the name is written beside them.
 - Nothing is downloaded or loaded remotely. Marks only identify the student's own plan and imply no affiliation.
+
+**Manage budget** (`/set-budget`, 2026-10-13, the same language as Add subscription):
+- **Header:** back, "YOUR WALLET", and **Set budget** or **Manage budget**. There is no description paragraph.
+- **Period card:** a full-width two-way segmented control (Weekly | Monthly).
+  - Radios are 44 pt. The selected one has a cyan border, a check, and cyan text.
+  - Below it is a read-only "CURRENT PERIOD" panel with a calendar icon and the date range, which updates at once.
+- **Amount card:** "RM", a hairline divider, and a large 28 pt input. Both use the Space Mono finance font (`financeFontStyle` from `FinanceNumber`), to match the other finance pages. This is the one editable amount in Space Mono, by owner request on 2026-10-13. Inline errors move focus to the field.
+  - When a budget exists for the shown period, a quiet note says "Updating this period’s budget, currently RM 500.00."
+- **Footer:** the shared `SwipeToSave` and "Or tap to save", hidden while the keyboard is open, exactly as on Add subscription.
+- **Success:** the shared `SaveSuccessOverlay`: "Budget saved" or "Budget updated", the amount in Space Mono, "Monthly budget" or "Weekly budget", the date range, and "Tap anywhere to continue".
+  - Nothing implies that money moved.
+  - Back on Wallet, the shared `FinanceToast` (the same component, 2.5 s timing, animation, placement, and screen-reader announcement as "Subscription saved.") says "Budget saved." once, with no second line. It replaces the earlier inline notice card.
+
+**Shared save pattern:** `SwipeToSave` and `SaveSuccessOverlay` are the one slide-to-save and blue-success implementation. Add subscription (`SubscriptionSavedOverlay` passes its identity row and reminder pill) and Manage budget both use them.
+
+**Add subscription** (2026-10-13; Edit keeps the older single-card form):
+- **Back gesture:** the iOS 26 full-screen back swipe is off on this screen (`fullScreenGestureEnabled: false`), because it took the slide-to-save drag. The edge swipe, the Back button, and Android back still work.
+- **Header:** back, **Add subscription** on the same row, and one helper line.
+- **Cards, in order** (16 pt padding, 12 pt gaps, dark in both themes):
+  1. **Identity:** the name field with a 44 pt icon preview (a dashed neutral tile while blank, then the brand tile for the typed name).
+     - On focus or typing, a compact list of up to six suggested names opens inside the card, so nothing can clip it. Each row has a tile, the name, and a cyan check plus "Selected" for an exact match. A note says they are names only.
+     - Choosing fills only the name. Escape, Return, a choice, or leaving the field closes it; Arrow Down moves into it on the web.
+  2. **Amount per billing:** "RM" and a large 28 pt input in the system font (not Space Mono, because it is editable).
+  3. **Billing:** frequency as four radio chips (selected: cyan border, check, cyan text), then a "Next billing date" row.
+  4. **Reminder:** the notification switch with its hint, then a "Reminder timing" row.
+  5. **More details** (muted icon): a category row and notes.
+  - Rows use the new `variant="row"` of `SelectionField` and `ExpenseDatePicker` (label left, value and chevron or calendar right, 48 pt). Their defaults are unchanged elsewhere.
+- **Footer (fixed above the safe area, outside the scroll area):**
+  - A **slide-to-save** track (60 pt, dark surface, border) with a 52 pt Unifyd-blue thumb and a white arrow. Blue fills behind the thumb, from 28% to full opacity, and "Slide to save" fades as the thumb passes.
+  - Releasing below 90% of the travel springs back. The slider is hidden from screen readers.
+  - Below it, **Or tap to save**: a 44 pt text button that runs the same validation and save. Swiping is never the only way.
+  - A failed save shows a red message above the slider.
+  - The footer is hidden while the keyboard is open, so it never rides up over the fields. Scrolling dismisses the keyboard (interactive on iOS), and the footer returns.
+- **Saved overlay:** the Home overview card's blue-to-cyan `brandGradient` (same top-left → bottom-right diagonal) grows as a circle from the thumb to fill the screen (360 ms), then a spinner and "Saving subscription…" show. This is the screen's one gradient element.
+  - Only after the save is confirmed does the minimal success state appear: a bare checkmark (spring), then (fading up) "Subscription added", the amount in Space Mono (44 pt, never negative), and a 28 pt tile with "Name · Frequency".
+  - A reminder is mentioned only when one was wanted but could not be set, as a small outlined pill with an icon and a short label ("Reminder time has passed", "Notifications are off", "Reminders work in the mobile app", "Reminder could not be set"; screen readers hear the full sentence), with an underlined "Try the reminder again" when retrying can help. A reminder that was set is not mentioned.
+  - A quiet "Tap anywhere to continue" sits at the bottom (a 44 pt text button). Tapping anywhere also continues. There is no automatic dismissal.
+  - All overlay text and the check use the near-black action ink (≈ 4.8:1 on `#007AFB`, ≈ 9.5:1 on `#34C1FC`). White, which the Home card uses, would be about 4:1 on the blue end and 2:1 on the cyan end. This is an intentional difference from the Home card.
+  - Reduce Motion: no circle and no spring; loading and success appear in place.
 
 ### List screens
 

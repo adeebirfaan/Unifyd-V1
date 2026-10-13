@@ -49,10 +49,13 @@ test('student can create, edit, complete, reopen, and delete an owned task', asy
     await page.getByRole('button', { name: 'Save changes' }).click();
     await expect(page.getByText(`${prefix} edited`)).toBeVisible();
     await page.getByRole('button', { name: `Complete task ${prefix} edited` }).click();
-    await expect(page.getByRole('button', { name: `Reopen task ${prefix} edited` })).toBeVisible();
-    await page.getByRole('button', { name: `Reopen task ${prefix} edited` }).click();
-    await expect(page.getByRole('button', { name: `Complete task ${prefix} edited` })).toBeVisible();
-    await page.getByRole('button', { name: `Open task ${prefix} edited` }).click();
+    // A completed task leaves Priority tasks; All tasks lists it under Completed, where it can be reopened.
+    await expect(page.getByRole('button', { name: `Complete task ${prefix} edited` })).toHaveCount(0);
+    await page.getByTestId('view-all-tasks').filter({ visible: true }).click();
+    const sheet = page.getByTestId('all-tasks-sheet');
+    await sheet.getByRole('button', { name: `Reopen task ${prefix} edited` }).click();
+    await expect(sheet.getByRole('button', { name: `Complete task ${prefix} edited` })).toBeVisible();
+    await sheet.getByRole('button', { name: `Open task ${prefix} edited` }).click();
     await page.getByRole('button', { name: 'Delete task' }).click();
     await expect(page.getByText(`Delete “${prefix} edited”? This cannot be undone.`)).toBeVisible();
     await page.getByRole('button', { name: 'Cancel' }).click();

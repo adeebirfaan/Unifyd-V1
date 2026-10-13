@@ -133,11 +133,20 @@ test('quick actions open Add expense, Scan receipt, Budget, Split bills, and Sub
   await go('Manage budget', /\/set-budget/);
   await go('Split bills', /\/split-bills/);
   await go('Subscriptions', /\/subscriptions/);
-  for (const tile of ['quick-add', 'quick-scan', 'quick-budget', 'quick-split']) {
+  for (const tile of ['quick-add', 'quick-scan', 'quick-budget', 'quick-split', 'quick-subscriptions']) {
     const box = (await visible(page, tile).boundingBox())!;
     expect(box.height, `${tile} touch target`).toBeGreaterThanOrEqual(44);
     expect(box.width, `${tile} touch target`).toBeGreaterThanOrEqual(44);
   }
+  // Subscriptions is a standard tile, first on the second row: the same column and size as Add expense, no pill or chevron.
+  const add = (await visible(page, 'quick-add').boundingBox())!;
+  const split = (await visible(page, 'quick-split').boundingBox())!;
+  const subscriptions = (await visible(page, 'quick-subscriptions').boundingBox())!;
+  expect(Math.abs(subscriptions.x - add.x)).toBeLessThan(1);
+  expect(Math.abs(subscriptions.width - split.width)).toBeLessThan(1);
+  expect(subscriptions.y).toBeGreaterThan(add.y + add.height);
+  await expect(visible(page, 'quick-subscriptions')).toHaveAttribute('aria-label', 'Subscriptions');
+  await expect(actions.getByRole('button')).toHaveCount(5);
 });
 
 test('no budget and no expenses show compact empty states, and the attention card is left out', async ({ page }) => {
@@ -158,12 +167,13 @@ test('no budget and no expenses show compact empty states, and the attention car
   await expect(visible(page, 'finance-attention')).toHaveCount(0);
   await expect(page.getByText('Your wallet is ready.').filter({ visible: true })).toBeVisible();
   await expect(visible(page, 'view-all-expenses')).toHaveCount(0);
-  // Back on Wallet the deck keeps its place, and Back to overview returns to the first card.
+  // Back on Wallet the deck keeps its place; the overview's dot brings it forward (no separate back control).
   await expect(deckDots(page)).toHaveCount(2);
   await frontCard(page, 'Spending by category');
-  await page.getByTestId('finance-deck-back').filter({ visible: true }).click();
+  await showDeckCard(page, 'Overview');
   await frontCard(page, 'Overview');
-  await expect(page.getByTestId('finance-deck-back').filter({ visible: true })).toHaveCount(0);
+  // With no attention card, the guide names only the card that is there.
+  await expect(visible(page, 'finance-deck-hint')).toContainText('Swipe or tap the card behind for spending by category');
   await visible(page, 'budget-summary').getByRole('button', { name: 'Set a budget' }).click();
   await expect(page).toHaveURL(/\/set-budget/);
 });
@@ -223,6 +233,9 @@ test('Light mode keeps cards dark and readable, and a 320 px phone shows everyth
     return Math.max(...amounts.map((el) => el.getBoundingClientRect().right));
   });
   expect(bottomOfContent, 'quick actions fit the width').toBeLessThanOrEqual(320);
+  // Even at 320 px, "Subscriptions" stays one unbroken line: its tile is no taller than Scan receipt's.
+  const tileHeight = async (id: string) => (await visible(page, id).boundingBox())!.height;
+  expect(await tileHeight('quick-subscriptions')).toBeLessThanOrEqual(await tileHeight('quick-scan') + 0.5);
   // Scroll to the end: the last row must clear the tab bar.
   const lastRow = page.getByRole('button', { name: /^Open details for Mock 4/ }).filter({ visible: true });
   await lastRow.scrollIntoViewIfNeeded();
@@ -434,7 +447,7 @@ test('recent expenses are grouped by day with day totals, in the preview and in 
   await expect(page).toHaveURL(/\/expense-detail/);
 });
 
-test('the Finance deck swipes, brings a peeking card forward, and returns to the overview', async ({ page }) => {
+test('the Finance deck changes cards in one stable place, with a guide and no back-to-overview step', async ({ page }) => {
   await mockWallet(page, sample);
   await openWallet(page);
   const deck = page.getByTestId('finance-deck').filter({ visible: true });
@@ -444,41 +457,60 @@ test('the Finance deck swipes, brings a peeking card forward, and returns to the
     await page.mouse.wheel(pages * box.width, 0);
     await page.waitForTimeout(700);
   };
-  const back = page.getByTestId('finance-deck-back').filter({ visible: true });
+  const card = (key: string) => page.getByTestId(`finance-deck-card-${key}`).filter({ visible: true });
+  const actions = async () => (await visible(page, 'finance-quick-actions').boundingBox())!;
 
+  // The guide sits inside the overview card, below its figures, and names the real cards behind.
   await frontCard(page, 'Overview');
-  await expect(back, 'no back control on the overview').toHaveCount(0);
+  const hint = visible(page, 'finance-deck-hint');
+  await expect(hint).toContainText('Swipe or tap the cards behind for spending by category and items that need attention');
+  const overviewBox = (await card('overview').boundingBox())!;
+  const hintBox = (await hint.boundingBox())!;
+  const figuresBox = (await visible(page, 'budget-daily-average').boundingBox())!;
+  expect(hintBox.y).toBeGreaterThanOrEqual(figuresBox.y + figuresBox.height);
+  expect(hintBox.y + hintBox.height).toBeLessThanOrEqual(overviewBox.y + overviewBox.height);
+  const layoutBefore = await actions();
+
   await swipe(-1); // nothing before the first card
   await frontCard(page, 'Overview');
   await swipe(1);
   await frontCard(page, 'Spending by category');
-  await expect(back).toHaveText('Back to overview');
   // Only the front card's controls are exposed: the overview's figures are hidden from assistive tech now.
   await expect(page.getByRole('button', { name: /^Open details for KFC Gambang/ })).toBeAttached();
+  // The selected card takes the overview's exact place and size; nothing below the deck moves.
+  const same = (box: { x: number; y: number; width: number; height: number }) => {
+    for (const key of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(box[key] - overviewBox[key])).toBeLessThan(1);
+  };
+  same((await card('categories').boundingBox())!);
+  expect(await actions()).toEqual(layoutBefore);
+  await expect(page.getByText('Back to overview', { exact: true })).toHaveCount(0);
+  await expect(page.getByTestId('finance-deck-back')).toHaveCount(0);
   await swipe(1);
   await frontCard(page, 'Needs attention');
+  same((await card('attention').boundingBox())!);
   await swipe(1); // nothing after the last card
   await frontCard(page, 'Needs attention');
-  await back.click();
+  expect(await actions()).toEqual(layoutBefore);
+  // Swiping back returns to the overview directly.
+  await swipe(-2);
   await frontCard(page, 'Overview');
-  await expect(back).toHaveCount(0);
 
   // Tapping the peeking edge of the card behind brings it forward (screen readers use the named dots instead).
-  const front = (await page.getByTestId('finance-deck-card-overview').filter({ visible: true }).boundingBox())!;
-  await page.mouse.click(front.x + front.width / 2, front.y - 9);
+  await page.mouse.click(overviewBox.x + overviewBox.width / 2, overviewBox.y - 9);
   await frontCard(page, 'Spending by category');
-  await back.click();
+  await showDeckCard(page, 'Overview');
   await frontCard(page, 'Overview');
 
   // Internal controls still act, not the deck: the overview's figures stay, and quick actions are untouched.
   await expect(visible(page, 'finance-quick-actions').getByRole('button', { name: 'Add expense', exact: true })).toBeVisible();
 });
 
-test('a single available card is shown plainly, with no deck dots or back control', async ({ page }) => {
+test('a single available card is shown plainly, with no deck dots, guide, or back control', async ({ page }) => {
   // While the period cannot load, only the overview card (with its retry) exists.
   await mockWallet(page, { ...sample, failPeriod: true });
   await openWallet(page);
   await expect(page.getByTestId('finance-deck-single').filter({ visible: true })).toBeVisible();
   await expect(deckDots(page)).toHaveCount(0);
-  await expect(page.getByTestId('finance-deck-back').filter({ visible: true })).toHaveCount(0);
+  await expect(page.getByTestId('finance-deck-hint')).toHaveCount(0);
+  await expect(page.getByText('Back to overview', { exact: true })).toHaveCount(0);
 });

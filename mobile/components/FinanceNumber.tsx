@@ -48,3 +48,6 @@ export function FinanceNumber({ style, fit = false, onLayout, children, ...props
 const styles = StyleSheet.create({
   font: { fontFamily: FAMILY, fontWeight: '400', fontVariant: ['tabular-nums'], letterSpacing: LETTER_SPACING },
 });
+
+/** The same finance font for the one editable amount that uses it (Manage budget, owner request 2026-10-13). */
+export const financeFontStyle = styles.font;

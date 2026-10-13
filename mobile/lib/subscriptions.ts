@@ -131,11 +131,44 @@ export function upcomingRenewals<T extends Pick<SubscriptionRecord, 'name' | 'ne
     .sort((a, b) => a.next_billing_date.localeCompare(b.next_billing_date) || a.name.localeCompare(b.name));
 }
 
-/** Active subscriptions by nearest billing date, then paused ones by name. */
-export function sortSubscriptions<T extends Pick<SubscriptionRecord, 'name' | 'next_billing_date' | 'is_active'>>(subscriptions: readonly T[]): T[] {
+type Named = Pick<SubscriptionRecord, 'name'> & { id?: string };
+/** Deterministic tie-breaker for plans sharing a date: name, then id. */
+function byNameThenId(a: Named, b: Named): number {
+  return a.name.localeCompare(b.name) || (a.id ?? '').localeCompare(b.id ?? '');
+}
+
+/** Active subscriptions by nearest billing date (so overdue come first), then paused ones by name. */
+export function sortSubscriptions<T extends Pick<SubscriptionRecord, 'name' | 'next_billing_date' | 'is_active'> & { id?: string }>(subscriptions: readonly T[]): T[] {
   return [...subscriptions].sort((a, b) => Number(b.is_active) - Number(a.is_active)
     || (a.is_active ? a.next_billing_date.localeCompare(b.next_billing_date) : 0)
-    || a.name.localeCompare(b.name));
+    || byNameThenId(a, b));
+}
+
+/** Rows each overview section shows before "View all (N)". The full list is always kept for the sheet and totals. */
+export const SUBSCRIPTION_PREVIEW_LIMIT = 5;
+export type SubscriptionDateGroup<T> = { date: string; subscriptions: T[] };
+export type RenewalDay = 'today' | 'tomorrow' | 'yesterday' | null;
+
+/**
+ * Groups already-sorted subscriptions by `next_billing_date` (a date-only string, so no time zone can move a
+ * plan to another day). Groups keep the order of their first row and rows keep their order, so the caller's
+ * sort (by date, or by urgency, which is also date order) decides everything. No empty group is ever made.
+ * Apply any preview limit before grouping.
+ */
+export function groupSubscriptionsByDate<T extends Pick<SubscriptionRecord, 'next_billing_date'>>(subscriptions: readonly T[]): SubscriptionDateGroup<T>[] {
+  const groups = new Map<string, SubscriptionDateGroup<T>>();
+  for (const subscription of subscriptions) {
+    const group = groups.get(subscription.next_billing_date) ?? { date: subscription.next_billing_date, subscriptions: [] };
+    group.subscriptions.push(subscription);
+    groups.set(subscription.next_billing_date, group);
+  }
+  return [...groups.values()];
+}
+
+/** "today", "tomorrow", or "yesterday" relative to the local date, otherwise null (show the full date). */
+export function renewalDay(iso: string, todayISO: string): RenewalDay {
+  const days = daysUntil(iso, todayISO);
+  return days === 0 ? 'today' : days === 1 ? 'tomorrow' : days === -1 ? 'yesterday' : null;
 }
 
 export type ReminderPlanItem = { identifier: string; subscriptionId: string; fire: Date };
@@ -169,21 +202,21 @@ export function reconcileReminders(userId: string, scheduled: readonly { identif
   return { cancel, schedule: [...wanted.keys()].filter((identifier) => !kept.has(identifier)) };
 }
 
-export const ATTENTION_LIMIT = 3;
 const STATUS_PRIORITY: Record<RenewalStatus, number> = { overdue: 0, today: 1, soon: 2, later: 3 };
 
 /**
  * Active subscriptions that need attention (overdue, renewing today, or within the reminder window used by
  * `renewalStatus`), highest priority first: overdue, then today, then soon; earlier dates first within each.
- * At most three; an empty result means the attention section is left out.
+ * Every matching plan is returned (the overview previews the first five); an empty result means the section is left out.
+ * Because overdue dates come before today and today before later dates, this order is also date order.
  */
-export function attentionSubscriptions<T extends Pick<SubscriptionRecord, 'name' | 'next_billing_date' | 'reminder_days_before' | 'is_active'>>(subscriptions: readonly T[], todayISO: string, limit = ATTENTION_LIMIT): { subscription: T; status: Exclude<RenewalStatus, 'later'> }[] {
+export function attentionSubscriptions<T extends Pick<SubscriptionRecord, 'name' | 'next_billing_date' | 'reminder_days_before' | 'is_active'> & { id?: string }>(subscriptions: readonly T[], todayISO: string, limit = Infinity): { subscription: T; status: Exclude<RenewalStatus, 'later'> }[] {
   return subscriptions
     .filter((subscription) => subscription.is_active)
     .map((subscription) => ({ subscription, status: renewalStatus(subscription.next_billing_date, subscription.reminder_days_before, todayISO) }))
     .filter((entry): entry is { subscription: T; status: Exclude<RenewalStatus, 'later'> } => entry.status !== 'later')
     .sort((a, b) => STATUS_PRIORITY[a.status] - STATUS_PRIORITY[b.status]
       || a.subscription.next_billing_date.localeCompare(b.subscription.next_billing_date)
-      || a.subscription.name.localeCompare(b.subscription.name))
+      || byNameThenId(a.subscription, b.subscription))
     .slice(0, limit);
 }

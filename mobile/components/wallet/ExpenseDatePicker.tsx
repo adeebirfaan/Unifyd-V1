@@ -7,7 +7,8 @@ import { isValidISODate, localDateISO } from '@/lib/expenseForm';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
-export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle }: { value: string; onChange: (date: string) => void; error?: string; label?: string; pickerTitle?: string }) {
+/** `variant="row"` is the compact grouped-card row (label left, date and calendar icon right); the accessible name is unchanged. */
+export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle, variant = 'field' }: { value: string; onChange: (date: string) => void; error?: string; label?: string; pickerTitle?: string; variant?: 'field' | 'row' }) {
   const { tokens } = useAppearance();
   const { language, t } = useI18n();
   const initial = isValidISODate(value) ? new Date(`${value}T12:00:00`) : new Date();
@@ -27,12 +28,18 @@ export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle }
     setVisible(false);
   }
 
-  return <View style={styles.field}>
-    <Text style={[styles.label, { color: tokens.cardText }]}>{label ?? t('expense.date')}</Text>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label ?? t('expense.date')}: ${selectedLabel}`} onPress={() => setVisible(true)} style={[styles.control, { backgroundColor: tokens.cardElevated, borderColor: error ? tokens.cardErrorText : tokens.border }]}>
-      <Text style={[styles.controlText, { color: tokens.cardText }]}>{selectedLabel}</Text>
-      <Ionicons name="calendar-outline" size={21} color={tokens.brandCyan} />
-    </Pressable>
+  return <View style={variant === 'row' ? styles.rowField : styles.field}>
+    {variant === 'row' ? <Pressable accessibilityRole="button" accessibilityLabel={`${label ?? t('expense.date')}: ${selectedLabel}`} onPress={() => setVisible(true)} style={styles.row}>
+      <Text style={[styles.rowLabel, { color: tokens.cardText }]}>{label ?? t('expense.date')}</Text>
+      <Text style={[styles.rowValue, { color: error ? tokens.cardErrorText : tokens.cardMutedText }]} numberOfLines={1}>{selectedLabel}</Text>
+      <Ionicons name="calendar-outline" size={18} color={tokens.brandCyan} />
+    </Pressable> : <>
+      <Text style={[styles.label, { color: tokens.cardText }]}>{label ?? t('expense.date')}</Text>
+      <Pressable accessibilityRole="button" accessibilityLabel={`${label ?? t('expense.date')}: ${selectedLabel}`} onPress={() => setVisible(true)} style={[styles.control, { backgroundColor: tokens.cardElevated, borderColor: error ? tokens.cardErrorText : tokens.border }]}>
+        <Text style={[styles.controlText, { color: tokens.cardText }]}>{selectedLabel}</Text>
+        <Ionicons name="calendar-outline" size={21} color={tokens.brandCyan} />
+      </Pressable>
+    </>}
     {error && <Text style={[styles.error, { color: tokens.cardErrorText }]} accessibilityRole="alert">{error}</Text>}
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
       <View style={styles.modalRoot}>
@@ -64,6 +71,8 @@ const styles = StyleSheet.create({
   field: { gap: spacing.space2 }, label: { ...typography.label },
   control: { minHeight: 54, borderWidth: 1, borderRadius: radius.radiusMd, paddingHorizontal: spacing.space4, flexDirection: 'row', alignItems: 'center', gap: spacing.space3 },
   controlText: { ...typography.body, flex: 1 }, error: { ...typography.label },
+  rowField: { gap: spacing.space1 }, row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.space2 },
+  rowLabel: { ...typography.body, flex: 1 }, rowValue: { ...typography.body, flexShrink: 0, maxWidth: '58%', textAlign: 'right' },
   modalRoot: { flex: 1, justifyContent: 'center', padding: spacing.space4 }, scrim: { ...StyleSheet.absoluteFill },
   calendar: { width: '100%', maxWidth: 400, alignSelf: 'center', borderWidth: 1, borderRadius: radius.radiusLg, padding: spacing.space4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, heading: { ...typography.sectionTitle, flex: 1 },

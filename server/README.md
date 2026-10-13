@@ -67,3 +67,14 @@ Each signed-in session may send 30 questions per 10 minutes (`429 RATE_LIMITED`)
 4. Errors: `401 UNAUTHORIZED`, `400 INVALID_REQUEST` (any other field, such as a user ID, is refused), `429 RATE_LIMITED` (60 per 10 minutes per session), and `503 AUTH_UNAVAILABLE`, `HISTORY_UNAVAILABLE`, or `SUGGESTION_UNAVAILABLE`.
 
 No Groq or other LLM, remote model, or keyword table is used. Titles, history, vocabulary, and tokens are not stored or logged. The app treats a suggestion as optional and never saves an expense because of one. Automated tests use fictional fixtures and a fake history loader.
+
+## Receipt OCR evaluation (offline)
+
+Measures receipt parser accuracy against hand-made labels for Phase 9 evidence. Real receipts, their OCR text, and labels stay in `server/local-data/receipt-eval/`, which Git ignores.
+
+1. Put receipt photos in `local-data/receipt-eval/images/` (JPEG, PNG, or WEBP).
+2. Copy `scripts/receipt-labels.template.csv` to `local-data/receipt-eval/labels.csv` and add one row per image: `file,type,condition,merchant,date,total`. The template explains each column.
+3. Run `npm run eval:receipts:ocr` once. It sends each image to Google Vision with the same call the receipt endpoint uses, and caches the text and word boxes in `local-data/receipt-eval/ocr/`. Images already cached are skipped.
+4. Run `npm run eval:receipts`. It works offline from the cache, so it is free and fast to repeat after each parser change. It prints accuracy for merchant, date, and total, the share of receipts with all three correct, and a breakdown by receipt type and condition. Each field is scored `correct`, `flagged` (wrong, but the review warning was shown), or `silent` (wrong with no warning). Every wrong field in the development split is listed.
+
+About 20% of receipts are held out as a test split, chosen from a hash of the file name, so the choice is stable as receipts are added. Their results stay hidden until `npm run eval:receipts -- --final`, which should be used only for the final reported score. `--json` prints machine-readable results. Scoring rules: the parsed merchant is correct when its words begin with the labelled trading name (case, punctuation, and "Sdn Bhd" ignored); the date must match exactly; the total must match to the cent. A blank label expects no value.

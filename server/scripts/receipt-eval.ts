@@ -10,6 +10,7 @@ import { join } from 'node:path';
 import { FIELDS, groupBy, parseLabelsCsv, scoreReceipt, summarize } from '../src/receipt-eval.js';
 import type { GroupStats, ScoredReceipt } from '../src/receipt-eval.js';
 import { parseReceiptText } from '../src/receipt-parser.js';
+import type { OcrPage } from '../src/timetable-parser.js';
 import { LABELS, OCR } from './receipt-eval-paths.js';
 
 const final = process.argv.includes('--final');
@@ -36,8 +37,9 @@ const scored: ScoredReceipt[] = [];
 for (const label of labels) {
   const cache = join(OCR, `${label.file}.json`);
   if (!existsSync(cache)) { missing.push(label.file); continue; }
-  const { text } = JSON.parse(readFileSync(cache, 'utf8')) as { text: string };
-  scored.push(scoreReceipt(label, parseReceiptText(text)));
+  // The same input the receipt endpoint gives the parser: text and word boxes from one Vision call.
+  const { text, pages } = JSON.parse(readFileSync(cache, 'utf8')) as { text: string; pages?: OcrPage[] };
+  scored.push(scoreReceipt(label, parseReceiptText(text, pages)));
 }
 
 const dev = scored.filter((receipt) => receipt.split === 'dev');

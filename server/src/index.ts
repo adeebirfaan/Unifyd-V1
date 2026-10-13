@@ -7,7 +7,7 @@ import { loadExpenseHistory } from './expense-history.js';
 import { loadInsightFacts } from './insight-data.js';
 import { requestGroqSummary } from './insight-summary.js';
 import { POOF_REPLY_FORMAT } from './poof-chat.js';
-import { readTimetableWithVision } from './timetable-vision.js';
+import { pagesFromAnnotation, readTimetableWithVision } from './timetable-vision.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -37,7 +37,8 @@ const app = createApp({
   detectText: async (image) => {
     const [result] = await visionClient.documentTextDetection({ image: { content: image } });
     if (result.error) throw new Error('Vision detection failed.');
-    return result.fullTextAnnotation?.text ?? result.textAnnotations?.[0]?.description ?? '';
+    // Word boxes from the same call let the parser pair receipt labels with the amounts printed beside them.
+    return { text: result.fullTextAnnotation?.text ?? result.textAnnotations?.[0]?.description ?? '', pages: pagesFromAnnotation(result.fullTextAnnotation as never) };
   },
   readTimetable: (file, kind) => readTimetableWithVision(visionClient as never, file, kind),
   insights: {

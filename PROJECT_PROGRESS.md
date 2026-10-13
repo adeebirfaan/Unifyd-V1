@@ -243,6 +243,59 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 - Parser improvements (done in the entry above).
 
 
+> The two entries below were written on branch `claude/upbeat-clarke-chzhwi` (commits `a90151e`, `6a92006`) and merged on 2026-10-14. The server files they describe are on `main` in their later, improved form.
+
+### 2026-10-13 — Phase 9: one-command receipt evaluation setup
+
+**Requirements implemented:**
+- Phase 9 evidence: OCR accuracy evaluation (RISK-002). No app behaviour changed.
+
+**Changed files:**
+- New: `server/scripts/receipt-eval-setup.ts`, `server/scripts/receipt-eval-paths.ts`.
+- Edited: `server/src/receipt-eval.ts`, `server/src/receipt-eval.test.ts`, `server/scripts/receipt-ocr-cache.ts`, `server/scripts/receipt-eval.ts`, `server/scripts/receipt-labels.template.csv`, `server/package.json` (`eval:receipts:setup`, `eval:receipts:run`), `server/README.md`, and this file.
+
+**What changed:**
+- `npm run eval:receipts:run` creates the folders and `labels.csv`, adds an empty row for each new image (any file name), reads new images once with Google Vision, and scores the labelled rows. Existing labels are never overwritten.
+- Rows with only a file name are waiting for labels and are skipped, so labelling can be done in batches.
+- Label dates accept `YYYY-MM-DD` or `DD/MM/YYYY`; Excel's byte-order mark, quoted or comma-padded comment lines, and trailing empty columns are accepted.
+- Unsupported files (for example HEIC) are listed and skipped. Missing Google credentials stop the OCR step with the fix. Vision is not contacted when every image is cached.
+
+**Tests performed:**
+- Server unit tests 74/74 (8 in `receipt-eval.test.ts`). Typecheck and build pass; the scripts typecheck under the same strict options.
+- Dry runs with placeholder files: the first run created `labels.csv` with empty rows, skipped a HEIC file and `desktop.ini`, and stopped at the missing-credentials message (this environment has no Google credentials). With one row labelled and fake cached OCR, the second run kept the label, skipped the waiting row, and scored without contacting Google. Placeholder files were deleted.
+
+**Issues or decisions:**
+- No real receipt has been read yet; the first live Vision run happens on the owner's computer.
+
+**Next action:**
+- Save receipt photos in `server/local-data/receipt-eval/images/`, run `npm run eval:receipts:run`, fill in `labels.csv`, and run it again for the baseline.
+
+### 2026-10-13 — Phase 9: offline receipt OCR evaluation tooling
+
+**Requirements implemented:**
+- Phase 9 evidence: OCR accuracy evaluation (RISK-002). No app behaviour changed.
+
+**Changed files:**
+- New: `server/src/receipt-eval.ts`, `server/src/receipt-eval.test.ts`, `server/scripts/receipt-ocr-cache.ts`, `server/scripts/receipt-eval.ts`, `server/scripts/receipt-labels.template.csv`.
+- Edited: `server/package.json` (`eval:receipts:ocr`, `eval:receipts`), `server/README.md`, and this file.
+
+**What changed:**
+- `eval:receipts:ocr` sends each image in `server/local-data/receipt-eval/images/` to Google Vision once (same `documentTextDetection` call as the endpoint) and caches text and word boxes locally. Images, OCR text, and labels stay in the Git-ignored `local-data/`.
+- `eval:receipts` re-scores `parseReceiptText` offline against `labels.csv`: merchant, date, and total accuracy, all-three-correct rate, and breakdowns by type (`chain_retail`, `food_beverage`, `local_shop`, `handwritten`, `digital`, `other`) and condition (`clean`, `hard`). Each wrong field is `flagged` (review warning shown) or `silent`.
+- About 20% of receipts form a held-out test split chosen by a hash of the file name; its results are shown only with `--final`.
+- Target set: 100 real receipts, labelled by hand, before any parser change.
+
+**Tests performed:**
+- Server unit tests 72/72 (6 new: CSV parsing and validation, merchant matching, outcomes, summary, split stability). Typecheck and build pass; the scripts typecheck under the same strict options.
+- A dry run with 8 fictional OCR texts produced the expected table and wrong-field list; the fictional files were deleted. No Vision call was made.
+- An earlier probe of the current parser with fictional texts showed six known weaknesses: "Total Qty" and "Total Savings" lines taken as the total, totals in a separate column not found, month-name dates ("12 Oct 2026", "12 OKT 2026") not read, a promo date chosen over the purchase date, and "WELCOME TO" taken as the merchant.
+
+**Issues or decisions:**
+- The baseline must be measured on real receipts before the parser is changed, so the thesis can report before and after on the same set.
+
+**Next action:**
+- Collect and label 100 receipts, run `npm run eval:receipts:ocr` and `npm run eval:receipts`, and record the baseline here.
+
 ### 2026-10-13 — Wallet: Subscriptions as a standard quick-action tile in a 4-column grid
 
 **What changed (layout only; routes, subscription logic, and Wallet figures are unchanged):**

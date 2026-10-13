@@ -109,6 +109,32 @@ The suite captures and restores the test profile around the run, including tempo
 
 ## Completed work log
 
+### 2026-10-13 — Phase 9: offline receipt OCR evaluation tooling
+
+**Requirements implemented:**
+- Phase 9 evidence: OCR accuracy evaluation (RISK-002). No app behaviour changed.
+
+**Changed files:**
+- New: `server/src/receipt-eval.ts`, `server/src/receipt-eval.test.ts`, `server/scripts/receipt-ocr-cache.ts`, `server/scripts/receipt-eval.ts`, `server/scripts/receipt-labels.template.csv`.
+- Edited: `server/package.json` (`eval:receipts:ocr`, `eval:receipts`), `server/README.md`, and this file.
+
+**What changed:**
+- `eval:receipts:ocr` sends each image in `server/local-data/receipt-eval/images/` to Google Vision once (same `documentTextDetection` call as the endpoint) and caches text and word boxes locally. Images, OCR text, and labels stay in the Git-ignored `local-data/`.
+- `eval:receipts` re-scores `parseReceiptText` offline against `labels.csv`: merchant, date, and total accuracy, all-three-correct rate, and breakdowns by type (`chain_retail`, `food_beverage`, `local_shop`, `handwritten`, `digital`, `other`) and condition (`clean`, `hard`). Each wrong field is `flagged` (review warning shown) or `silent`.
+- About 20% of receipts form a held-out test split chosen by a hash of the file name; its results are shown only with `--final`.
+- Target set: 100 real receipts, labelled by hand, before any parser change.
+
+**Tests performed:**
+- Server unit tests 72/72 (6 new: CSV parsing and validation, merchant matching, outcomes, summary, split stability). Typecheck and build pass; the scripts typecheck under the same strict options.
+- A dry run with 8 fictional OCR texts produced the expected table and wrong-field list; the fictional files were deleted. No Vision call was made.
+- An earlier probe of the current parser with fictional texts showed six known weaknesses: "Total Qty" and "Total Savings" lines taken as the total, totals in a separate column not found, month-name dates ("12 Oct 2026", "12 OKT 2026") not read, a promo date chosen over the purchase date, and "WELCOME TO" taken as the merchant.
+
+**Issues or decisions:**
+- The baseline must be measured on real receipts before the parser is changed, so the thesis can report before and after on the same set.
+
+**Next action:**
+- Collect and label 100 receipts, run `npm run eval:receipts:ocr` and `npm run eval:receipts`, and record the baseline here.
+
 ### 2026-10-13 — Wallet: insight cards in the Home-style card deck
 
 **What changed:** presentation only. Card contents, calculations, attention rules, routes, quick actions, recent expenses, View all, and Subscriptions are unchanged.

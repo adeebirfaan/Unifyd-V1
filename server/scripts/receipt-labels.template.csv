@@ -1,0 +1,11 @@
+# Copy to server/local-data/receipt-eval/labels.csv (ignored by Git) and add one row per image.
+# file:      image file name in local-data/receipt-eval/images/
+# type:      chain_retail | food_beverage | local_shop | handwritten | digital | other
+# condition: clean | hard   (hard = crumpled, faded, angled, shadowed, blurry, or cut off)
+# merchant:  the shop's trading name as printed at the top, without branch or "Sdn Bhd"
+#            (e.g. Tealive, not "Tealive @ UMP Pekan"). Use quotes if it has a comma.
+# date:      purchase date as YYYY-MM-DD; blank if the receipt shows no date
+# total:     the amount actually paid (after rounding/discount), e.g. 12.60; blank if none
+file,type,condition,merchant,date,total
+r001.jpg,chain_retail,clean,KK Mart,2026-10-12,5.70
+r002.jpg,handwritten,hard,"Kedai Runcit Ali, Pekan",,88.00

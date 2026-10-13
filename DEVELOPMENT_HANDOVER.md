@@ -74,12 +74,9 @@ npm run eval:receipts -- --final                      # ONLY for the final repor
 
 ## Git status (end of 2026-10-14)
 
-- **Branch:** `main`. **HEAD:** `a5280d5` ("Receipt OCR: purchase date from context…"), identical to `origin/main`.
-- **Uncommitted, for review:**
-  - code: `mobile/components/home/InsightDeck.tsx`, `mobile/constants/reminder-timing.ts`, `mobile/lib/poofFacts.ts`;
-  - docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`, `UNIFYD_SDD.md`, `UNIFYD_SRS.md`, `server/README.md`;
-  - new: `DEVELOPMENT_HANDOVER.md`.
-- **Other branches:** `ocr-improvements`, `feature/wallet-studies-refresh`, and the older `feature/*` branches are already in `main`; `origin/claude/upbeat-clarke-chzhwi` is unmerged (see Known issues).
+- **Branch:** `main`, pushed to `origin/main`; **nothing uncommitted**. The last commits are this handover update, `6ec2a0d` (merge of `claude/upbeat-clarke-chzhwi`, which keeps its receipt-evaluation history), and `f492668` (maintenance: cleanup, docs sync, handover). Check with `git log --oneline -5`.
+- **Branches:** only `main`, locally and on GitHub. All feature branches were fully merged and then deleted on 2026-10-14; their commits remain in `main`'s history.
+- **Git-ignored and kept locally:** `.env` files, `server/local-data/` and `local data/` (receipt data), `local-assets/`, build output.
 
 ## Continuation prompt
 
@@ -87,12 +84,11 @@ npm run eval:receipts -- --final                      # ONLY for the final repor
 Continue Unifyd development from DEVELOPMENT_HANDOVER.md (2026-10-14). Read it, CLAUDE.md, and the
 "Handover summary" at the top of PROJECT_PROGRESS.md first.
 
-State: branch main at a5280d5 (= origin/main), with uncommitted maintenance changes listed under
-"Git status" in the handover. All features are implemented and pass automated tests (e2e 82, mobile
-unit 103, server 93). Receipt OCR parser improved (development all-three 78.6%, 0 silent); final
-evaluation not yet run.
+State: branch main (= origin/main), working tree clean, only the main branch left. All features are
+implemented and pass automated tests (e2e 82, mobile unit 103, server 93). Receipt OCR parser improved
+(development all-three 78.6%, 0 silent); final evaluation not yet run.
 
-First: run `git status` and confirm the uncommitted files match the handover; do not discard them.
+First: run `git status` and `git log --oneline -5` and confirm they match the handover.
 Then help me with the next recommended task: a phone check of receipt OCR with the new parser
 (restart the server, scan receipts, record wrong or flagged fields). Do not change the parser on
 the basis of the held-out or final receipts, do not run --final, and do not commit, push, run SQL,

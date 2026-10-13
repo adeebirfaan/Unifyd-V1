@@ -8,7 +8,11 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test src/*.test.ts"
+    "test": "tsx --test src/*.test.ts",
+    "eval:receipts:ocr": "tsx scripts/receipt-ocr-cache.ts",
+    "eval:receipts": "tsx scripts/receipt-eval.ts",
+    "eval:receipts:setup": "tsx scripts/receipt-eval-setup.ts",
+    "eval:receipts:run": "tsx scripts/receipt-eval-setup.ts && tsx scripts/receipt-ocr-cache.ts && tsx scripts/receipt-eval.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.5",

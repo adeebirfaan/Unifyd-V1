@@ -25,7 +25,8 @@ export const TIMETABLE_MAX_PDF_PAGES = 3;
 
 export type OcrDependencies = {
   verifyToken: (token: string) => Promise<boolean>;
-  detectText: (image: Buffer) => Promise<string>;
+  /** Vision text, optionally with the word boxes from the same call (used to pair receipt labels with amounts). */
+  detectText: (image: Buffer) => Promise<string | { text: string; pages?: OcrPage[] }>;
   insights?: InsightDependencies;
   poof?: PoofDependencies;
   categories?: CategoryDependencies;
@@ -168,8 +169,9 @@ export function createApp({ verifyToken, detectText, insights, poof, readTimetab
         return errorResponse(response, 415, 'UNSUPPORTED_IMAGE', 'Use a valid JPEG, PNG, or WEBP image.');
       }
       try {
-        const text = await detectText(image.buffer);
-        response.json(parseReceiptText(text));
+        const detected = await detectText(image.buffer);
+        const { text, pages } = typeof detected === 'string' ? { text: detected, pages: undefined } : detected;
+        response.json(parseReceiptText(text, pages));
       } catch {
         // Provider details, image content and access tokens must not reach clients or logs.
         errorResponse(response, 502, 'OCR_UNAVAILABLE', 'The receipt could not be read. Please retry or enter it manually.');

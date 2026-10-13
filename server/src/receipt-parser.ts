@@ -1,4 +1,7 @@
+import { receiptRows } from './receipt-layout.js';
 import { extractMerchant } from './receipt-merchant.js';
+import { extractTotal } from './receipt-total.js';
+import type { OcrPage } from './timetable-parser.js';
 
 export type ReceiptResult = {
   merchantName: string | null;
@@ -23,49 +26,23 @@ function extractDate(text: string): string | null {
   return validDate(year < 100 ? 2000 + year : year, Number(local[2]), Number(local[1]));
 }
 
-function extractAmount(lines: string[]): { value: number | null; needsReview: boolean } {
-  // Prefer a labelled payable total. Subtotals, tax and change are never used as fallbacks.
-  for (let index = lines.length - 1; index >= 0; index -= 1) {
-    const line = lines[index]!;
-    if (!/\b(grand\s*total|total\s*(?:due|payable|amount)?|amount\s*due|jumlah(?:\s*bayaran)?)\b/i.test(line)
-      || /\b(sub\s*total|subtotal|tax|sst|change|baki)\b/i.test(line)) continue;
-    // Vision often places the payable amount on the line below its label.
-    // Only use that line when it contains an amount alone, so another field
-    // cannot accidentally become the total.
-    const next = lines[index + 1];
-    const sources = [line, /^(?:RM\s*)?\d[\d,]*(?:\.\d{2})?(?:\s*\/[=-]?)?\s*$/i.test(next ?? '') ? next! : null];
-    for (const source of sources) {
-      if (!source) continue;
-      const decimals = [...source.matchAll(/(?:RM\s*)?(\d{1,3}(?:,\d{3})*|\d+)\.(\d{2})\b/gi)];
-      const decimal = decimals.at(-1);
-      if (decimal) {
-        const value = Number(`${decimal[1]!.replaceAll(',', '')}.${decimal[2]}`);
-        if (value > 0 && Number.isFinite(value)) return { value, needsReview: false };
-      }
-      // Handwritten receipts may write RM88 as "88/=". Treat an integer
-      // only next to a total label as a draft and explicitly ask for review.
-      const integer = source.match(/(?:^|[\s:])(?:RM\s*)?(\d{1,3}(?:,\d{3})*|\d+)(?:\s*\/[=-]?)?\s*$/i);
-      if (integer) {
-        const value = Number(integer[1]!.replaceAll(',', ''));
-        if (value > 0 && Number.isFinite(value)) return { value, needsReview: true };
-      }
-    }
-  }
-  return { value: null, needsReview: true };
-}
-
-export function parseReceiptText(rawText: string): ReceiptResult {
+/**
+ * Reads merchant, date, and total from Vision's text. `pages` (word boxes from the same Vision call) let the
+ * parser rebuild printed rows; without them it uses the text order alone.
+ */
+export function parseReceiptText(rawText: string, pages?: readonly OcrPage[]): ReceiptResult {
   const text = rawText.trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const rows = receiptRows(pages);
   const merchant = extractMerchant(lines);
   const merchantName = merchant.value;
   const purchaseDate = extractDate(text);
-  const amount = extractAmount(lines);
-  const totalAmount = amount.value;
+  const total = extractTotal(lines, rows, text);
+  const totalAmount = total.value;
   const warnings: string[] = [];
   if (!text) warnings.push('No readable text was detected.');
   if (!merchantName || merchant.review) warnings.push('Merchant name needs review.');
   if (!purchaseDate) warnings.push('Purchase date needs review.');
-  if (amount.needsReview) warnings.push('Total amount needs review.');
+  if (totalAmount === null || total.review) warnings.push('Total amount needs review.');
   return { merchantName, purchaseDate, totalAmount, rawText: text, warnings };
 }

@@ -1,3 +1,5 @@
+import { extractMerchant } from './receipt-merchant.js';
+
 export type ReceiptResult = {
   merchantName: string | null;
   purchaseDate: string | null;
@@ -52,27 +54,17 @@ function extractAmount(lines: string[]): { value: number | null; needsReview: bo
   return { value: null, needsReview: true };
 }
 
-function extractMerchant(lines: string[]): string | null {
-  const first = lines.findIndex((line) => /[\p{L}]/u.test(line) && !/^(receipt|resit|invoice|tax invoice|date|tarikh)\b/i.test(line));
-  if (first < 0) return null;
-  const prefix = lines[first]!;
-  if (!/^M\/S\.?$/i.test(prefix)) return prefix;
-  const name = lines[first + 1];
-  if (!name || !/^[\p{L}][\p{L} .'-]*$/u.test(name) || /^(?:no|date|tarikh|quantity|amount)\b/i.test(name)) return prefix;
-  const continuation = lines[first + 2];
-  return `${prefix} ${name}${continuation && /^(?:BT\.?|BINTI|BIN|SDN\.?|BHD\.?)(?:\s|$)/i.test(continuation) ? ` ${continuation}` : ''}`;
-}
-
 export function parseReceiptText(rawText: string): ReceiptResult {
   const text = rawText.trim();
   const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
-  const merchantName = extractMerchant(lines);
+  const merchant = extractMerchant(lines);
+  const merchantName = merchant.value;
   const purchaseDate = extractDate(text);
   const amount = extractAmount(lines);
   const totalAmount = amount.value;
   const warnings: string[] = [];
   if (!text) warnings.push('No readable text was detected.');
-  if (!merchantName) warnings.push('Merchant name needs review.');
+  if (!merchantName || merchant.review) warnings.push('Merchant name needs review.');
   if (!purchaseDate) warnings.push('Purchase date needs review.');
   if (amount.needsReview) warnings.push('Total amount needs review.');
   return { merchantName, purchaseDate, totalAmount, rawText: text, warnings };

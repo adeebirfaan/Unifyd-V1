@@ -45,6 +45,18 @@ test('one authenticated receipt returns only reviewable fields', async () => {
   });
 });
 
+test('word boxes from the same Vision call pair a column-ordered total; the response fields are unchanged', async () => {
+  // Vision read this two-column receipt column by column: labels first, then amounts.
+  const text = 'Kedai Buku UMPSA\nDate: 08/10/2026 10:15\nTotal\nCash\n12.50\n20.00';
+  const word = (value: string, x0: number, y0: number) => ({ text: value, x0, y0, x1: x0 + 40, y1: y0 + 12, block: 1 });
+  const pages = [{ text, words: [word('Kedai', 0, 0), word('Buku', 50, 0), word('UMPSA', 100, 0), word('Date:', 0, 30), word('08/10/2026', 50, 30),
+    word('10:15', 100, 30), word('Total', 0, 60), word('Cash', 0, 90), word('12.50', 300, 60), word('20.00', 300, 90)] }];
+  const withBoxes = createApp({ verifyToken: async () => true, detectText: async () => ({ text, pages }) });
+  const response = await request(withBoxes).post('/api/ocr/receipt').set('Authorization', 'Bearer valid-test-token')
+    .attach('image', jpeg, { filename: 'receipt.jpg', contentType: 'image/jpeg' }).expect(200);
+  assert.deepEqual(response.body, { merchantName: 'Kedai Buku UMPSA', purchaseDate: '2026-10-08', totalAmount: 12.5, rawText: text, warnings: [] });
+});
+
 test('missing, multiple, wrong-field, invalid-type and oversized uploads fail safely', async () => {
   const route = () => request(app).post('/api/ocr/receipt').set('Authorization', 'Bearer valid-test-token');
   await route().field('note', 'unexpected').expect(400);

@@ -16,6 +16,8 @@ import { prepareReceiptImage } from '@/lib/receiptImageTools';
 import { ReceiptOcrError, scanReceipt } from '@/lib/receiptOcr';
 import type { ReceiptOcrErrorCode, ReceiptOcrResult } from '@/lib/receiptOcr';
 import { READING_SLOW_MS, remainingMinimumMs } from '@/lib/scanFlow';
+import { formatScanTiming } from '@/lib/scanTiming';
+import type { PrepareTiming, UploadTiming } from '@/lib/scanTiming';
 import { supabase } from '@/lib/supabase';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useAuth } from '@/providers/AuthProvider';
@@ -29,6 +31,8 @@ const errorKeys: Record<ReceiptOcrErrorCode, TranslationKey> = {
 // Sending the same prepared photo again can help with these; the others need another photo or a sign-in.
 const RETRYABLE = new Set<ReceiptOcrErrorCode>(['unavailable', 'network', 'timeout']);
 const wait = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
+// Stage timing in the Metro log (durations and sizes only). Development builds only, and only with EXPO_PUBLIC_SCAN_TIMING=1.
+const SCAN_TIMING = __DEV__ && process.env.EXPO_PUBLIC_SCAN_TIMING === '1';
 
 type Step = 'start' | 'reading' | 'review';
 type ScanError = { key: TranslationKey; canRetry: boolean };
@@ -55,6 +59,8 @@ export default function ScanReceiptScreen() {
   const [discardOpen, setDiscardOpen] = useState(false);
   // The current Reading run. A newer run (Retry, Cancel, leaving) makes every older reply stale.
   const run = useRef<{ id: number; controller: AbortController | null; slowTimer: ReturnType<typeof setTimeout> | null }>({ id: 0, controller: null, slowTimer: null });
+  // The current run's stage timings (only filled in when SCAN_TIMING is on).
+  const timing = useRef<{ prepare?: PrepareTiming & { totalMs: number }; upload?: UploadTiming }>({});
 
   const stopRun = useCallback(() => {
     run.current.id += 1;
@@ -67,6 +73,7 @@ export default function ScanReceiptScreen() {
 
   function beginReading(nextPhase: 'preparing' | 'reading') {
     stopRun();
+    timing.current = {};
     const id = run.current.id;
     setError(null); setSlow(false); setPhase(nextPhase); setStep('reading');
     run.current.slowTimer = setTimeout(() => { if (run.current.id === id) setSlow(true); }, READING_SLOW_MS);
@@ -74,9 +81,11 @@ export default function ScanReceiptScreen() {
   }
 
   /** Shows the outcome once Reading has been visible for its minimum time, unless a newer run took over. */
-  async function finish(id: number, startedAt: number, show: () => void) {
-    await wait(remainingMinimumMs(startedAt, Date.now()));
+  async function finish(id: number, startedAt: number, show: () => void, outcome: string) {
+    const minWaitMs = remainingMinimumMs(startedAt, Date.now());
+    await wait(minWaitMs);
     if (run.current.id !== id) return;
+    if (SCAN_TIMING) console.info(formatScanTiming({ ...timing.current, minWaitMs, totalMs: Date.now() - startedAt, outcome }));
     if (run.current.slowTimer) clearTimeout(run.current.slowTimer);
     run.current.slowTimer = null;
     run.current.controller = null;
@@ -89,12 +98,12 @@ export default function ScanReceiptScreen() {
     const controller = new AbortController();
     run.current.controller = controller;
     try {
-      const scanned = await scanReceipt(prepared, { signal: controller.signal });
-      await finish(id, startedAt, () => { setResult(scanned); setStep('review'); });
+      const scanned = await scanReceipt(prepared, { signal: controller.signal, onTiming: SCAN_TIMING ? (upload) => { timing.current.upload = upload; } : undefined });
+      await finish(id, startedAt, () => { setResult(scanned); setStep('review'); }, 'ok');
     } catch (caught) {
       const code = caught instanceof ReceiptOcrError ? caught.code : 'unavailable';
       if (code === 'cancelled') return;
-      await finish(id, startedAt, () => { setError({ key: errorKeys[code], canRetry: RETRYABLE.has(code) }); setStep('start'); });
+      await finish(id, startedAt, () => { setError({ key: errorKeys[code], canRetry: RETRYABLE.has(code) }); setStep('start'); }, `error:${code}`);
     }
   }
 
@@ -124,10 +133,11 @@ export default function ScanReceiptScreen() {
     let prepared: ReceiptImage;
     try {
       // Camera and library photos (often HEIC and over 5 MB) become an upright JPEG before any check or upload.
-      prepared = await prepareReceiptImage(asset.uri);
+      const prepareStart = Date.now();
+      prepared = await prepareReceiptImage(asset.uri, SCAN_TIMING ? (prepare) => { timing.current.prepare = { ...prepare, totalMs: Date.now() - prepareStart }; } : undefined);
     } catch (caught) {
       const key: TranslationKey = caught instanceof ReceiptImageError && caught.code === 'tooLarge' ? 'scan.tooLarge' : 'scan.prepareError';
-      await finish(id, startedAt, () => { setError({ key, canRetry: false }); setStep('start'); });
+      await finish(id, startedAt, () => { setError({ key, canRetry: false }); setStep('start'); }, 'error:prepare');
       return;
     }
     if (run.current.id !== id) return;

@@ -2,6 +2,8 @@
 // server (JPEG, PNG, or WEBP up to 5 MiB) rejects, so every picked photo becomes an upright JPEG first.
 // Pure: the image work is injected (lib/receiptImageTools.ts on the device), so Node tests can run it.
 
+import type { PrepareTiming } from '@/lib/scanTiming';
+
 export const RECEIPT_MAX_BYTES = 5 * 1024 * 1024;
 /** Longest side after preparation. Large enough for OCR; smaller images read receipt text noticeably worse. */
 export const RECEIPT_MAX_EDGE = 2400;
@@ -39,10 +41,20 @@ export function receiptTargetSize(width: number, height: number, maxEdge = RECEI
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
-export async function normalizeReceiptImage<Decoded extends ReceiptImageSize>(uri: string, tools: ReceiptImageTools<Decoded>): Promise<ReceiptImage> {
+/** `onTiming` (optional, for scan timing) receives the decode and encode durations and the result's size. */
+export async function normalizeReceiptImage<Decoded extends ReceiptImageSize>(uri: string, tools: ReceiptImageTools<Decoded>,
+  onTiming?: (timing: PrepareTiming) => void, now: () => number = () => performance.now()): Promise<ReceiptImage> {
   let decoded: Decoded;
+  const started = now();
+  let decodeMs = 0;
+  const encodeMs: number[] = [];
+  const timedEncode = async (image: Decoded, size: ReceiptImageSize | null, quality: number) => {
+    const start = now();
+    try { return await tools.encode(image, size, quality); } finally { encodeMs.push(now() - start); }
+  };
   try {
     decoded = await tools.decode(uri);
+    decodeMs = now() - started;
   } catch {
     throw new ReceiptImageError('conversionFailed');
   }
@@ -51,14 +63,15 @@ export async function normalizeReceiptImage<Decoded extends ReceiptImageSize>(ur
     const size = receiptTargetSize(decoded.width, decoded.height);
     let encoded: EncodedImage;
     try {
-      encoded = await tools.encode(decoded, size, RECEIPT_JPEG_QUALITY);
+      encoded = await timedEncode(decoded, size, RECEIPT_JPEG_QUALITY);
       // Same size, lower quality: dense receipts at 2400 px are rarely this large, and the text stays readable.
-      if (encoded.size > RECEIPT_MAX_BYTES) encoded = await tools.encode(decoded, size, RECEIPT_RETRY_QUALITY);
+      if (encoded.size > RECEIPT_MAX_BYTES) encoded = await timedEncode(decoded, size, RECEIPT_RETRY_QUALITY);
     } catch {
       throw new ReceiptImageError('conversionFailed');
     }
     if (!(encoded.size > 0)) throw new ReceiptImageError('conversionFailed');
     if (encoded.size > RECEIPT_MAX_BYTES) throw new ReceiptImageError('tooLarge');
+    onTiming?.({ decodeMs, encodeMs, width: encoded.width, height: encoded.height, bytes: encoded.size });
     return { uri: encoded.uri, width: encoded.width, height: encoded.height, size: encoded.size, mimeType: 'image/jpeg', fileName: 'receipt.jpg', file: encoded.file };
   } finally {
     try { tools.release?.(decoded); } catch { /* releasing native memory is best effort */ }

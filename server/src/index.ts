@@ -7,6 +7,7 @@ import { loadExpenseHistory } from './expense-history.js';
 import { loadInsightFacts } from './insight-data.js';
 import { requestGroqSummary } from './insight-summary.js';
 import { POOF_REPLY_FORMAT } from './poof-chat.js';
+import { createScanTiming } from './scan-timing.js';
 import { pagesFromAnnotation, readTimetableWithVision } from './timetable-vision.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
@@ -23,8 +24,11 @@ const host = process.env.OCR_HOST?.trim() || '127.0.0.1';
 const supabase = createClient(url, publishableKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
-// Application Default Credentials are discovered by the official Google client library.
+// Application Default Credentials are discovered by the official Google client library. One client is created at
+// start-up and reused, so its access token and connection are reused too (the first scan sets them up).
 const visionClient = new vision.ImageAnnotatorClient();
+// Per-scan stage timing in the server log (durations only). Off unless SCAN_TIMING=1, and never in production.
+const scanTimingEnabled = process.env.SCAN_TIMING?.trim() === '1' && process.env.NODE_ENV !== 'production';
 // Groq is optional. Without a key, the insights endpoint still returns verified facts with a fallback.
 const groqApiKey = process.env.GROQ_API_KEY?.trim();
 const groqModel = process.env.GROQ_MODEL?.trim() || 'openai/gpt-oss-20b';
@@ -50,8 +54,9 @@ const app = createApp({
   },
   // Local Naive Bayes model only; never Groq. History is read with the caller's own token.
   categories: { loadHistory: (token) => loadExpenseHistory(url, publishableKey, token) },
+  scanTimer: createScanTiming({ enabled: scanTimingEnabled }),
 });
 
 app.listen(port, host, () => {
-  console.info(`Unifyd service listening on ${host}:${port} (AI summaries and Poof replies ${groqApiKey ? 'enabled' : 'not configured'})`);
+  console.info(`Unifyd service listening on ${host}:${port} (AI summaries and Poof replies ${groqApiKey ? 'enabled' : 'not configured'}${scanTimingEnabled ? '; scan timing on' : ''})`);
 });

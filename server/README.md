@@ -12,6 +12,14 @@ The default listener is `127.0.0.1:3001`. For a physical phone on the same trust
 
 For phone testing, start this server with `npm start` from `server/`, then start Expo from `mobile/`. The phone and computer need a reachable local network path when the OCR URL uses a private address. A phone providing a hotspot to the computer may work too; its cellular indicator is expected. From the phone's browser, open `<EXPO_PUBLIC_OCR_API_URL>/health` to verify routing and firewall access. It should show `{ "status": "ok" }` before attempting a scan. After changing `mobile/.env`, fully reload Expo Go or the development build so the new `EXPO_PUBLIC_OCR_API_URL` is included in its JavaScript bundle. An installed production build needs a rebuild or an update made with the intended environment value. The URL contains no Supabase or Google credentials.
 
+## Scan timing (measurement only)
+
+Set `SCAN_TIMING=1` in `server/.env` and restart the server to log one line per receipt scan, for example
+`[scan-timing] scan=1 first=yes status=200 bytes=1268000 auth=180ms upload=95ms vision=1830ms parse=4ms items=1ms total=2110ms`.
+`auth` is the Supabase sign-in check, `upload` the time to receive the image, `vision` the Google Vision call, `parse` and `items` the local parsing, and `first=yes` marks the first scan since the server started (it includes setting up the Google connection and access token). Only durations, the status code, and the image size in bytes are logged: never image content, OCR text, tokens, or user data. It is off by default and ignored when `NODE_ENV=production`. The Vision and Supabase clients are created once at start-up and reused.
+
+`npm run timing:receipts:parse` times the parser alone on the cached OCR of the development receipts (no network, no Vision; held-out and final receipts are never read).
+
 ## Endpoints
 
 - `GET /health` returns `{ "status": "ok" }`.

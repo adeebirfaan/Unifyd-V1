@@ -14,7 +14,8 @@
     "eval:receipts:setup": "tsx scripts/receipt-eval-setup.ts",
     "eval:receipts:run": "tsx scripts/receipt-eval-setup.ts && tsx scripts/receipt-ocr-cache.ts && tsx scripts/receipt-eval.ts",
     "eval:receipts:final-setup": "tsx scripts/receipt-eval-setup.ts --final && tsx scripts/receipt-ocr-cache.ts --final",
-    "eval:receipts:final-check": "tsx scripts/receipt-final-check.ts"
+    "eval:receipts:final-check": "tsx scripts/receipt-final-check.ts",
+    "timing:receipts:parse": "tsx scripts/receipt-parse-timing.ts"
   },
   "dependencies": {
     "@google-cloud/vision": "^5.3.5",

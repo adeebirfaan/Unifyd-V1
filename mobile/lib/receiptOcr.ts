@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 
 import type { ReceiptImage } from '@/lib/receiptImage';
 import { receiptItems } from '@/lib/scanFlow';
+import type { UploadTiming } from '@/lib/scanTiming';
 import type { ReceiptItem } from '@/lib/scanFlow';
 import { supabase } from '@/lib/supabase';
 
@@ -58,15 +59,18 @@ function isResult(value: unknown): value is Omit<ReceiptOcrResult, 'items'> & { 
 /**
  * Uploads a photo already prepared by `prepareReceiptImage` (an upright JPEG named receipt.jpg).
  * `signal` cancels the request (Back or Retry during Reading); it then fails with `cancelled`.
+ * `onTiming` (optional, for scan timing) receives the sign-in lookup and the upload-plus-server durations.
  */
-export async function scanReceipt(image: ReceiptImage, { signal }: { signal?: AbortSignal } = {}): Promise<ReceiptOcrResult> {
+export async function scanReceipt(image: ReceiptImage, { signal, onTiming }: { signal?: AbortSignal; onTiming?: (timing: UploadTiming) => void } = {}): Promise<ReceiptOcrResult> {
   const baseUrl = ocrBaseUrl();
   if (!baseUrl) throw new ReceiptOcrError('notConfigured');
   const mime = image.mimeType;
   if (!ACCEPTED_TYPES.has(mime)) throw new ReceiptOcrError('invalidImage');
   if (image.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
 
+  const sessionStart = performance.now();
   const { data, error } = await supabase.auth.getSession();
+  const sessionMs = performance.now() - sessionStart;
   if (error || !data.session?.access_token) throw new ReceiptOcrError('authRequired');
   if (signal?.aborted) throw new ReceiptOcrError('cancelled');
 
@@ -78,6 +82,7 @@ export async function scanReceipt(image: ReceiptImage, { signal }: { signal?: Ab
   signal?.addEventListener('abort', cancel);
   // A failure while sending is a cancellation, a timeout, or an upload (network) problem; never a reading failure.
   const sendFailed = () => new ReceiptOcrError(signal?.aborted ? 'cancelled' : timedOut ? 'timeout' : 'network');
+  const requestStart = performance.now();
   try {
     let status: number;
     let body: unknown;
@@ -135,5 +140,6 @@ export async function scanReceipt(image: ReceiptImage, { signal }: { signal?: Ab
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener('abort', cancel);
+    onTiming?.({ sessionMs, requestMs: performance.now() - requestStart });
   }
 }

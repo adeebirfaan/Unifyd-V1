@@ -156,6 +156,31 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt scan speed: stage timing (measurement only)
+
+**Requirements implemented:**
+- None (measurement). No behaviour, parser, response, image-quality, or evaluation change.
+
+**Changed files:**
+- Server: `server/src/scan-timing.ts` (new), `server/src/scan-timing.test.ts` (new), `server/src/app.ts` (receipt route marks stages), `server/src/index.ts` (`SCAN_TIMING` flag), `server/scripts/receipt-parse-timing.ts` (new), `server/package.json` (`timing:receipts:parse`), `server/.env.example`, `server/README.md`.
+- Mobile: `mobile/lib/scanTiming.ts` (new), `mobile/tests/scanTiming.test.mjs` (new), `mobile/lib/receiptImage.ts` and `receiptImageTools.ts` (optional decode/encode timing callback), `mobile/lib/receiptOcr.ts` (optional session and upload+server timing), `mobile/app/scan-receipt.tsx` (one Metro log line per scan), `mobile/.env.example`.
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Server, with `SCAN_TIMING=1` (off by default, ignored in production): one log line per receipt request with auth, upload, Vision, parse, items, and total durations, the status, the image size, and whether it is the first scan since start. The Vision and Supabase clients are created once and reused; the first scan includes the Google connection and token setup.
+- Mobile, with `EXPO_PUBLIC_SCAN_TIMING=1` in a development build: one Metro log line per scan with prepare (decode and each encode), the image size and dimensions sent, the sign-in lookup, upload+server, the minimum-time wait, the total, and the outcome.
+- Hosting: the server runs on the owner's Windows PC (`npm start`, LAN address); there is no cloud deployment, so no idle sleep, but the first scan after a restart sets up the Google connection.
+
+**Tests performed:**
+- Parser timing on cached OCR, 42 development receipts, 50 warm runs each (two runs): parse first call median 0.58–0.65 ms (max 4.65 ms); warm median 0.24–0.25 ms (p95 1.7 ms); items warm median 0.15 ms (p95 0.4 ms).
+- Server typecheck, **113/113** (3 new), build; a real start with `SCAN_TIMING=1` logged `[scan-timing] scan=1 first=yes status=401 total=0ms` for an unauthenticated request (no Vision call).
+- Mobile typecheck and lint clean; unit **120/120** (2 new); Playwright `scanFlow` + `unifyd` 18/18 (timing off).
+- `npm run eval:receipts:run` byte-identical to `reports/dev-after-improvements.txt`.
+- Not executed: a timed scan on the iPhone (owner to run), any Vision call.
+
+**Next action:**
+- Owner runs timed scans on the iPhone; then choose fixes from the ranked list.
+
 ### 2026-10-14 — Receipt scan flow: finish, minimal Start text, merge to main (Phase D)
 
 **Requirements implemented:**

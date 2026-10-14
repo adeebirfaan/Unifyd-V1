@@ -11,6 +11,8 @@ import { GroqError, groqMessages, groqPayload, validateSummary } from './insight
 import type { GroqMessage, InsightSummary, SummaryLanguage } from './insight-summary.js';
 import { isCrisisMessage, parsePoofRequest, poofMessages, validatePoofReply } from './poof-chat.js';
 import { withReceiptItems } from './receipt-items.js';
+import { createScanTiming } from './scan-timing.js';
+import type { ScanTimer } from './scan-timing.js';
 import { parseReceiptText } from './receipt-parser.js';
 import { parseTimetable } from './timetable-parser.js';
 import type { OcrPage } from './timetable-parser.js';
@@ -31,6 +33,8 @@ export type OcrDependencies = {
   insights?: InsightDependencies;
   poof?: PoofDependencies;
   categories?: CategoryDependencies;
+  /** Optional per-scan stage timing (durations only); off unless the server sets SCAN_TIMING=1. */
+  scanTimer?: () => ScanTimer;
   /** Reads a timetable image or PDF in memory; throws TimetableDocumentError for unreadable PDFs. */
   readTimetable?: (file: Buffer, kind: 'image' | 'pdf') => Promise<{ pages: OcrPage[]; totalPages: number }>;
 };
@@ -102,7 +106,7 @@ function parseCategoryRequest(body: unknown): string | null {
   return trimmed && trimmed.length <= MAX_TITLE_LENGTH ? trimmed : null;
 }
 
-export function createApp({ verifyToken, detectText, insights, poof, readTimetable, categories }: OcrDependencies) {
+export function createApp({ verifyToken, detectText, insights, poof, readTimetable, categories, scanTimer = createScanTiming({ enabled: false }) }: OcrDependencies) {
   const app = express();
   app.disable('x-powered-by');
   // Identical facts reuse a recent summary so refreshes do not repeatedly call Groq.
@@ -145,6 +149,9 @@ export function createApp({ verifyToken, detectText, insights, poof, readTimetab
   app.get('/health', (_request, response) => response.json({ status: 'ok' }));
 
   app.post('/api/ocr/receipt', async (request: Request, response: Response) => {
+    // Timing only records durations; every exit (success or error) ends it once with the status code.
+    const timer = scanTimer();
+    response.on('finish', () => timer.end(response.statusCode));
     const token = bearerToken(request);
     if (!token) return errorResponse(response, 401, 'UNAUTHORIZED', 'A valid sign-in is required.');
     try {
@@ -152,9 +159,11 @@ export function createApp({ verifyToken, detectText, insights, poof, readTimetab
     } catch {
       return errorResponse(response, 503, 'AUTH_UNAVAILABLE', 'Sign-in verification is unavailable. Please retry.');
     }
+    timer.stage('auth');
     if (!request.is('multipart/form-data')) return errorResponse(response, 415, 'INVALID_UPLOAD', 'Send one receipt image as multipart form data.');
 
     upload(request, response, async (uploadError?: unknown) => {
+      timer.stage('upload');
       if (uploadError) {
         if (uploadError instanceof multer.MulterError && uploadError.code === 'LIMIT_FILE_SIZE') {
           return errorResponse(response, 413, 'IMAGE_TOO_LARGE', 'The image must be 5 MB or smaller.');
@@ -166,14 +175,20 @@ export function createApp({ verifyToken, detectText, insights, poof, readTimetab
       }
       const image = request.file;
       if (!image || image.size === 0) return errorResponse(response, 400, 'MISSING_IMAGE', 'Choose a receipt image.');
+      timer.bytes(image.size);
       if (actualMime(image.buffer) !== image.mimetype) {
         return errorResponse(response, 415, 'UNSUPPORTED_IMAGE', 'Use a valid JPEG, PNG, or WEBP image.');
       }
       try {
         const detected = await detectText(image.buffer);
+        timer.stage('vision');
         const { text, pages } = typeof detected === 'string' ? { text: detected, pages: undefined } : detected;
+        const parsed = parseReceiptText(text, pages);
+        timer.stage('parse');
         // Items are added after parsing; merchant, date, and total come from the parser unchanged.
-        response.json(withReceiptItems(parseReceiptText(text, pages), pages));
+        const body = withReceiptItems(parsed, pages);
+        timer.stage('items');
+        response.json(body);
       } catch {
         // Provider details, image content and access tokens must not reach clients or logs.
         errorResponse(response, 502, 'OCR_UNAVAILABLE', 'The receipt could not be read. Please retry or enter it manually.');

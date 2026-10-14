@@ -5,6 +5,7 @@ import { Platform } from 'react-native';
 
 import { normalizeReceiptImage } from '@/lib/receiptImage';
 import type { ReceiptImage, ReceiptImageTools } from '@/lib/receiptImage';
+import type { PrepareTiming } from '@/lib/scanTiming';
 
 // The manipulator reads HEIC and applies EXIF orientation while decoding (iOS fixes it explicitly, Android's
 // Glide loader and the browser apply it), so the saved JPEG is upright and carries no orientation tag.
@@ -30,6 +31,6 @@ const tools: ReceiptImageTools<ImageRef> = {
 };
 
 /** Turns a picked camera or library photo into an upright JPEG of at most 2400 px and 5 MB, ready for OCR. */
-export function prepareReceiptImage(uri: string): Promise<ReceiptImage> {
-  return normalizeReceiptImage(uri, tools);
+export function prepareReceiptImage(uri: string, onTiming?: (timing: PrepareTiming) => void): Promise<ReceiptImage> {
+  return normalizeReceiptImage(uri, tools, onTiming);
 }

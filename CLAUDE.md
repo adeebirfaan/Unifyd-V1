@@ -77,7 +77,7 @@ npm run eval:receipts:final-setup                     # final test set in local-
 npm run eval:receipts:final-check                     # final labels format check only; never runs the parser
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 118, server 110, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 120, server 113, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -294,9 +294,9 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 - Receipt evaluation data lives only in git-ignored `server/local-data/receipt-eval/` (images, `labels.csv`, `ocr/` cache); originals are also in `local data/receipt-eval/images`. Never commit or delete them.
 
 **Environment variable names (never print values):**
-- `mobile/.env`: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_OCR_API_URL`.
+- `mobile/.env`: `EXPO_PUBLIC_SUPABASE_URL`, `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `EXPO_PUBLIC_OCR_API_URL`, optional `EXPO_PUBLIC_SCAN_TIMING` (1 = scan stage timings in the Metro log, development builds only).
 - `mobile/.env.test`: `E2E_TEST_EMAIL`, `E2E_TEST_PASSWORD`.
-- `server/.env`: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `GROQ_API_KEY` (optional), `GROQ_MODEL`, `PORT`, `OCR_HOST`, `OCR_ALLOWED_ORIGINS`.
+- `server/.env`: `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `GROQ_API_KEY` (optional), `GROQ_MODEL`, `PORT`, `OCR_HOST`, `OCR_ALLOWED_ORIGINS`, optional `SCAN_TIMING` (1 = per-scan stage durations in the server log via `scan-timing.ts`; off in production).
 
 ## 11. Known document inconsistencies (trust the code and the newest source)
 

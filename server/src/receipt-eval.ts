@@ -65,34 +65,49 @@ const contentLines = (csv: string) => csv.replace(/^\uFEFF/, '').split(/\r?\n/).
 
 /**
  * Reads the labels CSV. Blank lines and lines starting with # are ignored, and a row
- * with only a file name is waiting to be labelled. Throws on any other invalid row.
+ * with only a file name is waiting to be labelled. Every invalid row is listed in `errors`;
+ * `files` names every row's file, valid or not.
  */
-export function parseLabelsCsv(csv: string): { labels: ReceiptLabel[]; pending: string[] } {
+export function readLabelsCsv(csv: string): { labels: ReceiptLabel[]; pending: string[]; errors: string[]; files: string[] } {
   const [header, ...rows] = contentLines(csv);
-  if (!header || splitCsvLine(header.line).join(',') !== LABELS_HEADER) throw new Error(`The first row must be: ${LABELS_HEADER}`);
+  if (!header || splitCsvLine(header.line).join(',') !== LABELS_HEADER) return { labels: [], pending: [], errors: [`The first row must be: ${LABELS_HEADER}`], files: [] };
   const seen = new Set<string>();
   const labels: ReceiptLabel[] = [];
   const pending: string[] = [];
+  const errors: string[] = [];
+  const files: string[] = [];
   for (const { line, number } of rows) {
     const cells = splitCsvLine(line);
-    const fail = (message: string): never => { throw new Error(`Line ${number}: ${message}`); };
-    // Spreadsheet apps may drop or add trailing empty columns.
-    while (cells.length > 6 && !cells[cells.length - 1]) cells.pop();
-    while (cells.length < 6 && cells.length > 0) cells.push('');
-    if (cells.length !== 6) fail(`expected 6 columns, found ${cells.length}`);
-    const [file, type, condition, merchant, date, total] = cells as [string, string, string, string, string, string];
-    if (!file) fail('file is required');
-    if (seen.has(file)) fail(`duplicate file ${file}`);
-    seen.add(file);
-    if (!type && !condition && !merchant && !date && !total) { pending.push(file); continue; }
-    if (!(RECEIPT_TYPES as readonly string[]).includes(type)) fail(`type must be one of ${RECEIPT_TYPES.join(', ')}`);
-    if (!(RECEIPT_CONDITIONS as readonly string[]).includes(condition)) fail('condition must be clean or hard');
-    const parsedDate = date ? labelDate(date) : null;
-    if (date && !parsedDate) fail('date must be a real date as YYYY-MM-DD or DD/MM/YYYY, or blank when the receipt shows none');
-    const amount = total ? Number(total.replace(/^RM\s*/i, '').replace(/,/g, '')) : null;
-    if (amount !== null && !(Number.isFinite(amount) && amount > 0)) fail('total must be a positive number such as 12.50, or blank');
-    labels.push({ file, type: type as ReceiptType, condition: condition as ReceiptCondition, merchant: merchant || null, date: parsedDate, total: amount });
+    if (cells[0]) files.push(cells[0]);
+    // The first problem on a row is reported and the row is skipped.
+    const problem = (() => {
+      // Spreadsheet apps may drop or add trailing empty columns.
+      while (cells.length > 6 && !cells[cells.length - 1]) cells.pop();
+      while (cells.length < 6 && cells.length > 0) cells.push('');
+      if (cells.length !== 6) return `expected 6 columns, found ${cells.length}`;
+      const [file, type, condition, merchant, date, total] = cells as [string, string, string, string, string, string];
+      if (!file) return 'file is required';
+      if (seen.has(file)) return `duplicate file ${file}`;
+      seen.add(file);
+      if (!type && !condition && !merchant && !date && !total) { pending.push(file); return null; }
+      if (!(RECEIPT_TYPES as readonly string[]).includes(type)) return `type must be one of ${RECEIPT_TYPES.join(', ')}`;
+      if (!(RECEIPT_CONDITIONS as readonly string[]).includes(condition)) return 'condition must be clean or hard';
+      const parsedDate = date ? labelDate(date) : null;
+      if (date && !parsedDate) return 'date must be a real date as YYYY-MM-DD or DD/MM/YYYY, or blank when the receipt shows none';
+      const amount = total ? Number(total.replace(/^RM\s*/i, '').replace(/,/g, '')) : null;
+      if (amount !== null && !(Number.isFinite(amount) && amount > 0)) return 'total must be a positive number such as 12.50, or blank';
+      labels.push({ file, type: type as ReceiptType, condition: condition as ReceiptCondition, merchant: merchant || null, date: parsedDate, total: amount });
+      return null;
+    })();
+    if (problem) errors.push(`Line ${number}: ${problem}`);
   }
+  return { labels, pending, errors, files: [...new Set(files)] };
+}
+
+/** As `readLabelsCsv`, but throws on the first invalid row. */
+export function parseLabelsCsv(csv: string): { labels: ReceiptLabel[]; pending: string[] } {
+  const { labels, pending, errors } = readLabelsCsv(csv);
+  if (errors[0]) throw new Error(errors[0]);
   return { labels, pending };
 }
 
@@ -152,17 +167,21 @@ export type ScoredReceipt = {
   label: ReceiptLabel;
   split: 'dev' | 'test';
   outcomes: Record<Field, Outcome>;
+  /** Whether the field's review warning was shown, whatever the outcome. */
+  warned: Record<Field, boolean>;
   got: { merchant: string | null; date: string | null; total: number | null };
 };
 
 export function scoreReceipt(label: ReceiptLabel, result: ReceiptResult): ScoredReceipt {
   const outcomes = {} as Record<Field, Outcome>;
+  const warned = {} as Record<Field, boolean>;
   for (const field of FIELDS) {
     const flagged = result.warnings.some((warning) => WARNING_FOR[field].test(warning));
+    warned[field] = flagged;
     outcomes[field] = fieldCorrect(field, result, label) ? 'correct' : flagged ? 'flagged' : 'silent';
   }
   return {
-    label, split: isTestSample(label.file) ? 'test' : 'dev', outcomes,
+    label, split: isTestSample(label.file) ? 'test' : 'dev', outcomes, warned,
     got: { merchant: result.merchantName, date: result.purchaseDate, total: result.totalAmount },
   };
 }
@@ -188,4 +207,22 @@ export function groupBy<K extends string>(scored: ScoredReceipt[], key: (receipt
   const groups = new Map<K, ScoredReceipt[]>();
   for (const receipt of scored) groups.set(key(receipt), [...(groups.get(key(receipt)) ?? []), receipt]);
   return groups;
+}
+
+export const BREAKDOWN_KINDS = ['correctNoWarning', 'correctWithWarning', 'wrongFlagged', 'wrongSilent', 'blank'] as const;
+export type WarningBreakdown = Record<(typeof BREAKDOWN_KINDS)[number], number>;
+
+/**
+ * How one field's results relate to its review warning. Each receipt counts once: correct without or with a
+ * warning; a wrong value that was flagged or silent; or blank (no value returned although the label has one).
+ */
+export function warningBreakdown(scored: ScoredReceipt[], field: Field): WarningBreakdown {
+  const counts: WarningBreakdown = { correctNoWarning: 0, correctWithWarning: 0, wrongFlagged: 0, wrongSilent: 0, blank: 0 };
+  for (const receipt of scored) {
+    const outcome = receipt.outcomes[field];
+    if (outcome === 'correct') counts[receipt.warned[field] ? 'correctWithWarning' : 'correctNoWarning']++;
+    else if (receipt.got[field] === null) counts.blank++;
+    else counts[outcome === 'flagged' ? 'wrongFlagged' : 'wrongSilent']++;
+  }
+  return counts;
 }

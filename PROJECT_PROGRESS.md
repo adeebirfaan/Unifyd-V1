@@ -156,6 +156,33 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt OCR evaluation: separate final test set
+
+**Requirements implemented:**
+- Phase 9 evaluation tooling (no app, API, parser, label, split, or scoring change).
+
+**Changed files:**
+- `server/scripts/receipt-eval-paths.ts`, `server/scripts/receipt-eval-setup.ts`, `server/scripts/receipt-ocr-cache.ts`, `server/scripts/receipt-eval.ts`, `server/scripts/receipt-final-check.ts` (new), `server/src/receipt-eval.ts`, `server/src/receipt-eval-report.ts` (new), `server/src/receipt-label-check.ts` (new), `server/src/receipt-eval-report.test.ts` (new), `server/package.json`, `server/README.md`.
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- New folder `server/local-data/receipt-eval/final/` (`images/`, `labels.csv`, `ocr/`), ignored by Git through `/local-data/`.
+- `npm run eval:receipts:final-setup`: creates `final/labels.csv` from the same template with one empty row per image, then asks before sending new images to Google Vision (says how many; `-- --yes` when there is no terminal) and caches them in `final/ocr/`.
+- `npm run eval:receipts:final-check`: format-only label check (header, types, conditions, dates, totals, duplicates, waiting rows, unknown and unlisted files, cached-OCR count). It imports no parser code and opens no OCR file.
+- `--final` now prints the held-out split, the final set, and both combined (same columns, per type and condition, plus a per-field warnings breakdown: correct no warning, correct with warning, wrong flagged, wrong silent, blank). It refuses to score an incomplete final set.
+- Report text moved into the pure `receipt-eval-report.ts`; the final set is loaded only through a callback used for `--final`. `readLabelsCsv` collects every invalid row (`parseLabelsCsv` still throws on the first, same messages). `ScoredReceipt` gained `warned` (outcomes unchanged).
+
+**Tests performed:**
+- Server typecheck, **101/101** tests (8 new: normal output never loads or prints the final set, `--final` has all three tables with type/condition/warning rows, incomplete final set stops before output, breakdown totals, all invalid rows listed, label check shows no parser output, check code cannot reach the parser or OCR text, normal scripts open `final/` only with `--final`), build; `scripts/` also type-checked with a temporary config.
+- `npm run eval:receipts:run` output byte-identical to `reports/dev-after-improvements.txt` (and `--json` identical to before); no `final/` folder created.
+- Scratch-copy smoke test (not the real data): final-setup created the labels file and, without a terminal, read no images; final-check reported a bad type and then "Labels OK"; normal output identical with and without `final/`.
+- Not executed: `--final` (reserved for the one final run), any Vision call.
+
+**Issues or decisions:**
+- The label check reports the first problem on each row; fix it and re-run to see the next.
+
+**Next action:**
+- Collect 40–50 new receipts into `final/images/`, run final-setup and final-check, then the single `--final` run.
 ### 2026-10-14 — Receipt OCR: prepare camera and library photos as upright JPEGs before upload
 
 **Requirements implemented:**

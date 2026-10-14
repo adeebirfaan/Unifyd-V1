@@ -453,6 +453,76 @@ Every student has a personal visual identity through an **original illustrated a
 | Mind | Calmer neutral surfaces, mood emojis or icons, low-pressure wording, no alarming graphics |
 | Insights | Three simple cards/panels: finance, academics, wellness; facts first, AI text secondary |
 
+### Receipt scan flow (proposed 2026-10-14, awaiting owner approval)
+
+Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, review form, and the full detected text, one under another). **Principle: the less scrolling needed to finish, the better.** The route, its `budgetPeriod` parameter, and the receipt endpoint stay the same. The screen moves through three steps in place: **Start → Reading → Review**. Structure only was taken from an external reference flow; its colours, fonts, icons, wording, and branding are not used.
+
+**Layout rules (all steps)**
+- Each step fits one standard phone screen (about 844 pt) for a typical receipt. Review may scroll only for a long item list. There is one scroll area, and the primary action never scrolls away.
+- The primary action sits at the bottom in thumb reach, fixed above the safe area and outside the scroll area, as on Add subscription. It is hidden while the keyboard is open, so it never rides over a field.
+- No step shows the raw detected text on the page; it opens in a bottom sheet.
+- At most one `brandGradient` element per step (the Start icon tile). Cards, inputs, and sheets stay dark in both appearances.
+- Back: on Start it leaves the screen; during Reading it cancels the request and returns to Start; on Review it asks "Discard this scan?" (`ConfirmDialog`) before returning to Start.
+
+**Step 1 — Start**
+- Top: the 44 pt back button only. No eyebrow, helper paragraph, empty preview box, or "Extract details" button.
+- Centre: an 88 pt circular tile on `brandGradient` with the Ionicons `scan-outline` glyph in near-black `actionInk`; "Scan a receipt" (screen title, 26/700); one line (body, muted): "Paper receipts, photos, and screenshots. We'll fill in the details for you to check."
+- Privacy line (label, muted, under the description): see Privacy wording.
+- Bottom, in order: **Scan with camera** (primary: white fill, near-black text, camera icon); **Choose photo or screenshot** (secondary: dark surface, border, images icon); **Add expense manually** (44 pt text link, page accent), which opens `/add-expense` with the same `budgetPeriod`.
+- Picking a photo starts Reading at once. The separate preview-then-"Extract details" step is removed.
+- Errors (camera permission, photo could not be prepared, too large, unsupported, sign-in expired, service unavailable) appear as one inline error row above the buttons: an `alert-circle-outline` icon and the existing message text, announced to screen readers. The buttons stay usable.
+
+**Step 2 — Reading**
+- A full-screen state on the page background (nothing half-built behind it): the dotted ring, centred, with the status text below it (section title, 19/700), then a quiet back control.
+- Status text: "Preparing your photo…" while the photo is converted on the device (`prepareReceiptImage`), then "Reading your receipt…" while it uploads and the server reads it. One continuous loading state covers both.
+- **Dotted ring:** 160 pt across; about 48 dots of 2–4 pt in `brandBlue` and `brandCyan`, set in two loose bands around one circle with small random offsets. The outer band turns clockwise once every 6 s, the inner band counter-clockwise once every 9 s, and each dot's opacity drifts between 0.35 and 1 over 1.6–2.4 s at staggered phases, so the dots seem to drift around the circle. It uses React Native `Animated` with the native driver (transform and opacity only), like `PoofMascot`. No new libraries and no native modules.
+- **Timing:**
+  - The Reading state stays visible for **at least 1.2 s** from when it appears, so a fast result never flickers. A result that arrives earlier waits only for the rest of that 1.2 s. There is no other artificial delay.
+  - After **20 s** without a result, the ring keeps moving and a card appears below it: "This is taking longer than usual." with **Retry** (cancels and sends the same prepared photo again) and **Enter manually** (`/add-expense`).
+  - The existing 45 s request timeout and errors return to Start with the error row, offering the same two actions.
+- **Reduce Motion:** the ring is drawn once, static, at full opacity. The status text cross-fades (200 ms) when it changes. Nothing turns or drifts.
+- **Accessibility:** the ring is hidden from screen readers. The status text is a polite live region; the slow-state card is announced.
+
+**Step 3 — Review** (one scroll area, sticky footer)
+1. **Header:** the back button and "Review receipt" on one row.
+2. **Receipt row** (one compact dark card): a 56 × 72 pt thumbnail of the prepared photo (`contain`, rounded 12), "Receipt photo", and "Tap to view". Tapping opens a full-screen viewer (dark scrim, the photo fitted to the screen, a 44 pt close button; Android back closes it). The photo exists only in memory for this review and is never saved, so there is no "keep photo" control.
+3. **Details card** (grouped 48 pt rows with hairline dividers, the Add subscription row style):
+   - **Merchant:** a full-width text field that wraps to two lines. The name is never cut off.
+   - **Date:** `ExpenseDatePicker variant="row"`.
+   - **Total:** "RM" and the amount input (system font, like Add subscription; inputs do not use Space Mono).
+   - **Category:** `SelectionField variant="row"`. It always starts empty (product rule). The existing optional `CategorySuggestion` appears under the row and is applied only when tapped.
+   - **Note:** a collapsed "Add a note" row that expands into the notes field.
+4. **Items** (planned separately, see Items below).
+5. **View detected text:** a label-size page-accent link with a `document-text-outline` icon. It opens a bottom sheet (the `AllExpensesSheet` pattern: handle, `useSheetDrag`, close button, Reduce Motion aware) titled "Detected text", with one line, "The text Google Cloud Vision read from your photo, to help you check the details.", and the raw text, selectable.
+6. **Sticky footer:** **Save expense** (primary). It runs the existing validation, sets `entry_source='ocr'`, and returns to Wallet with the existing saved toast. Field errors scroll to and focus the first invalid field. A failed save shows the existing red message above the button and keeps every edit.
+
+**Uncertain fields (review warnings)**
+- The server's existing warning strings map to fields: "Merchant name needs review." → Merchant; "Purchase date needs review." → Date; "Total amount needs review." → Total. Nothing is inferred beyond these.
+- A flagged field shows, beside its label, an amber (`cardWarningText`) `alert-circle-outline` icon and the word **"Check"**. Screen readers hear "{field}, needs review". Colour is never the only cue.
+- A flagged field that came back empty shows the placeholder "Not found, please enter it".
+- The marker clears once the student edits that field. It is a prompt, not an error, and never blocks saving.
+- "No readable text was detected." shows one amber line at the top of the Details card: "We couldn't read any text. Enter the details yourself." Any unknown warning shows the existing "Check the extracted details before using them."
+- Validation errors stay red, with a red border and text, so they are distinct from the amber review markers.
+
+**Items** (requires a separate scope decision before it is built)
+- The receipt endpoint returns no line items today, the parser extracts none, and the `expenses` table cannot store them. This needs:
+  - server item extraction, returned as an optional field and evaluated with its own labels;
+  - a storage decision: a new owner-only `expense_items` table (migration), a text summary in notes, or review-only items that are not saved.
+- **When built:**
+  - The card is titled "Items (N)". With more than 4 items, the first 4 show, then "Show all N items"; it opens with every item when there are 4 or fewer.
+  - Each row has the name (wraps to two lines, never cut off), "× qty" when above 1, and the price in `FinanceNumber`, always with two decimals (RM 5.30).
+  - Discounts are negative lines with a `pricetag-outline` icon and a minus sign (−RM 5.00), never shown by colour alone.
+  - Tapping a row opens a small item sheet (name, quantity, price, **Remove item**). "Add item" and "Add discount" rows end the list.
+  - Total, subtotal, tax, service charge, rounding, cash, tendered, and change lines are never items.
+  - When the items do not add up to the Total, a quiet amber line says so. The Total field stays the saved amount and is never overwritten automatically.
+
+**Privacy wording** (English; Malay to match)
+- Start: "Your photo is sent to the Unifyd server and read with Google Cloud Vision. Unifyd doesn't keep the photo."
+- Detected-text sheet: as above.
+- Never say that text is read on the phone, that nothing is uploaded, or that the photo is kept.
+
+**Do not repeat these mistakes seen in the reference flow:** Total or Change rows listed as items; truncated merchant or item names; amounts without two decimals; a Details card with no total; a loading animation drawn over a half-built screen; a "keep receipt image" option; on-device privacy claims.
+
 ## 11. Design acceptance checklist
 
 Before a screen is considered complete:

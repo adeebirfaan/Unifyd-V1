@@ -24,7 +24,17 @@ export type EncodedImage = ReceiptImageSize & { uri: string; size: number; file?
 export type ReceiptImageTools<Decoded extends ReceiptImageSize> = {
   decode: (uri: string) => Promise<Decoded>;
   encode: (image: Decoded, size: ReceiptImageSize | null, quality: number) => Promise<EncodedImage>;
+  /** Single pass: read the file, apply orientation, resize to `size`, and save, without a separate decode. */
+  encodeFile?: (uri: string, size: ReceiptImageSize | null, quality: number) => Promise<EncodedImage>;
   release?: (image: Decoded) => void;
+};
+
+export type NormalizeOptions = {
+  /** The photo's upright pixel size as the picker reports it; enables the single pass. */
+  size?: ReceiptImageSize;
+  /** Optional, for scan timing: decode and encode durations and the result's size. */
+  onTiming?: (timing: PrepareTiming) => void;
+  now?: () => number;
 };
 
 export type ReceiptImageErrorCode = 'conversionFailed' | 'tooLarge';
@@ -41,20 +51,47 @@ export function receiptTargetSize(width: number, height: number, maxEdge = RECEI
   return { width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)) };
 }
 
-/** `onTiming` (optional, for scan timing) receives the decode and encode durations and the result's size. */
+const result = (encoded: EncodedImage): ReceiptImage =>
+  ({ uri: encoded.uri, width: encoded.width, height: encoded.height, size: encoded.size, mimeType: 'image/jpeg', fileName: 'receipt.jpg', file: encoded.file });
+
+/**
+ * With the photo's own size (`options.size`) and an `encodeFile` tool, the photo is read, resized, and saved in one
+ * pass, to the same target size and quality as the two-pass path. Whenever that size is missing, the single pass
+ * fails, or its result is not exactly the expected size, the two-pass path (decode, then encode) runs as before.
+ */
 export async function normalizeReceiptImage<Decoded extends ReceiptImageSize>(uri: string, tools: ReceiptImageTools<Decoded>,
-  onTiming?: (timing: PrepareTiming) => void, now: () => number = () => performance.now()): Promise<ReceiptImage> {
+  { size: given, onTiming, now = () => performance.now() }: NormalizeOptions = {}): Promise<ReceiptImage> {
   let decoded: Decoded;
-  const started = now();
   let decodeMs = 0;
   const encodeMs: number[] = [];
-  const timedEncode = async (image: Decoded, size: ReceiptImageSize | null, quality: number) => {
+  const timed = async (encode: () => Promise<EncodedImage>) => {
     const start = now();
-    try { return await tools.encode(image, size, quality); } finally { encodeMs.push(now() - start); }
+    try { return await encode(); } finally { encodeMs.push(now() - start); }
   };
+  const timedEncode = (image: Decoded, size: ReceiptImageSize | null, quality: number) => timed(() => tools.encode(image, size, quality));
+
+  const encodeFile = tools.encodeFile;
+  if (encodeFile && given && given.width > 0 && given.height > 0) {
+    const size = receiptTargetSize(given.width, given.height);
+    const expected = size ?? given;
+    let encoded: EncodedImage | null = null;
+    try {
+      encoded = await timed(() => encodeFile(uri, size, RECEIPT_JPEG_QUALITY));
+      if (encoded.size > RECEIPT_MAX_BYTES) encoded = await timed(() => encodeFile(uri, size, RECEIPT_RETRY_QUALITY));
+    } catch {
+      encoded = null;
+    }
+    if (encoded && encoded.size > 0 && encoded.width === expected.width && encoded.height === expected.height) {
+      if (encoded.size > RECEIPT_MAX_BYTES) throw new ReceiptImageError('tooLarge');
+      onTiming?.({ decodeMs: 0, encodeMs, width: encoded.width, height: encoded.height, bytes: encoded.size, singlePass: true });
+      return result(encoded);
+    }
+  }
+
+  const decodeStart = now();
   try {
     decoded = await tools.decode(uri);
-    decodeMs = now() - started;
+    decodeMs = now() - decodeStart;
   } catch {
     throw new ReceiptImageError('conversionFailed');
   }
@@ -71,8 +108,8 @@ export async function normalizeReceiptImage<Decoded extends ReceiptImageSize>(ur
     }
     if (!(encoded.size > 0)) throw new ReceiptImageError('conversionFailed');
     if (encoded.size > RECEIPT_MAX_BYTES) throw new ReceiptImageError('tooLarge');
-    onTiming?.({ decodeMs, encodeMs, width: encoded.width, height: encoded.height, bytes: encoded.size });
-    return { uri: encoded.uri, width: encoded.width, height: encoded.height, size: encoded.size, mimeType: 'image/jpeg', fileName: 'receipt.jpg', file: encoded.file };
+    onTiming?.({ decodeMs, encodeMs, width: encoded.width, height: encoded.height, bytes: encoded.size, singlePass: false });
+    return result(encoded);
   } finally {
     try { tools.release?.(decoded); } catch { /* releasing native memory is best effort */ }
   }

@@ -134,7 +134,10 @@ export default function ScanReceiptScreen() {
     try {
       // Camera and library photos (often HEIC and over 5 MB) become an upright JPEG before any check or upload.
       const prepareStart = Date.now();
-      prepared = await prepareReceiptImage(asset.uri, SCAN_TIMING ? (prepare) => { timing.current.prepare = { ...prepare, totalMs: Date.now() - prepareStart }; } : undefined);
+      prepared = await prepareReceiptImage(asset.uri, {
+        size: { width: asset.width, height: asset.height },
+        onTiming: SCAN_TIMING ? (prepare) => { timing.current.prepare = { ...prepare, totalMs: Date.now() - prepareStart }; } : undefined,
+      });
     } catch (caught) {
       const key: TranslationKey = caught instanceof ReceiptImageError && caught.code === 'tooLarge' ? 'scan.tooLarge' : 'scan.prepareError';
       await finish(id, startedAt, () => { setError({ key, canRetry: false }); setStep('start'); }, 'error:prepare');

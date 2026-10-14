@@ -9,6 +9,8 @@ import { requestGroqSummary } from './insight-summary.js';
 import { POOF_REPLY_FORMAT } from './poof-chat.js';
 import { createScanTiming } from './scan-timing.js';
 import { pagesFromAnnotation, readTimetableWithVision } from './timetable-vision.js';
+import { warmUpVision } from './vision-warmup.js';
+import type { WarmableVisionClient } from './vision-warmup.js';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -58,5 +60,7 @@ const app = createApp({
 });
 
 app.listen(port, host, () => {
+  // In the background: start-up never waits for or fails on Google. A failed warm-up leaves the first scan to connect.
+  void warmUpVision(visionClient as unknown as WarmableVisionClient);
   console.info(`Unifyd service listening on ${host}:${port} (AI summaries and Poof replies ${groqApiKey ? 'enabled' : 'not configured'}${scanTimingEnabled ? '; scan timing on' : ''})`);
 });

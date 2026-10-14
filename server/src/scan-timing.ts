@@ -2,13 +2,16 @@
 // It records durations, the HTTP status, the image size in bytes, and whether this was the first scan since the
 // server started. It never records image content, OCR text, tokens, or anything about the user.
 
-export type ScanStage = 'auth' | 'upload' | 'vision' | 'parse' | 'items';
-const STAGES: readonly ScanStage[] = ['auth', 'upload', 'vision', 'parse', 'items'];
+// `upload`: until the image has arrived. `authCheck`: the sign-in check itself, which runs during the upload.
+// `authWait`: any extra wait for that check after the upload. (`auth` is the earlier, sequential stage name.)
+export type ScanStage = 'auth' | 'upload' | 'authCheck' | 'authWait' | 'vision' | 'parse' | 'items';
+const STAGES: readonly ScanStage[] = ['auth', 'upload', 'authCheck', 'authWait', 'vision', 'parse', 'items'];
 
-export type ScanTimer = { stage: (name: ScanStage) => void; bytes: (count: number) => void; end: (status: number) => void };
+/** `stage` records the time since the previous mark; `span` starts an overlapping measurement and returns its stop. */
+export type ScanTimer = { stage: (name: ScanStage) => void; span: (name: ScanStage) => () => void; bytes: (count: number) => void; end: (status: number) => void };
 export type ScanTimingOptions = { enabled: boolean; log?: (line: string) => void; now?: () => number };
 
-const NOOP: ScanTimer = { stage: () => undefined, bytes: () => undefined, end: () => undefined };
+const NOOP: ScanTimer = { stage: () => undefined, span: () => () => undefined, bytes: () => undefined, end: () => undefined };
 
 /** One log line: "[scan-timing] scan=1 first=yes status=200 bytes=812345 auth=118ms upload=41ms vision=1830ms parse=4ms items=2ms total=2001ms". */
 export function formatScanTiming(entry: { scan: number; status: number; bytes: number | null; stages: Partial<Record<ScanStage, number>>; total: number }): string {
@@ -34,6 +37,7 @@ export function createScanTiming({ enabled, log = (line) => console.info(line), 
     const stages: Partial<Record<ScanStage, number>> = {};
     return {
       stage: (name) => { const at = now(); stages[name] = at - last; last = at; },
+      span: (name) => { const from = now(); return () => { stages[name] = now() - from; }; },
       bytes: (count) => { bytes = count; },
       end: (status) => {
         if (done) return;

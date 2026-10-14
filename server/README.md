@@ -15,15 +15,15 @@ For phone testing, start this server with `npm start` from `server/`, then start
 ## Scan timing (measurement only)
 
 Set `SCAN_TIMING=1` in `server/.env` and restart the server to log one line per receipt scan, for example
-`[scan-timing] scan=1 first=yes status=200 bytes=1268000 auth=180ms upload=95ms vision=1830ms parse=4ms items=1ms total=2110ms`.
-`auth` is the Supabase sign-in check, `upload` the time to receive the image, `vision` the Google Vision call, `parse` and `items` the local parsing, and `first=yes` marks the first scan since the server started (it includes setting up the Google connection and access token). Only durations, the status code, and the image size in bytes are logged: never image content, OCR text, tokens, or user data. It is off by default and ignored when `NODE_ENV=production`. The Vision and Supabase clients are created once at start-up and reused.
+`[scan-timing] scan=1 first=yes status=200 bytes=1268000 upload=1900ms authCheck=500ms authWait=0ms vision=1830ms parse=4ms items=1ms total=2110ms`.
+`upload` is the time to receive the image, `authCheck` the Supabase sign-in check (it runs during the upload), `authWait` any extra wait for that check after the upload, `vision` the Google Vision call, `parse` and `items` the local parsing, and `first=yes` marks the first scan since the server started (it includes setting up the Google connection and access token). Only durations, the status code, and the image size in bytes are logged: never image content, OCR text, tokens, or user data. It is off by default and ignored when `NODE_ENV=production`. The Vision and Supabase clients are created once at start-up and reused. At start-up the server also warms up Google Vision in the background (access token, client, connection; no Vision request) and logs `Google Vision ready (… ms)`; if Google is unreachable it logs one warning, start-up continues, and the first scan connects as before.
 
 `npm run timing:receipts:parse` times the parser alone on the cached OCR of the development receipts (no network, no Vision; held-out and final receipts are never read).
 
 ## Endpoints
 
 - `GET /health` returns `{ "status": "ok" }`.
-- `POST /api/ocr/receipt` requires `Authorization: Bearer <Supabase access token>` and one `multipart/form-data` file in field `image`. JPEG, PNG and WEBP are accepted up to 5 MiB. Other fields or files are rejected. The service verifies the token with Supabase Auth before reading the upload, checks the image signature, then calls Google Vision document text detection.
+- `POST /api/ocr/receipt` requires `Authorization: Bearer <Supabase access token>` and one `multipart/form-data` file in field `image`. JPEG, PNG and WEBP are accepted up to 5 MiB. Other fields or files are rejected. The service starts verifying the token with Supabase Auth while the upload arrives (once per request, never cached); no response is sent and OCR never runs until that check has passed. It then checks the image signature and calls Google Vision document text detection.
 
 The success response contains `merchantName`, `purchaseDate`, `totalAmount`, `rawText`, `warnings`, and `items`. Missing values are `null`; uncertain values are returned with the review warnings `Merchant name needs review.`, `Purchase date needs review.`, or `Total amount needs review.` (the app maps these exact strings).
 

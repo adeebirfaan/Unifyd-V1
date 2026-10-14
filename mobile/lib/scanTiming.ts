@@ -1,7 +1,7 @@
 // Optional stage timing for one receipt scan on the device, to see where scan time goes. Durations, image size,
 // and outcome only: never image content, OCR text, tokens, or user data. Pure, so Node tests can run it.
 
-export type PrepareTiming = { decodeMs: number; encodeMs: number[]; width: number; height: number; bytes: number };
+export type PrepareTiming = { decodeMs: number; encodeMs: number[]; width: number; height: number; bytes: number; singlePass: boolean };
 export type UploadTiming = { sessionMs: number; requestMs: number };
 export type ScanTiming = {
   prepare?: PrepareTiming & { totalMs: number };
@@ -19,8 +19,9 @@ const megabytes = (bytes: number) => `${(bytes / (1024 * 1024)).toFixed(2)}MB`;
 export function formatScanTiming(timing: ScanTiming): string {
   const parts: string[] = [];
   if (timing.prepare) {
-    const { totalMs, decodeMs, encodeMs, width, height, bytes } = timing.prepare;
-    parts.push(`prepare=${round(totalMs)}ms (decode=${round(decodeMs)}ms encode=${encodeMs.map(round).join('+')}ms ×${encodeMs.length}) image=${width}×${height} ${megabytes(bytes)}`);
+    const { totalMs, decodeMs, encodeMs, width, height, bytes, singlePass } = timing.prepare;
+    const passes = singlePass ? 'single' : `decode=${round(decodeMs)}ms`;
+    parts.push(`prepare=${round(totalMs)}ms (${passes} encode=${encodeMs.map(round).join('+')}ms ×${encodeMs.length}) image=${width}×${height} ${megabytes(bytes)}`);
   }
   if (timing.upload) parts.push(`session=${round(timing.upload.sessionMs)}ms upload+server=${round(timing.upload.requestMs)}ms`);
   parts.push(`minWait=${round(timing.minWaitMs)}ms`, `total=${round(timing.totalMs)}ms`, timing.outcome);

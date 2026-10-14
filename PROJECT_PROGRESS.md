@@ -156,6 +156,31 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt scan speed: no-risk fixes (warm-up, parallel sign-in check, single-pass photo)
+
+**Requirements implemented:**
+- Performance only. No change to image size or JPEG quality, the Vision request, the parser, the response, or the evaluation.
+
+**Changed files:**
+- Server: `server/src/vision-warmup.ts` (new), `server/src/scan-speed.test.ts` (new), `server/src/app.ts` (parallel sign-in check), `server/src/index.ts` (background warm-up), `server/src/scan-timing.ts` (+ `span`, `authCheck`/`authWait` stages), `server/src/scan-timing.test.ts`, `server/README.md`.
+- Mobile: `mobile/lib/receiptImage.ts` (single pass with fallback; options argument), `mobile/lib/receiptImageTools.ts` (`encodeFile`), `mobile/lib/scanTiming.ts` (`singlePass`), `mobile/app/scan-receipt.tsx` (passes the picker's size), `mobile/tests/receiptImageSinglePass.test.mjs` (new), `mobile/tests/scanTiming.test.mjs`.
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Owner's 5 timed iPhone scans (before): phone total median 6.9 s (3.9–9.9 s). Median stages: prepare 243 ms, server auth 517 ms (187–1106), upload receive after auth 1.9 s (0.8–5.5 s) plus about 0.8 s before the server starts timing, Vision 2.1 s (first scan 3.2 s), parse + items about 10 ms. The upload of about 1 MB is the largest and most variable cost (not changed here; to be decided with an accuracy check).
+- Warm-up: at start-up, in the background, the server fetches the Google access token, prepares the Vision client, and opens its connection (no Vision request). Failures log one line without details, never stop start-up, and clear any cached failed set-up so the first scan connects as before. Real start-up logged `Google Vision ready (1677 ms)`.
+- Parallel sign-in check: verification starts when the request arrives and runs while the upload is read; every path (including upload and content-type errors) awaits it before answering, and OCR runs only after it passed. One check per request, never cached.
+- Single pass: the photo is read, resized to the same target size, and saved at the same quality in one manipulator pass using the picker's upright width and height; missing sizes, failures, or a result of a different size fall back to decode-then-encode.
+
+**Tests performed:**
+- Server typecheck, **119/119** (6 new: rejected and failing checks never reach OCR, OCR waits for a slow check, each request is checked again, upload errors still answer 401 to unverified callers, warm-up success and three failure cases), build.
+- Mobile typecheck and lint clean; unit **124/124** (4 new: same output size as two passes for six photo sizes, quality retry, three fallbacks, timing flag); Playwright `scanFlow`, `unifyd`, `categorySuggestion` 22/22.
+- `npm run eval:receipts:run` byte-identical to `reports/dev-after-improvements.txt`.
+- Not executed: after-fix timed scans on the iPhone (owner to run).
+
+**Next action:**
+- Owner reruns the timed scans to compare; then decide on upload size with an accuracy check.
+
 ### 2026-10-14 — Receipt scan speed: stage timing (measurement only)
 
 **Requirements implemented:**

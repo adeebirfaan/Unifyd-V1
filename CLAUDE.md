@@ -77,7 +77,7 @@ npm run eval:receipts:final-setup                     # final test set in local-
 npm run eval:receipts:final-check                     # final labels format check only; never runs the parser
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 120, server 113, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 124, server 119, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -202,6 +202,7 @@ npm run eval:receipts:final-check                     # final labels format chec
   - Parsing (2026-10-14): the endpoint passes the text **and** Vision word boxes from the same `documentTextDetection` call; the parser still works from text alone.
   - Merchant: a general list of nationwide Malaysian brands, then "THANK YOU FOR SHOPPING AT X", fuel brands over dealer companies, then generic header rules. Total: label/amount pairing on rebuilt rows, final labels over plain "Total", never subtotal/cash/change; unpaid orders and outstanding bills return `null`. Date: English/Malay month names, label/time context, never due/expiry dates.
   - Uncertain values reuse the three existing warning strings (the app maps them exactly).
+  - Speed (2026-10-14): the Supabase token check runs in parallel with reading the upload (every path awaits it before any response or OCR; never cached), and `vision-warmup.ts` warms the Vision client at start-up without failing start-up. The app prepares photos in one pass from the picker's upright size (`encodeFile`), falling back to decode-then-encode.
   - Items (2026-10-14): `receipt-items.ts` (`withReceiptItems`, applied in `app.ts` after `parseReceiptText`, so the evaluation never sees it) returns `{name, quantity, unitPrice, amount}` lines (discounts negative). It adds `Items may be incomplete.` when they miss the total by more than RM 0.05 after printed rounding/tax, and returns `[]` when there is no total, the order is unpaid, or the lines are more than 40% off. The app shows that warning on the Items card only.
 - `POST /api/timetable/import`: one `file` part, PNG, JPEG, or PDF; encrypted or truncated PDFs return 422. Returns `{candidates, warnings, pagesProcessed, totalPages}`. Raw text is never returned.
 - `POST /api/insights/generate`: `{language, timeZone}` returns facts plus a summary or fallback. It uses a 10-minute cache.

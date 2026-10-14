@@ -35,12 +35,12 @@ test('a timed scan logs one line of durations only, and the response is unchange
   const [withTiming, without] = [await send(timed), await send(plain)];
   assert.deepEqual(withTiming.body, without.body);
   assert.equal(lines.length, 1);
-  assert.match(lines[0]!, /^\[scan-timing\] scan=1 first=yes status=200 bytes=12 auth=\d+ms upload=\d+ms vision=\d+ms parse=\d+ms items=\d+ms total=\d+ms$/);
+  assert.match(lines[0]!, /^\[scan-timing\] scan=1 first=yes status=200 bytes=12 upload=\d+ms authCheck=\d+ms authWait=\d+ms vision=\d+ms parse=\d+ms items=\d+ms total=\d+ms$/);
   // Never content, tokens, or user data.
   assert.doesNotMatch(lines[0]!, /Kedai|UMPSA|Notebook|12\.50|secret-token-value|Bearer/);
 
   // Errors are timed too, with their status and only the stages reached.
   const denied = createApp({ verifyToken: async () => false, detectText: async () => text, scanTimer });
   await request(denied).post('/api/ocr/receipt').set('Authorization', 'Bearer x').attach('image', jpeg, { filename: 'receipt.jpg', contentType: 'image/jpeg' }).expect(401);
-  assert.match(lines[1]!, /^\[scan-timing\] scan=2 first=no status=401 total=\d+ms$/);
+  assert.match(lines[1]!, /^\[scan-timing\] scan=2 first=no status=401 upload=\d+ms authCheck=\d+ms total=\d+ms$/);
 });

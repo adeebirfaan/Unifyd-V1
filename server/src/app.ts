@@ -154,16 +154,27 @@ export function createApp({ verifyToken, detectText, insights, poof, readTimetab
     response.on('finish', () => timer.end(response.statusCode));
     const token = bearerToken(request);
     if (!token) return errorResponse(response, 401, 'UNAUTHORIZED', 'A valid sign-in is required.');
-    try {
-      if (!(await verifyToken(token))) return errorResponse(response, 401, 'UNAUTHORIZED', 'A valid sign-in is required.');
-    } catch {
-      return errorResponse(response, 503, 'AUTH_UNAVAILABLE', 'Sign-in verification is unavailable. Please retry.');
+    // The sign-in check runs while the image arrives, once per request (never cached). Nothing is answered and OCR
+    // never runs until it has passed: every path below awaits `verified()` first.
+    const authDone = timer.span('authCheck');
+    const verification = Promise.resolve().then(() => verifyToken(token))
+      .then((valid): 'ok' | 'denied' => (valid ? 'ok' : 'denied'), (): 'unavailable' => 'unavailable')
+      .finally(authDone);
+    const verified = async () => {
+      const outcome = await verification;
+      if (outcome === 'denied') errorResponse(response, 401, 'UNAUTHORIZED', 'A valid sign-in is required.');
+      if (outcome === 'unavailable') errorResponse(response, 503, 'AUTH_UNAVAILABLE', 'Sign-in verification is unavailable. Please retry.');
+      return outcome === 'ok';
+    };
+    if (!request.is('multipart/form-data')) {
+      if (await verified()) errorResponse(response, 415, 'INVALID_UPLOAD', 'Send one receipt image as multipart form data.');
+      return;
     }
-    timer.stage('auth');
-    if (!request.is('multipart/form-data')) return errorResponse(response, 415, 'INVALID_UPLOAD', 'Send one receipt image as multipart form data.');
 
     upload(request, response, async (uploadError?: unknown) => {
       timer.stage('upload');
+      if (!(await verified())) return;
+      timer.stage('authWait');
       if (uploadError) {
         if (uploadError instanceof multer.MulterError && uploadError.code === 'LIMIT_FILE_SIZE') {
           return errorResponse(response, 413, 'IMAGE_TOO_LARGE', 'The image must be 5 MB or smaller.');

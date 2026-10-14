@@ -73,9 +73,11 @@ npm run web                                           # dev server
 npm run typecheck && npm test && npm run build        # tsx --test with injected fakes, no network
 npm run dev   |   npm run build && npm start          # 127.0.0.1:3001; set OCR_HOST=0.0.0.0 for a phone on the LAN
 npm run eval:receipts:run                             # receipt OCR evaluation: labels.csv rows, cached Vision OCR, development scores
+npm run eval:receipts:final-setup                     # final test set in local-data/receipt-eval/final/ (asks before Vision)
+npm run eval:receipts:final-check                     # final labels format check only; never runs the parser
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 103, server 93, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 103, server 101, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.

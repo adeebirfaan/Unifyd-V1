@@ -88,3 +88,15 @@ About 20% of receipts are held out as a test split, chosen from a hash of the fi
 If Google credentials are missing, the OCR step stops with the fix: run `gcloud auth application-default login`, as for the receipt endpoint.
 
 Scoring gives the parser the cached text and word boxes, exactly as the endpoint does. Results so far (2026-10-14, 57 receipts: 42 development, 15 held out, not yet scored): development all-three-correct 21.4% before and 78.6% after the parser work, with no wrong value left without a warning. Collect a fresh set of about 40–50 receipts before the final run, and use `--final` only once.
+
+### Final test set
+
+A separate, untouched set of new receipts (about 40–50) for the final score, kept in `local-data/receipt-eval/final/` (`images/`, `labels.csv`, `ocr/`; ignored by Git). Normal runs (`eval:receipts:run`, `eval:receipts`, `--json`) never read, score, or print anything from this folder, so the parser cannot be tuned against it.
+
+1. Save the new photos in `local-data/receipt-eval/final/images/` (JPEG, PNG, or WEBP). Never copy them into the development `images/` folder, and do not look at how the parser reads them.
+2. Run `npm run eval:receipts:final-setup`. It creates `final/labels.csv` from the same template, with one empty row per new image, then says how many new images it will send to Google Vision and asks before reading any (`-- --yes` answers yes when there is no terminal). The text and word boxes are cached in `final/ocr/`; re-running reads only new images.
+3. Fill in `final/labels.csv` exactly as for the development labels.
+4. Run `npm run eval:receipts:final-check` until it prints "Labels OK". It checks format only: the header, allowed types and conditions, real dates (YYYY-MM-DD or DD/MM/YYYY), positive totals, duplicates, rows waiting for labels, rows whose file is missing from `final/images/`, images with no row, and labelled images without cached OCR (it lists cache file names only). It reports the first problem on each row. It never runs the parser and never shows any accuracy, outcome, or parsed value.
+5. Once, for the reported result: `npm run eval:receipts -- --final` (add `--json` for the appendix). After the development table it prints three tables: the held-out test split, the final test set, and both combined. Each has the same columns as the development table (merchant, date, total, all 3, silent), rows per receipt type and condition, and a warnings breakdown per field: correct with no warning, correct with a warning, wrong but flagged, wrong and silent, and blank (no value although the label has one). Per-receipt details are still listed for the development split only. If the final set is missing, has rows waiting for labels, or has labelled images without cached OCR, `--final` stops before scoring anything, so the one run is not used up.
+
+The development/held-out split, labels, and scoring rules are unchanged.

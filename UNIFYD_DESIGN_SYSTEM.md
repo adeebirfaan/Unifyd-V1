@@ -462,18 +462,18 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
 - The primary action sits at the bottom in thumb reach, fixed above the safe area and outside the scroll area, as on Add subscription. It is hidden while the keyboard is open, so it never rides over a field.
 - No step shows the raw detected text on the page; it opens in a bottom sheet.
 - At most one `brandGradient` element per step (the Start icon tile). Cards, inputs, and sheets stay dark in both appearances.
-- Back: on Start it leaves the screen; during Reading it cancels the request and returns to Start; on Review it asks "Discard this scan?" (`ConfirmDialog`) before returning to Start.
+- Back: on Start it leaves the screen; during Reading it cancels the request and returns to Start; on Review it asks "Discard this scan?" (`ConfirmDialog`) before returning to Start. Android back follows the same rules, and the iOS edge swipe-back is turned off except on Start, so a scan or draft is never dropped by accident.
 
 **Step 1 — Start**
 - Top: the 44 pt back button only. No eyebrow, helper paragraph, empty preview box, or "Extract details" button.
-- Centre: an 88 pt circular tile on `brandGradient` with the Ionicons `scan-outline` glyph in near-black `actionInk`; "Scan a receipt" (screen title, 26/700); one line (body, muted): "Paper receipts, photos, and screenshots. We'll fill in the details for you to check."
-- Privacy line (label, muted, under the description): see Privacy wording.
+- Centre: an 88 pt circular tile on `brandGradient` with the Ionicons `scan-outline` glyph in near-black `actionInk`, then "Scan a receipt" (screen title, 26/700). No description line: the two button labels already say what can be scanned (owner request, 2026-10-14: minimal text).
+- Privacy line (label, muted, under the description, with a small `lock-closed-outline` icon): see Privacy wording.
 - Bottom, in order: **Scan with camera** (primary: white fill, near-black text, camera icon); **Choose photo or screenshot** (secondary: dark surface, border, images icon); **Add expense manually** (44 pt text link, page accent), which opens `/add-expense` with the same `budgetPeriod`.
 - Picking a photo starts Reading at once. The separate preview-then-"Extract details" step is removed.
-- Errors (camera permission, photo could not be prepared, too large, unsupported, sign-in expired, service unavailable) appear as one inline error row above the buttons: an `alert-circle-outline` icon and the existing message text, announced to screen readers. The buttons stay usable.
+- Errors (camera permission, photo could not be prepared, too large, unsupported, sign-in expired, upload failed, reading failed, timed out) appear as one inline error card above the buttons: an `alert-circle-outline` icon and the message, announced to screen readers. The buttons and "Add expense manually" stay usable. Upload ("We couldn't upload the photo. Check your connection and try again."), reading, and timeout failures add **Try again**, which resends the same prepared photo.
 
 **Step 2 — Reading**
-- A full-screen state on the page background (nothing half-built behind it): the dotted ring, centred, with the status text below it (section title, 19/700), then a quiet back control.
+- A full-screen state on the page background (nothing half-built behind it): the dotted ring, centred, with the status text below it (section title, 19/700). A back arrow at the top (labelled "Cancel") and a quiet "Cancel" text button at the bottom both cancel.
 - Status text: "Preparing your photo…" while the photo is converted on the device (`prepareReceiptImage`), then "Reading your receipt…" while it uploads and the server reads it. One continuous loading state covers both.
 - **Dotted ring:** 160 pt across; about 66 dots of 3–5 pt in `brandBlue` and `brandCyan` (denser and brighter than first proposed, so the ring reads clearly on the dark page), set in two loose bands around one circle with small random offsets. The outer band turns clockwise once every 6 s, the inner band counter-clockwise once every 9 s, and each dot's opacity drifts between 0.5 and 1 over 1.6–2.4 s at staggered phases, so the dots seem to drift around the circle. It uses React Native `Animated` with the native driver (transform and opacity only), like `PoofMascot`. No new libraries and no native modules.
 - **Timing:**
@@ -490,7 +490,7 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
    - **Merchant:** a full-width text field that wraps to two lines. The name is never cut off.
    - **Date:** `ExpenseDatePicker variant="row"`.
    - **Total:** "RM" and the amount input (system font, like Add subscription; inputs do not use Space Mono).
-   - **Category:** `SelectionField variant="row"`. It always starts empty (product rule). The existing optional `CategorySuggestion` appears under the row and is applied only when tapped.
+   - **Category:** `SelectionField variant="row"`. It always starts empty (product rule). The existing optional `CategorySuggestion` appears just above the row and is applied only when tapped.
    - **Note:** a collapsed "Add a note" row that expands into the notes field.
 4. **Items** (planned separately, see Items below).
 5. **View detected text:** a label-size page-accent link with a `document-text-outline` icon. It opens a bottom sheet (the `AllExpensesSheet` pattern: handle, `useSheetDrag`, close button, Reduce Motion aware) titled "Detected text", with one line, "The text Google Cloud Vision read from your photo, to help you check the details.", and the raw text, selectable.
@@ -517,7 +517,7 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
   - When the items do not add up to the Total, a quiet amber line says so. The Total field stays the saved amount and is never overwritten automatically.
 
 **Privacy wording** (English; Malay to match)
-- Start: "Your photo is sent to the Unifyd server and read with Google Cloud Vision. Unifyd doesn't keep the photo."
+- Start (one short line, owner request 2026-10-14): "Read by Google Cloud Vision. Photo not kept." The privacy policy keeps the full wording (the Unifyd server, Google Cloud Vision, and that the photo and detected text are not kept).
 - Detected-text sheet: as above.
 - Never say that text is read on the phone, that nothing is uploaded, or that the photo is kept.
 

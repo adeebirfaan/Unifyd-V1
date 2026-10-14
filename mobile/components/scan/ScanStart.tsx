@@ -10,7 +10,7 @@ import { useI18n } from '@/providers/LanguageProvider';
 export type ScanStartError = { message: string; canRetry: boolean };
 
 /**
- * Step 1: a short title, one line, the privacy note, and two actions at the bottom in thumb reach. The icon tile is
+ * Step 1: a short title, one quiet privacy line, and two actions at the bottom in thumb reach. The icon tile is
  * the step's one brand-gradient element. An error appears as one row above the buttons, which stay usable.
  */
 export function ScanStart({ busy, error, onBack, onCamera, onLibrary, onManual, onRetry }: {
@@ -28,7 +28,6 @@ export function ScanStart({ busy, error, onBack, onCamera, onLibrary, onManual, 
         <Ionicons name="scan-outline" size={40} color={tokens.actionInk} />
       </View>
       <Text accessibilityRole="header" style={[styles.title, { color: tokens.screenText }]}>{t('scan.title')}</Text>
-      <Text style={[styles.body, { color: tokens.mutedText }]}>{t('scan.startBody')}</Text>
       <View style={styles.privacy}>
         <Ionicons name="lock-closed-outline" size={14} color={tokens.mutedText} />
         <Text testID="scan-privacy" style={[styles.privacyText, { color: tokens.mutedText }]}>{t('scan.privacy')}</Text>
@@ -65,8 +64,7 @@ const styles = StyleSheet.create({
   centre: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.space3, paddingBottom: spacing.space4 },
   iconTile: { width: 88, height: 88, borderRadius: 44, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginBottom: spacing.space2 },
   title: { ...typography.screenTitle, textAlign: 'center' },
-  body: { ...typography.body, lineHeight: 23, textAlign: 'center', maxWidth: 340 },
-  privacy: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.space1, maxWidth: 340, marginTop: spacing.space1 },
+  privacy: { flexDirection: 'row', alignItems: 'center', gap: spacing.space1, maxWidth: 340 },
   privacyText: { ...typography.label, fontWeight: '500', lineHeight: 18, flexShrink: 1, textAlign: 'center' },
   actions: { gap: spacing.space3 },
   error: { borderWidth: 1, borderRadius: radius.radiusMd, padding: spacing.space4, gap: spacing.space3 },

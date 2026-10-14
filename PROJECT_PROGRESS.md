@@ -156,6 +156,32 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt scan flow: finish, minimal Start text, merge to main (Phase D)
+
+**Requirements implemented:**
+- Design system "Receipt scan flow" final details; owner request for less text on Start.
+
+**Changed files:**
+- `mobile/components/scan/ScanStart.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/scanFlow.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Start now shows only the icon tile, "Scan a receipt", one short privacy line ("Read by Google Cloud Vision. Photo not kept." / "Dibaca oleh Google Cloud Vision. Foto tidak disimpan."), the two buttons, and Add expense manually. The description line was removed. The privacy policy keeps the full wording (Unifyd server, Google Cloud Vision, photo and detected text not kept).
+- Design doc brought in line with the build: lock icon on the privacy line, back arrow plus Cancel on Reading, suggestion above the Category row, iOS swipe-back off except on Start, the full list of error messages with Try again for upload, reading, and timeout failures.
+- `scan-flow-redesign` (design doc, Phase B scan flow, Phase C items, this entry) merged into `main` locally; not pushed.
+
+**Tests performed:**
+- Branch contained `main` (0 behind, 3 ahead) before the final commit.
+- Mobile typecheck and lint clean; unit 118/118. Server typecheck, 110/110, build.
+- `npm run eval:receipts:run` byte-identical to `reports/dev-after-improvements.txt` (0 images read by Vision; `--final` not run).
+- Full Playwright suite before the text change: 93 passed, 1 failed (`budget` "a failed save keeps the amount…", intermittent on `main` as well). After the text change: `scanFlow` 11/11 plus a screenshot check of Start at 390 × 844.
+- Not executed: device test of the final build.
+
+**Issues or decisions:**
+- The gear button seen in the owner's iPhone screenshot is Expo Go's developer menu, not part of Unifyd.
+
+**Next action:**
+- Test the scan flow on the iPhone with the checklist from Phase C.
+
 ### 2026-10-14 — Receipt OCR: line items as an additive, optional field (Phase C)
 
 **Requirements implemented:**

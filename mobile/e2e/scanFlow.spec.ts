@@ -54,7 +54,7 @@ test('Start shows only the essentials, Reading lasts at least 1.2 s, and Review 
   await expect(start.getByRole('button', { name: 'Scan with camera' })).toBeVisible();
   await expect(start.getByRole('button', { name: 'Choose photo or screenshot' })).toBeVisible();
   await expect(start.getByRole('button', { name: 'Add expense manually' })).toBeVisible();
-  await expect(page.getByTestId('scan-privacy')).toHaveText('Your photo is sent to the Unifyd server and read with Google Cloud Vision. Unifyd doesn’t keep the photo.');
+  await expect(page.getByTestId('scan-privacy')).toHaveText('Read by Google Cloud Vision. Photo not kept.');
   await expect(page.getByText('Extract details')).toHaveCount(0);
 
   // Record, inside the page, when Reading appears and when Review replaces it.

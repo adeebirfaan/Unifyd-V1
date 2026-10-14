@@ -102,37 +102,36 @@ test('receipt selection sends a bearer-authenticated image and shows an unsaved 
   await signIn(page);
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('button', { name: 'Scan receipt' }).click();
-  await expect(page.getByText('Preview only. No expense or receipt image has been saved.')).toHaveCount(0);
+  await expect(page.getByTestId('scan-start')).toBeVisible();
   const fileChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose photo' }).click();
+  await page.getByRole('button', { name: 'Choose photo or screenshot' }).click();
   await (await fileChooser).setFiles({
     name: 'synthetic-receipt.png', mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l4cAAAAASUVORK5CYII=', 'base64'),
   });
-  await page.getByRole('button', { name: 'Extract details' }).click();
-  await expect(page.getByText('Extracted draft')).toBeVisible();
-  await expect(page.getByText('Kedai Buku UMPSA', { exact: true })).toBeVisible();
-  await expect(page.getByText('RM 12.50', { exact: true })).toBeVisible();
-  await expect(page.getByText('Preview only. No expense or receipt image has been saved.')).toBeVisible();
+  // Picking starts reading at once; there is no separate "Extract details" step.
+  await expect(page.getByText('Review receipt')).toBeVisible();
   expect(postedImage).toBe(true);
-  await expect(page.getByText('Review expense')).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('Kedai Buku UMPSA');
-  await expect(page.getByRole('textbox', { name: 'Amount (RM)' })).toHaveValue('12.5');
-  await page.getByRole('button', { name: 'Save receipt expense' }).click();
+  await expect(page.getByRole('textbox', { name: 'Merchant' })).toHaveValue('Kedai Buku UMPSA');
+  await expect(page.getByRole('textbox', { name: 'Total' })).toHaveValue('12.50');
+  await expect(page.getByRole('button', { name: /^Date: 8 October 2026/ })).toBeVisible();
+  const save = page.getByTestId('scan-save-footer').getByRole('button', { name: 'Save expense' });
+  await save.click();
   await expect(page.getByText('Choose a category.')).toBeVisible();
   expect(savedExpense.value).toBeNull();
-  await page.getByRole('textbox', { name: 'Title' }).fill('  Books from OCR  ');
-  await page.getByRole('textbox', { name: 'Amount (RM)' }).fill('13.25');
+  await page.getByRole('textbox', { name: 'Merchant' }).fill('  Books from OCR  ');
+  await page.getByRole('textbox', { name: 'Total' }).fill('13.25');
   await page.getByRole('button', { name: /^Category:/ }).click();
   await page.getByRole('radio', { name: 'Academic Materials' }).click();
+  await page.getByRole('button', { name: 'Add a note' }).click();
   await page.getByRole('textbox', { name: 'Notes (optional)' }).fill('  Checked receipt  ');
-  await page.getByRole('button', { name: 'Save receipt expense' }).click();
+  await save.click();
   await expect(page.getByText('We could not save this receipt expense. Your changes are still here. Please try again.')).toBeVisible();
-  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('  Books from OCR  ');
-  await expect(page.getByRole('textbox', { name: 'Amount (RM)' })).toHaveValue('13.25');
+  await expect(page.getByRole('textbox', { name: 'Merchant' })).toHaveValue('  Books from OCR  ');
+  await expect(page.getByRole('textbox', { name: 'Total' })).toHaveValue('13.25');
   expect(savedExpense.value).toBeNull();
   allowSave = true;
-  await page.getByRole('button', { name: 'Save receipt expense' }).click();
+  await save.click();
   await expect(page.getByText('Expense saved.').filter({ visible: true })).toBeVisible();
   expect(savedExpense.value).toMatchObject({
     title: 'Books from OCR', amount: 13.25, category: 'academic_materials',
@@ -154,10 +153,13 @@ test('a photo that cannot be converted shows an error and is never uploaded', as
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('button', { name: 'Scan receipt' }).click();
   const fileChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose photo' }).click();
+  await page.getByRole('button', { name: 'Choose photo or screenshot' }).click();
   await (await fileChooser).setFiles({ name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not a decodable image') });
   await expect(page.getByText('We could not prepare that photo for scanning. Please try another photo.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Extract details' })).toBeDisabled();
+  // Back on Start: another photo or manual entry, but no retry of a photo that could not be prepared.
+  await expect(page.getByTestId('scan-start')).toBeVisible();
+  await expect(page.getByTestId('scan-error-retry')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Add expense manually' })).toBeVisible();
   expect(uploads).toBe(0);
 });
 
@@ -181,15 +183,14 @@ test('OCR review requires missing fields before an expense can be saved', async 
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('button', { name: 'Scan receipt' }).click();
   const fileChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose photo' }).click();
+  await page.getByRole('button', { name: 'Choose photo or screenshot' }).click();
   await (await fileChooser).setFiles({
     name: 'unclear-receipt.png', mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l4cAAAAASUVORK5CYII=', 'base64'),
   });
-  await page.getByRole('button', { name: 'Extract details' }).click();
-  await expect(page.getByRole('textbox', { name: 'Title' })).toHaveValue('');
-  await expect(page.getByRole('textbox', { name: 'Amount (RM)' })).toHaveValue('');
-  await page.getByRole('button', { name: 'Save receipt expense' }).click();
+  await expect(page.getByRole('textbox', { name: 'Merchant, needs review' })).toHaveValue('');
+  await expect(page.getByRole('textbox', { name: 'Total, needs review' })).toHaveValue('');
+  await page.getByTestId('scan-save-footer').getByRole('button', { name: 'Save expense' }).click();
   await expect(page.getByText('Enter an expense title.')).toBeVisible();
   await expect(page.getByText('Enter an amount.')).toBeVisible();
   await expect(page.getByText('Choose a category.')).toBeVisible();

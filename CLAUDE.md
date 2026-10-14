@@ -48,7 +48,7 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
 | `mobile/` | Expo SDK 57 (`expo ~57.0.27`), Expo Router 57 with **typed routes**, React Native 0.86, React 19.2, TypeScript strict. Read `mobile/AGENTS.md` before touching Expo APIs: fetch the v57 docs and never trust memory. |
 | `mobile/app/` | Routes. `_layout.tsx` is the auth and profile gate. `(auth)/`: login and create-account. `onboarding.tsx`. `(tabs)/`: `index` (Home), `wallet`, `quick` (centre + slot; a direct visit redirects Home), `planner`, `mind`, `profile` (hidden, `href:null`, opened from the Home avatar). |
 | `mobile/app/` stack screens | `add-expense`, `edit-expense`, `expense-detail`, `scan-receipt`, `set-budget` (param `period=weekly\|monthly`, default monthly), `subscriptions`, `subscription-entry` (param `id` for edit), `split-bills`, `split-bill` (param `id`), `split-bill-entry` (param `id` for edit), `add-task`, `edit-task`, `task-detail`, `reminders`, `my-semester`, `timetable`, `timetable-entry`, `timetable-import`, `settings`, `edit-profile`, `privacy-policy`, `terms-of-use`. |
-| `mobile/components/` | Grouped by feature: `home/` (CardDeck, DeckCards, ShadePicker), `finance/` (subscriptions, split bills, `ConfirmDialog`), `poof/`, `mascot/`, `wallet/`, `planner/`, `mind/`, `timetable/`, `profile/`, `auth/`, plus `Screen.tsx`, `Avatar.tsx`, `QuickActions.tsx`. |
+| `mobile/components/` | Grouped by feature: `home/` (CardDeck, DeckCards, ShadePicker), `finance/` (subscriptions, split bills, `ConfirmDialog`), `scan/` (receipt scan steps), `poof/`, `mascot/`, `wallet/`, `planner/`, `mind/`, `timetable/`, `profile/`, `auth/`, plus `Screen.tsx`, `Avatar.tsx`, `QuickActions.tsx`. |
 | `mobile/lib/` | Logic and data. Pure, tested rule modules: `dashboardFacts`, `poofFacts`, `poofEngine`, `budgetSummary`, `budgetPeriod`, `moodTrends`, `reminderMath`, `reminderHistory`, `subscriptions`, `splitBills`, `timetable`, `greeting`, `quickActions`, `cardShades`, `avatarIds`. Loaders: `*Data.ts`, `timetableEntries.ts`, `semesterCourses.ts`. Clients: `supabase.ts`, `receiptOcr.ts` (`ocrBaseUrl()`), `insights.ts`, `poofAi.ts`, `timetableImport.ts`, `taskReminders.ts`, `subscriptionReminders.ts`. |
 | `mobile/constants/` | `i18n.ts` (every string, English and Malay), `theme.ts` (tokens), `avatars.ts` (12-avatar manifest), `umpsa-academic-catalog.ts` (11 faculties, 6 Computing programmes), `reminder-timing.ts`. |
 | `mobile/providers/` | `AuthProvider` (`session`, `profile`, `refreshProfile`), `AppearanceProvider` (`tokens`), `LanguageProvider` (`t`, `language`, `saveLanguage`). |
@@ -77,7 +77,7 @@ npm run eval:receipts:final-setup                     # final test set in local-
 npm run eval:receipts:final-check                     # final labels format check only; never runs the parser
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 110, server 101, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 117, server 101, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -135,6 +135,7 @@ npm run eval:receipts:final-check                     # final labels format chec
   - Category always starts empty, and an undetected date stays blank.
   - Saving is explicit and sets `entry_source='ocr'`.
   - The image and raw text are never stored.
+  - **Scan flow** (2026-10-14, design system "Receipt scan flow"): one route, three steps in `app/scan-receipt.tsx` with `components/scan/`: **Start** (`ScanStart`: gradient icon tile, privacy line naming the Unifyd server and Google Cloud Vision, Scan with camera / Choose photo or screenshot / Add expense manually) → **Reading** (`ScanReading` + `ReceiptReadingRing`, RN `Animated` dotted ring; ≥ 1.2 s, Retry and Enter manually after 20 s, static under Reduce Motion) → **Review** (`ScanReview`: photo row with full-screen viewer, Details with amber "Check" marks from the warnings, `ReceiptItemsCard` only when the optional `items` field is present, `DetectedTextSheet`, fixed Save expense). Rules in `lib/scanFlow.ts`; form state shared with Add expense via `hooks/useExpenseDraft.ts`. `scanReceipt` takes an abort `signal` and reports `network`, `timeout`, and `cancelled` separately. Items are never saved.
 
 ### Planner
 - **Task fields:** title and subject required, description optional, deadline (`timestamptz`), priority `low|medium|high` (default medium), status `pending|ongoing|completed`.

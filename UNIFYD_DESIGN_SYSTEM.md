@@ -87,7 +87,7 @@ Use the platform’s clear sans-serif typeface (for example Inter, if configured
 - Keep descriptions short; prefer one strong title and one supportive line.
 - Use tabular/monospaced numerals only where financial alignment is required.
 - **Finance display numbers** use **Space Mono** (bundled, SIL Open Font License) through the shared `components/FinanceNumber.tsx`.
-  - Scope: Wallet totals, budget amount, spent, remaining or over-budget amount, percentage used, daily average, category amounts, expense amounts in history and detail, the OCR-detected total, and the Home Money and Overview spending figures and category percentages.
+  - Scope: Wallet totals, budget amount, spent, remaining or over-budget amount, percentage used, daily average, category amounts, expense amounts in history and detail, receipt item amounts on the scan Review step, and the Home Money and Overview spending figures and category percentages. The scanned total is now an editable field, so it uses the system font (2026-10-14).
   - Everything else keeps the system font: labels, titles, category names, buttons, dates, editable amount inputs, numbers inside sentences such as "RM 350.00 left of RM 1,500.00", and every non-finance module.
   - The font is regular weight only, with a line height of 1.25 × its size. Large values shrink to fit rather than clip.
   - **Rolling totals:** `components/AnimatedMoneyAmount.tsx` is used for the Wallet overview's primary amount (Available, Over budget, or Spent this period) and for Home's "Spent this month" on the Overview and Money cards. The all-time total no longer rolls.
@@ -453,7 +453,7 @@ Every student has a personal visual identity through an **original illustrated a
 | Mind | Calmer neutral surfaces, mood emojis or icons, low-pressure wording, no alarming graphics |
 | Insights | Three simple cards/panels: finance, academics, wellness; facts first, AI text secondary |
 
-### Receipt scan flow (proposed 2026-10-14, awaiting owner approval)
+### Receipt scan flow (approved and implemented 2026-10-14)
 
 Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, review form, and the full detected text, one under another). **Principle: the less scrolling needed to finish, the better.** The route, its `budgetPeriod` parameter, and the receipt endpoint stay the same. The screen moves through three steps in place: **Start → Reading → Review**. Structure only was taken from an external reference flow; its colours, fonts, icons, wording, and branding are not used.
 
@@ -475,7 +475,7 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
 **Step 2 — Reading**
 - A full-screen state on the page background (nothing half-built behind it): the dotted ring, centred, with the status text below it (section title, 19/700), then a quiet back control.
 - Status text: "Preparing your photo…" while the photo is converted on the device (`prepareReceiptImage`), then "Reading your receipt…" while it uploads and the server reads it. One continuous loading state covers both.
-- **Dotted ring:** 160 pt across; about 48 dots of 2–4 pt in `brandBlue` and `brandCyan`, set in two loose bands around one circle with small random offsets. The outer band turns clockwise once every 6 s, the inner band counter-clockwise once every 9 s, and each dot's opacity drifts between 0.35 and 1 over 1.6–2.4 s at staggered phases, so the dots seem to drift around the circle. It uses React Native `Animated` with the native driver (transform and opacity only), like `PoofMascot`. No new libraries and no native modules.
+- **Dotted ring:** 160 pt across; about 66 dots of 3–5 pt in `brandBlue` and `brandCyan` (denser and brighter than first proposed, so the ring reads clearly on the dark page), set in two loose bands around one circle with small random offsets. The outer band turns clockwise once every 6 s, the inner band counter-clockwise once every 9 s, and each dot's opacity drifts between 0.5 and 1 over 1.6–2.4 s at staggered phases, so the dots seem to drift around the circle. It uses React Native `Animated` with the native driver (transform and opacity only), like `PoofMascot`. No new libraries and no native modules.
 - **Timing:**
   - The Reading state stays visible for **at least 1.2 s** from when it appears, so a fast result never flickers. A result that arrives earlier waits only for the rest of that 1.2 s. There is no other artificial delay.
   - After **20 s** without a result, the ring keeps moving and a card appears below it: "This is taking longer than usual." with **Retry** (cancels and sends the same prepared photo again) and **Enter manually** (`/add-expense`).
@@ -499,16 +499,15 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
 **Uncertain fields (review warnings)**
 - The server's existing warning strings map to fields: "Merchant name needs review." → Merchant; "Purchase date needs review." → Date; "Total amount needs review." → Total. Nothing is inferred beyond these.
 - A flagged field shows, beside its label, an amber (`cardWarningText`) `alert-circle-outline` icon and the word **"Check"**. Screen readers hear "{field}, needs review". Colour is never the only cue.
-- A flagged field that came back empty shows the placeholder "Not found, please enter it".
+- A flagged field that came back empty shows the placeholder "Not found, please enter it" (the shorter "Not found" in the Date row).
 - The marker clears once the student edits that field. It is a prompt, not an error, and never blocks saving.
 - "No readable text was detected." shows one amber line at the top of the Details card: "We couldn't read any text. Enter the details yourself." Any unknown warning shows the existing "Check the extracted details before using them."
 - Validation errors stay red, with a red border and text, so they are distinct from the amber review markers.
 
-**Items** (requires a separate scope decision before it is built)
-- The receipt endpoint returns no line items today, the parser extracts none, and the `expenses` table cannot store them. This needs:
-  - server item extraction, returned as an optional field and evaluated with its own labels;
-  - a storage decision: a new owner-only `expense_items` table (migration), a text summary in notes, or review-only items that are not saved.
-- **When built:**
+**Items** (UI built; item extraction is planned for Phase C)
+- The app reads an optional `items` field (`[{ name, quantity, amount }]`, `amount` the line total in RM, negative for a discount). The endpoint does not return it yet, so the card is hidden. A missing or malformed field never breaks a scan.
+- Items are review-only: they are never saved (no schema change) and "Items help you check the total. Only the expense is saved." says so.
+- **Behaviour:**
   - The card is titled "Items (N)". With more than 4 items, the first 4 show, then "Show all N items"; it opens with every item when there are 4 or fewer.
   - Each row has the name (wraps to two lines, never cut off), "× qty" when above 1, and the price in `FinanceNumber`, always with two decimals (RM 5.30).
   - Discounts are negative lines with a `pricetag-outline` icon and a minus sign (−RM 5.00), never shown by colour alone.

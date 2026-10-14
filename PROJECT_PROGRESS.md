@@ -156,6 +156,37 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt scan flow redesign: Start, Reading, Review (Phase B)
+
+**Requirements implemented:**
+- SRS-FR-201 to SRS-FR-207 (receipt capture, OCR draft, editable review, fallback); design system "Receipt scan flow".
+
+**Changed files:**
+- New: `mobile/components/scan/` (`ScanStart`, `ScanReading`, `ReceiptReadingRing`, `ScanReview`, `ReceiptPhotoRow`, `DetectedTextSheet`, `ReceiptItemsCard`, `ReceiptItemSheet`, `ReviewFlag`), `mobile/lib/scanFlow.ts`, `mobile/hooks/useExpenseDraft.ts`, `mobile/tests/scanFlow.test.mjs`, `mobile/e2e/scanFlow.spec.ts`.
+- Changed: `mobile/app/scan-receipt.tsx` (three-step flow), `mobile/lib/receiptOcr.ts` (abort signal; `network`, `timeout`, `cancelled` errors; optional `items`), `mobile/components/wallet/ExpenseForm.tsx` (uses the shared hook; same markup), `mobile/components/wallet/ExpenseDatePicker.tsx` (row `placeholder`, `accessory`, `a11ySuffix`), `mobile/constants/i18n.ts`, `mobile/e2e/unifyd.spec.ts`, `mobile/e2e/categorySuggestion.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (section marked implemented; ring 66 dots of 3–5 pt, opacity 0.5–1; §5 scanned total now an editable system-font field), `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Start: gradient icon tile, title, one line, privacy line ("sent to the Unifyd server and read with Google Cloud Vision. Unifyd doesn't keep the photo."), Scan with camera, Choose photo or screenshot, Add expense manually. Picking starts reading at once (no Extract details step). Both sources still go through `prepareReceiptImage`.
+- Reading: full-screen dotted ring (RN `Animated`, native driver), "Preparing your photo…" then "Reading your receipt…", at least 1.2 s, Retry and Enter manually after 20 s, static ring under Reduce Motion, Cancel and Android back cancel the request.
+- Review: photo row with full-screen viewer; Details (merchant wraps, date row, total, category with the optional suggestion, collapsed note); amber "Check" marks from the existing warnings that clear on edit; one notice for no readable text; Items card only when the response has `items` (collapsed after 4, discounts as minus lines, add/edit/remove, mismatch note, never saved); raw text only in the "View detected text" sheet; Save expense fixed outside the scroll area; Back asks "Discard this scan?". iOS swipe-back is off except on Start.
+- Errors: unsupported or unpreparable photo, too large, upload failure (`network`), reading failure (`unavailable`), and timeout each have their own message; the last three offer Try again with the same prepared photo; manual entry is always on Start.
+- Privacy policy text now names the Unifyd server and Google Cloud Vision and says the photo and detected text are not kept.
+- No receipt image storage was added ("keep receipt image" would need Supabase Storage, a bucket policy, a column, and privacy wording).
+
+**Tests performed:**
+- Mobile typecheck and lint clean; unit **117/117** (7 new in `scanFlow.test.mjs`).
+- Playwright `scanFlow` 10/10 (steps, ≥ 1.2 s measured in the page, 20 s slow state with a fake clock, warnings, detected-text sheet, errors, items, discard, Reduce Motion), `unifyd` + `categorySuggestion` 11/11; OCR always mocked, no Vision call.
+- Full Playwright suite: **91 passed, 2 failed** (93 tests). `subscriptions` compact layout passed when re-run alone (load). `budget` "a failed save keeps the amount…" is intermittent: on this branch 3 failures in 9 spec runs, on `main` (temporary worktree) 1 in 8; the screen and its components are unchanged here.
+- Server typecheck, 101/101, build.
+- Not executed: iPhone or Android device test.
+
+**Issues or decisions:**
+- Total is an editable system-font field (design system §5 updated). Date placeholder shortened to "Not found" so it fits the row.
+
+**Next action:**
+- Phase C: server-side line items for the optional `items` field.
+
 ### 2026-10-14 — Receipt OCR evaluation: separate final test set
 
 **Requirements implemented:**

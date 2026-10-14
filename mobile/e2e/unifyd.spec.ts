@@ -88,9 +88,12 @@ test('receipt selection sends a bearer-authenticated image and shows an unsaved 
       } });
       return;
     }
+    const body = request.postDataBuffer()?.toString('latin1') ?? '';
+    // A picked PNG is converted on the device, so the upload is always a JPEG named receipt.jpg.
     postedImage = request.method() === 'POST'
       && request.headers().authorization?.startsWith('Bearer ') === true
-      && (request.postDataBuffer()?.toString('latin1').includes('name="image"') ?? false);
+      && body.includes('name="image"; filename="receipt.jpg"') && body.includes('Content-Type: image/jpeg')
+      && body.includes('ÿØÿ');
     await route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: JSON.stringify({
       merchantName: 'Kedai Buku UMPSA', purchaseDate: '2026-10-08', totalAmount: 12.5,
       rawText: 'Kedai Buku UMPSA\nTOTAL RM 12.50', warnings: [],
@@ -138,6 +141,24 @@ test('receipt selection sends a bearer-authenticated image and shows an unsaved 
   expect(typeof savedExpense.value?.user_id).toBe('string');
   expect(savedExpense.value).not.toHaveProperty('rawText');
   expect(savedExpense.value).not.toHaveProperty('image');
+});
+
+test('a photo that cannot be converted shows an error and is never uploaded', async ({ page }) => {
+  test.skip(!process.env.EXPO_PUBLIC_OCR_API_URL, 'The OCR API URL is not configured for Expo Web.');
+  let uploads = 0;
+  await page.route('**/api/ocr/receipt', async (route) => {
+    if (route.request().method() === 'POST') uploads += 1;
+    await route.fulfill({ status: 500 });
+  });
+  await signIn(page);
+  await page.getByRole('tab', { name: 'Wallet' }).click();
+  await page.getByRole('button', { name: 'Scan receipt' }).click();
+  const fileChooser = page.waitForEvent('filechooser');
+  await page.getByRole('button', { name: 'Choose photo' }).click();
+  await (await fileChooser).setFiles({ name: 'IMG_0001.HEIC', mimeType: 'image/heic', buffer: Buffer.from('not a decodable image') });
+  await expect(page.getByText('We could not prepare that photo for scanning. Please try another photo.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Extract details' })).toBeDisabled();
+  expect(uploads).toBe(0);
 });
 
 test('OCR review requires missing fields before an expense can be saved', async ({ page }) => {

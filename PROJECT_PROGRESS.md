@@ -156,6 +156,93 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt scan flow: finish, minimal Start text, merge to main (Phase D)
+
+**Requirements implemented:**
+- Design system "Receipt scan flow" final details; owner request for less text on Start.
+
+**Changed files:**
+- `mobile/components/scan/ScanStart.tsx`, `mobile/constants/i18n.ts`, `mobile/e2e/scanFlow.spec.ts`, `UNIFYD_DESIGN_SYSTEM.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Start now shows only the icon tile, "Scan a receipt", one short privacy line ("Read by Google Cloud Vision. Photo not kept." / "Dibaca oleh Google Cloud Vision. Foto tidak disimpan."), the two buttons, and Add expense manually. The description line was removed. The privacy policy keeps the full wording (Unifyd server, Google Cloud Vision, photo and detected text not kept).
+- Design doc brought in line with the build: lock icon on the privacy line, back arrow plus Cancel on Reading, suggestion above the Category row, iOS swipe-back off except on Start, the full list of error messages with Try again for upload, reading, and timeout failures.
+- `scan-flow-redesign` (design doc, Phase B scan flow, Phase C items, this entry) merged into `main` locally; not pushed.
+
+**Tests performed:**
+- Branch contained `main` (0 behind, 3 ahead) before the final commit.
+- Mobile typecheck and lint clean; unit 118/118. Server typecheck, 110/110, build.
+- `npm run eval:receipts:run` byte-identical to `reports/dev-after-improvements.txt` (0 images read by Vision; `--final` not run).
+- Full Playwright suite before the text change: 93 passed, 1 failed (`budget` "a failed save keeps the amount…", intermittent on `main` as well). After the text change: `scanFlow` 11/11 plus a screenshot check of Start at 390 × 844.
+- Not executed: device test of the final build.
+
+**Issues or decisions:**
+- The gear button seen in the owner's iPhone screenshot is Expo Go's developer menu, not part of Unifyd.
+
+**Next action:**
+- Test the scan flow on the iPhone with the checklist from Phase C.
+
+### 2026-10-14 — Receipt OCR: line items as an additive, optional field (Phase C)
+
+**Requirements implemented:**
+- Receipt review support (SRS-FR-203 editable review); design system "Receipt scan flow" Items card.
+
+**Changed files:**
+- New: `server/src/receipt-items.ts`, `server/src/receipt-items.test.ts`.
+- Changed: `server/src/app.ts` (response adds `items` after `parseReceiptText`), `server/src/app.test.ts`, `server/README.md`; `mobile/lib/scanFlow.ts` (`unitPrice`, `shownUnitPrice`, `itemsIncomplete` flag), `mobile/components/scan/ReceiptItemsCard.tsx`, `mobile/components/scan/ScanReview.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/scanFlow.test.mjs`, `mobile/e2e/scanFlow.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (Items section), `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- `receipt-items.ts` reads lines from the same rebuilt rows as the total (text lines without word boxes): two-line "name / barcode qty × unit amount" layouts, one-line items, leading quantities, price-qty-discount-amount columns, "@ unit xN", amounts alone on the next line, promotion lines ("02 6.99 -2.00") and named or nameless negative lines as discounts. Names must be real words (no prices, mostly-number or code-only text); summary, payment, tax, change, count, address, staff, document, and OCR-damaged labels ("otal", "nge", "Chang", "TCTAL", "Iten") are excluded.
+- Consistency: items must add up to the parsed total within RM 0.05, allowing printed rounding, tax, and service charge; when a line's printed amount disagrees with its own qty × unit, or an amount is illegible, the reading that adds up is used. A smaller gap adds `Items may be incomplete.`; more than 40% away, no total, or an unpaid order returns `[]`. The total is never changed.
+- The response gains `items: [{ name, quantity, unitPrice, amount }]`; the other five fields are unchanged. The warning names no field, so it never marks merchant, date, or total (and is not matched by the evaluation's flag rules).
+- Mobile shows "5 × RM 2.00" for printed unit prices and the incomplete note on the Items card only; editing drops a unit price that no longer agrees.
+
+**Tests performed:**
+- `npm run eval:receipts:run` output byte-identical to `reports/dev-after-improvements.txt` (twice; 0 images read by Vision; `final/` untouched; `--final` not run).
+- Server typecheck, **110/110** tests (8 in `receipt-items.test.ts`, 1 new endpoint test), build.
+- Mobile typecheck and lint clean; unit **118/118**; Playwright `scanFlow` 11/11 (items with the server's exact shape: unit price line, edit, add item and discount, incomplete note), `unifyd` + `categorySuggestion` 11/11.
+- Development split, cached OCR only (held-out receipts skipped by the evaluation hash): 31 of 42 receipts return items; 26 add up to the total within RM 0.05, 5 carry the incomplete warning, 11 return none (no total, unpaid, handwritten, or unreliable).
+- Not executed: held-out or final receipts (deliberately), device test.
+
+**Issues or decisions:**
+- Names are kept as printed, including chains' own truncation (a house brand's "HOUSEBRAND SCE") and OCR misspellings.
+- Items are never saved; storing them would need a table and a scope decision.
+
+**Next action:**
+- Try item reading on the phone with a few fresh receipts (not from the final set).
+
+### 2026-10-14 — Receipt scan flow redesign: Start, Reading, Review (Phase B)
+
+**Requirements implemented:**
+- SRS-FR-201 to SRS-FR-207 (receipt capture, OCR draft, editable review, fallback); design system "Receipt scan flow".
+
+**Changed files:**
+- New: `mobile/components/scan/` (`ScanStart`, `ScanReading`, `ReceiptReadingRing`, `ScanReview`, `ReceiptPhotoRow`, `DetectedTextSheet`, `ReceiptItemsCard`, `ReceiptItemSheet`, `ReviewFlag`), `mobile/lib/scanFlow.ts`, `mobile/hooks/useExpenseDraft.ts`, `mobile/tests/scanFlow.test.mjs`, `mobile/e2e/scanFlow.spec.ts`.
+- Changed: `mobile/app/scan-receipt.tsx` (three-step flow), `mobile/lib/receiptOcr.ts` (abort signal; `network`, `timeout`, `cancelled` errors; optional `items`), `mobile/components/wallet/ExpenseForm.tsx` (uses the shared hook; same markup), `mobile/components/wallet/ExpenseDatePicker.tsx` (row `placeholder`, `accessory`, `a11ySuffix`), `mobile/constants/i18n.ts`, `mobile/e2e/unifyd.spec.ts`, `mobile/e2e/categorySuggestion.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (section marked implemented; ring 66 dots of 3–5 pt, opacity 0.5–1; §5 scanned total now an editable system-font field), `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Start: gradient icon tile, title, one line, privacy line ("sent to the Unifyd server and read with Google Cloud Vision. Unifyd doesn't keep the photo."), Scan with camera, Choose photo or screenshot, Add expense manually. Picking starts reading at once (no Extract details step). Both sources still go through `prepareReceiptImage`.
+- Reading: full-screen dotted ring (RN `Animated`, native driver), "Preparing your photo…" then "Reading your receipt…", at least 1.2 s, Retry and Enter manually after 20 s, static ring under Reduce Motion, Cancel and Android back cancel the request.
+- Review: photo row with full-screen viewer; Details (merchant wraps, date row, total, category with the optional suggestion, collapsed note); amber "Check" marks from the existing warnings that clear on edit; one notice for no readable text; Items card only when the response has `items` (collapsed after 4, discounts as minus lines, add/edit/remove, mismatch note, never saved); raw text only in the "View detected text" sheet; Save expense fixed outside the scroll area; Back asks "Discard this scan?". iOS swipe-back is off except on Start.
+- Errors: unsupported or unpreparable photo, too large, upload failure (`network`), reading failure (`unavailable`), and timeout each have their own message; the last three offer Try again with the same prepared photo; manual entry is always on Start.
+- Privacy policy text now names the Unifyd server and Google Cloud Vision and says the photo and detected text are not kept.
+- No receipt image storage was added ("keep receipt image" would need Supabase Storage, a bucket policy, a column, and privacy wording).
+
+**Tests performed:**
+- Mobile typecheck and lint clean; unit **117/117** (7 new in `scanFlow.test.mjs`).
+- Playwright `scanFlow` 10/10 (steps, ≥ 1.2 s measured in the page, 20 s slow state with a fake clock, warnings, detected-text sheet, errors, items, discard, Reduce Motion), `unifyd` + `categorySuggestion` 11/11; OCR always mocked, no Vision call.
+- Full Playwright suite: **91 passed, 2 failed** (93 tests). `subscriptions` compact layout passed when re-run alone (load). `budget` "a failed save keeps the amount…" is intermittent: on this branch 3 failures in 9 spec runs, on `main` (temporary worktree) 1 in 8; the screen and its components are unchanged here.
+- Server typecheck, 101/101, build.
+- Not executed: iPhone or Android device test.
+
+**Issues or decisions:**
+- Total is an editable system-font field (design system §5 updated). Date placeholder shortened to "Not found" so it fits the row.
+
+**Next action:**
+- Phase C: server-side line items for the optional `items` field.
+
 ### 2026-10-14 — Receipt OCR evaluation: separate final test set
 
 **Requirements implemented:**

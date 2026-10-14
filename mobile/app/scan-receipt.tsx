@@ -1,22 +1,21 @@
-import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
-import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Stack, router, useLocalSearchParams } from 'expo-router';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { BackHandler, Platform, StyleSheet, View } from 'react-native';
 
-import { PrimaryButton } from '@/components/auth/PrimaryButton';
-import { ExpenseForm } from '@/components/wallet/ExpenseForm';
+import { ConfirmDialog } from '@/components/finance/ConfirmDialog';
+import { ScanReading } from '@/components/scan/ScanReading';
+import { ScanReview } from '@/components/scan/ScanReview';
+import { ScanStart } from '@/components/scan/ScanStart';
 import type { TranslationKey } from '@/constants/i18n';
-import { radius, spacing, typography } from '@/constants/theme';
+import { useReducedMotion } from '@/hooks/useReducedMotion';
 import type { ExpenseInput } from '@/lib/expenseForm';
-import { FinanceNumber } from '@/components/FinanceNumber';
-import { formatExpenseDate, formatRinggit } from '@/lib/expenseHistory';
 import { ReceiptImageError } from '@/lib/receiptImage';
 import type { ReceiptImage } from '@/lib/receiptImage';
 import { prepareReceiptImage } from '@/lib/receiptImageTools';
 import { ReceiptOcrError, scanReceipt } from '@/lib/receiptOcr';
 import type { ReceiptOcrErrorCode, ReceiptOcrResult } from '@/lib/receiptOcr';
+import { READING_SLOW_MS, remainingMinimumMs } from '@/lib/scanFlow';
 import { supabase } from '@/lib/supabase';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useAuth } from '@/providers/AuthProvider';
@@ -24,76 +23,154 @@ import { useI18n } from '@/providers/LanguageProvider';
 
 const errorKeys: Record<ReceiptOcrErrorCode, TranslationKey> = {
   notConfigured: 'scan.notConfigured', invalidImage: 'scan.invalidImage', tooLarge: 'scan.tooLarge',
-  authRequired: 'scan.authRequired', unavailable: 'scan.unavailable',
+  authRequired: 'scan.authRequired', unavailable: 'scan.unavailable', network: 'scan.networkError',
+  timeout: 'scan.timeout', cancelled: 'scan.unavailable',
 };
-const warningKeys: Record<string, TranslationKey> = {
-  'No readable text was detected.': 'scan.warningNoText',
-  'Merchant name needs review.': 'scan.warningMerchant',
-  'Purchase date needs review.': 'scan.warningDate',
-  'Total amount needs review.': 'scan.warningTotal',
-};
+// Sending the same prepared photo again can help with these; the others need another photo or a sign-in.
+const RETRYABLE = new Set<ReceiptOcrErrorCode>(['unavailable', 'network', 'timeout']);
+const wait = (ms: number) => new Promise<void>((resolve) => { setTimeout(resolve, ms); });
 
+type Step = 'start' | 'reading' | 'review';
+type ScanError = { key: TranslationKey; canRetry: boolean };
+
+/**
+ * Receipt scan flow (design system "Receipt scan flow"): Start → Reading → Review on one route. Every picked photo,
+ * from the camera or the library, is prepared on the device (upright JPEG, ≤ 2400 px, ≤ 5 MB) before upload.
+ * Reading stays at least 1.2 s and offers Retry and Enter manually after 20 s. Nothing is saved until Save expense.
+ */
 export default function ScanReceiptScreen() {
   const { budgetPeriod } = useLocalSearchParams<{ budgetPeriod?: string }>();
+  const period = budgetPeriod === 'weekly' ? 'weekly' : 'monthly';
   const { session } = useAuth();
   const { tokens } = useAppearance();
-  const { language, t } = useI18n();
-  const insets = useSafeAreaInsets();
-  const [asset, setAsset] = useState<ReceiptImage | null>(null);
-  const [result, setResult] = useState<ReceiptOcrResult | null>(null);
+  const { t } = useI18n();
+  const reduceMotion = useReducedMotion();
+  const [step, setStep] = useState<Step>('start');
+  const [phase, setPhase] = useState<'preparing' | 'reading'>('preparing');
+  const [slow, setSlow] = useState(false);
   const [picking, setPicking] = useState(false);
-  const [preparing, setPreparing] = useState(false);
-  const [scanning, setScanning] = useState(false);
-  const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
+  const [image, setImage] = useState<ReceiptImage | null>(null);
+  const [result, setResult] = useState<ReceiptOcrResult | null>(null);
+  const [error, setError] = useState<ScanError | null>(null);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  // The current Reading run. A newer run (Retry, Cancel, leaving) makes every older reply stale.
+  const run = useRef<{ id: number; controller: AbortController | null; slowTimer: ReturnType<typeof setTimeout> | null }>({ id: 0, controller: null, slowTimer: null });
 
-  async function selectImage(source: 'camera' | 'library') {
-    if (picking || scanning) return;
+  const stopRun = useCallback(() => {
+    run.current.id += 1;
+    run.current.controller?.abort();
+    run.current.controller = null;
+    if (run.current.slowTimer) clearTimeout(run.current.slowTimer);
+    run.current.slowTimer = null;
+  }, []);
+  useEffect(() => stopRun, [stopRun]);
+
+  function beginReading(nextPhase: 'preparing' | 'reading') {
+    stopRun();
+    const id = run.current.id;
+    setError(null); setSlow(false); setPhase(nextPhase); setStep('reading');
+    run.current.slowTimer = setTimeout(() => { if (run.current.id === id) setSlow(true); }, READING_SLOW_MS);
+    return { id, startedAt: Date.now() };
+  }
+
+  /** Shows the outcome once Reading has been visible for its minimum time, unless a newer run took over. */
+  async function finish(id: number, startedAt: number, show: () => void) {
+    await wait(remainingMinimumMs(startedAt, Date.now()));
+    if (run.current.id !== id) return;
+    if (run.current.slowTimer) clearTimeout(run.current.slowTimer);
+    run.current.slowTimer = null;
+    run.current.controller = null;
+    setSlow(false);
+    show();
+  }
+
+  async function read(prepared: ReceiptImage, id: number, startedAt: number) {
+    setPhase('reading');
+    const controller = new AbortController();
+    run.current.controller = controller;
+    try {
+      const scanned = await scanReceipt(prepared, { signal: controller.signal });
+      await finish(id, startedAt, () => { setResult(scanned); setStep('review'); });
+    } catch (caught) {
+      const code = caught instanceof ReceiptOcrError ? caught.code : 'unavailable';
+      if (code === 'cancelled') return;
+      await finish(id, startedAt, () => { setError({ key: errorKeys[code], canRetry: RETRYABLE.has(code) }); setStep('start'); });
+    }
+  }
+
+  async function pick(source: 'camera' | 'library') {
+    if (picking) return;
+    setError(null);
     setPicking(true);
-    setErrorKey(null);
+    let picked: ImagePicker.ImagePickerResult;
     try {
       if (source === 'camera' && Platform.OS !== 'web') {
         const permission = await ImagePicker.requestCameraPermissionsAsync();
-        if (!permission.granted) { setErrorKey('scan.cameraDenied'); return; }
+        if (!permission.granted) { setError({ key: 'scan.cameraDenied', canRetry: false }); return; }
       }
-      const picked = source === 'camera'
+      picked = source === 'camera'
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1, allowsMultipleSelection: false });
-      if (picked.canceled || !picked.assets[0]) return;
-      setAsset(null);
-      setResult(null);
-      // Camera and library photos (often HEIC and over 5 MB) become an upright JPEG before any check or upload.
-      setPreparing(true);
-      try {
-        setAsset(await prepareReceiptImage(picked.assets[0].uri));
-      } catch (error) {
-        setErrorKey(error instanceof ReceiptImageError && error.code === 'tooLarge' ? 'scan.tooLarge' : 'scan.prepareError');
-      }
     } catch {
-      setErrorKey('scan.pickError');
+      setError({ key: 'scan.pickError', canRetry: false });
+      return;
     } finally {
-      setPreparing(false);
       setPicking(false);
     }
+    const asset = picked.canceled ? null : picked.assets[0];
+    if (!asset) return;
+    setImage(null); setResult(null);
+    const { id, startedAt } = beginReading('preparing');
+    let prepared: ReceiptImage;
+    try {
+      // Camera and library photos (often HEIC and over 5 MB) become an upright JPEG before any check or upload.
+      prepared = await prepareReceiptImage(asset.uri);
+    } catch (caught) {
+      const key: TranslationKey = caught instanceof ReceiptImageError && caught.code === 'tooLarge' ? 'scan.tooLarge' : 'scan.prepareError';
+      await finish(id, startedAt, () => { setError({ key, canRetry: false }); setStep('start'); });
+      return;
+    }
+    if (run.current.id !== id) return;
+    setImage(prepared);
+    await read(prepared, id, startedAt);
   }
 
-  async function extract() {
-    if (!asset || scanning || picking) return;
-    setScanning(true);
-    setErrorKey(null);
-    setResult(null);
-    try {
-      setResult(await scanReceipt(asset));
-    } catch (error) {
-      setErrorKey(error instanceof ReceiptOcrError ? errorKeys[error.code] : 'scan.unavailable');
-    } finally {
-      setScanning(false);
-    }
+  function retry() {
+    if (!image) return;
+    const { id, startedAt } = beginReading('reading');
+    void read(image, id, startedAt);
   }
+
+  function cancelReading() {
+    stopRun();
+    setSlow(false);
+    setStep('start');
+  }
+
+  function enterManually() {
+    cancelReading();
+    router.push({ pathname: '/add-expense', params: { budgetPeriod: period } });
+  }
+
+  function discard() {
+    setDiscardOpen(false);
+    setResult(null); setImage(null); setStep('start');
+  }
+
+  // Android back follows the steps: Reading cancels, Review asks before discarding.
+  useEffect(() => {
+    if (step === 'start') return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (step === 'reading') { stopRun(); setSlow(false); setStep('start'); } else setDiscardOpen(true);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [step, stopRun]);
 
   async function saveExpense(input: ExpenseInput): Promise<boolean> {
     if (!session) return false;
     try {
-      const { data, error } = await supabase.from('expenses').insert({
+      const { data, error: saveError } = await supabase.from('expenses').insert({
         user_id: session.user.id,
         title: input.title,
         amount: input.amount,
@@ -102,100 +179,25 @@ export default function ScanReceiptScreen() {
         notes: input.notes,
         entry_source: 'ocr',
       }).select('id').single();
-      if (error || !data) return false;
-      router.replace({ pathname: '/(tabs)/wallet', params: { saved: '1', budgetPeriod: budgetPeriod === 'weekly' ? 'weekly' : 'monthly' } });
+      if (saveError || !data) return false;
+      router.replace({ pathname: '/(tabs)/wallet', params: { saved: '1', budgetPeriod: period } });
       return true;
     } catch {
       return false;
     }
   }
 
-  return <KeyboardAvoidingView style={{ flex: 1, backgroundColor: tokens.screenBackground }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-    <ScrollView style={{ flex: 1 }} keyboardShouldPersistTaps="handled" contentContainerStyle={[styles.content, { paddingTop: insets.top + spacing.space4, paddingBottom: insets.bottom + spacing.space8 }]}>
-    <View style={styles.inner}>
-      <Pressable accessibilityRole="button" accessibilityLabel={t('common.back')} onPress={() => router.back()} style={styles.back}>
-        <Ionicons name="arrow-back" size={22} color={tokens.screenText} />
-      </Pressable>
-      <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>{t('wallet.eyebrow')}</Text>
-      <Text style={[styles.title, { color: tokens.screenText }]}>{t('scan.title')}</Text>
-      <Text style={[styles.helper, { color: tokens.mutedText }]}>{t('scan.helper')}</Text>
-
-      <View style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
-        {asset ? <>
-          <Text style={[styles.cardLabel, { color: tokens.cardMutedText }]}>{t('scan.selected')}</Text>
-          <Image source={{ uri: asset.uri }} style={[styles.preview, { backgroundColor: tokens.cardElevated }]} resizeMode="contain" accessibilityLabel={t('scan.selected')} />
-        </> : <View style={[styles.emptyImage, { backgroundColor: tokens.cardElevated }]}><Ionicons name="receipt-outline" size={42} color={tokens.brandCyan} /></View>}
-        <View style={styles.choices}>
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: picking || scanning }} disabled={picking || scanning} onPress={() => { void selectImage('camera'); }} style={[styles.choice, { backgroundColor: tokens.cardElevated, borderColor: tokens.border }]}>
-            <Ionicons name="camera-outline" size={20} color={tokens.cardText} /><Text style={[styles.choiceText, { color: tokens.cardText }]}>{t('scan.camera')}</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" accessibilityState={{ disabled: picking || scanning }} disabled={picking || scanning} onPress={() => { void selectImage('library'); }} style={[styles.choice, { backgroundColor: tokens.cardElevated, borderColor: tokens.border }]}>
-            <Ionicons name="images-outline" size={20} color={tokens.cardText} /><Text style={[styles.choiceText, { color: tokens.cardText }]}>{t('scan.library')}</Text>
-          </Pressable>
-        </View>
-        {preparing && <View style={styles.preparing} accessibilityLiveRegion="polite"><ActivityIndicator color={tokens.brandCyan} /><Text style={[styles.note, { color: tokens.cardMutedText }]}>{t('scan.preparing')}</Text></View>}
-        {errorKey && <Text accessibilityRole="alert" style={[styles.error, { color: tokens.cardErrorText }]}>{t(errorKey)}</Text>}
-        <PrimaryButton onPress={() => { void extract(); }} disabled={!asset || picking} loading={scanning}>{scanning ? t('scan.scanning') : t('scan.scan')}</PrimaryButton>
-      </View>
-
-      {result && <View style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
-        <Text style={[styles.section, { color: tokens.cardText }]}>{t('scan.draftTitle')}</Text>
-        <Text style={[styles.note, { color: tokens.cardMutedText }]}>{t('scan.draftNote')}</Text>
-        <ResultRow label={t('scan.merchant')} value={result.merchantName ?? t('scan.notDetected')} />
-        <ResultRow label={t('scan.date')} value={result.purchaseDate ? formatExpenseDate(result.purchaseDate, language) : t('scan.notDetected')} />
-        <ResultRow label={t('scan.total')} value={result.totalAmount !== null ? formatRinggit(result.totalAmount) : t('scan.notDetected')} numeric={result.totalAmount !== null} />
-        {result.warnings.length > 0 && <View style={styles.textBlock}>
-          <Text style={[styles.cardLabel, { color: tokens.brandCyan }]}>{t('scan.warnings')}</Text>
-          {result.warnings.map((warning, index) => <Text key={`${index}-${warning}`} style={[styles.note, { color: tokens.cardMutedText }]}>{t(warningKeys[warning] ?? 'scan.warningOther')}</Text>)}
-        </View>}
-      </View>}
-      {result && <>
-        <Text style={[styles.section, styles.reviewTitle, { color: tokens.screenText }]}>{t('scan.reviewTitle')}</Text>
-        <Text style={[styles.helper, { color: tokens.mutedText }]}>{t('scan.reviewHelper')}</Text>
-        <ExpenseForm
-          suggestCategory
-          initial={{ title: result.merchantName ?? '', amount: result.totalAmount === null ? '' : String(result.totalAmount), category: null, expenseDate: result.purchaseDate ?? '', notes: '' }}
-          onSave={saveExpense}
-          submitKey="scan.saveExpense"
-          savingKey="scan.savingExpense"
-          errorKey="scan.saveError"
-        />
-        <View style={[styles.card, styles.rawCard, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
-          <Text style={[styles.cardLabel, { color: tokens.brandCyan }]}>{t('scan.rawText')}</Text>
-          <Text selectable style={[styles.rawText, { color: tokens.cardMutedText }]}>{result.rawText || t('scan.notDetected')}</Text>
-        </View>
-      </>}
-      <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/add-expense', params: { budgetPeriod: budgetPeriod === 'weekly' ? 'weekly' : 'monthly' } })} style={styles.manual}>
-        <Text style={[styles.manualText, { color: tokens.pageAccent }]}>{t('scan.manual')}</Text>
-      </Pressable>
-    </View>
-    </ScrollView>
-  </KeyboardAvoidingView>;
+  return <View style={[styles.fill, { backgroundColor: tokens.screenBackground }]}>
+    {/* The iOS swipe back would drop a scan in progress or a draft, so it works only on Start. */}
+    <Stack.Screen options={{ gestureEnabled: step === 'start' }} />
+    {step === 'start' && <ScanStart busy={picking} error={error ? { message: t(error.key), canRetry: error.canRetry && !!image } : null}
+      onBack={() => router.back()} onCamera={() => { void pick('camera'); }} onLibrary={() => { void pick('library'); }}
+      onManual={() => router.push({ pathname: '/add-expense', params: { budgetPeriod: period } })} onRetry={retry} />}
+    {step === 'reading' && <ScanReading phase={phase} slow={slow} reduceMotion={reduceMotion} onCancel={cancelReading} onRetry={retry} onManual={enterManually} />}
+    {step === 'review' && result && image && <ScanReview imageUri={image.uri} result={result} onSave={saveExpense} onBack={() => setDiscardOpen(true)} />}
+    <ConfirmDialog visible={discardOpen} title={t('scan.discardTitle')} body={t('scan.discardBody')} confirmLabel={t('scan.discard')} cancelLabel={t('scan.keepReviewing')}
+      busy={false} destructive onConfirm={discard} onCancel={() => setDiscardOpen(false)} testID="scan-discard" />
+  </View>;
 }
 
-function ResultRow({ label, value, numeric = false }: { label: string; value: string; numeric?: boolean }) {
-  const { tokens } = useAppearance();
-  // Only a detected total uses the finance number style; merchant, date, and "not detected" stay normal text.
-  const Value = numeric ? FinanceNumber : Text;
-  return <View style={[styles.resultRow, { borderTopColor: tokens.border }]}><Text style={[styles.cardLabel, { color: tokens.cardMutedText }]}>{label}</Text><Value style={[styles.resultValue, { color: tokens.cardText }]}>{value}</Value></View>;
-}
-
-const styles = StyleSheet.create({
-  content: { flexGrow: 1, paddingHorizontal: spacing.space6 }, inner: { width: '100%', maxWidth: 520, alignSelf: 'center' },
-  back: { width: 44, height: 44, justifyContent: 'center', marginBottom: spacing.space5 },
-  eyebrow: { ...typography.label, letterSpacing: 2, marginBottom: spacing.space2 },
-  title: { ...typography.screenTitle, marginBottom: spacing.space2 },
-  helper: { ...typography.body, lineHeight: 23, marginBottom: spacing.space6 },
-  card: { borderWidth: 1, borderRadius: radius.radiusLg, padding: spacing.space5, gap: spacing.space4, marginBottom: spacing.space4 },
-  emptyImage: { height: 160, borderRadius: radius.radiusMd, alignItems: 'center', justifyContent: 'center' },
-  preview: { width: '100%', height: 220, borderRadius: radius.radiusMd },
-  choices: { flexDirection: 'row', gap: spacing.space3 },
-  choice: { minHeight: 54, flex: 1, borderWidth: 1, borderRadius: radius.radiusMd, alignItems: 'center', justifyContent: 'center', gap: spacing.space1, padding: spacing.space2 },
-  choiceText: { ...typography.label, textAlign: 'center' },
-  cardLabel: { ...typography.label }, section: { ...typography.sectionTitle }, note: { ...typography.body, lineHeight: 22 },
-  error: { ...typography.body, lineHeight: 22 },
-  resultRow: { borderTopWidth: 1, paddingTop: spacing.space3, gap: spacing.space1 }, resultValue: { ...typography.body, fontWeight: '600' },
-  textBlock: { gap: spacing.space2 }, preparing: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3 }, rawText: { ...typography.body, lineHeight: 22 },
-  reviewTitle: { marginBottom: spacing.space2 }, rawCard: { marginTop: spacing.space4 },
-  manual: { minHeight: 48, alignItems: 'center', justifyContent: 'center' }, manualText: { ...typography.body, fontWeight: '600' },
-});
+const styles = StyleSheet.create({ fill: { flex: 1 } });

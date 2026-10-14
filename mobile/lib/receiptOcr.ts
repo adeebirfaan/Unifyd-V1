@@ -3,6 +3,8 @@ import { File, UploadType } from 'expo-file-system';
 import { Platform } from 'react-native';
 
 import type { ReceiptImage } from '@/lib/receiptImage';
+import { receiptItems } from '@/lib/scanFlow';
+import type { ReceiptItem } from '@/lib/scanFlow';
 import { supabase } from '@/lib/supabase';
 
 export type ReceiptOcrResult = {
@@ -11,9 +13,16 @@ export type ReceiptOcrResult = {
   totalAmount: number | null;
   rawText: string;
   warnings: string[];
+  /** Optional receipt lines (planned server field). Missing or malformed items become an empty list. */
+  items: ReceiptItem[];
 };
 
-export type ReceiptOcrErrorCode = 'notConfigured' | 'invalidImage' | 'tooLarge' | 'authRequired' | 'unavailable';
+/**
+ * `network`: the photo could not be uploaded (no connection or the server could not be reached).
+ * `unavailable`: the server answered but could not read the receipt. `timeout`: no answer within 45 s.
+ * `cancelled`: the student cancelled, so nothing is shown.
+ */
+export type ReceiptOcrErrorCode = 'notConfigured' | 'invalidImage' | 'tooLarge' | 'authRequired' | 'unavailable' | 'network' | 'timeout' | 'cancelled';
 export class ReceiptOcrError extends Error {
   constructor(public readonly code: ReceiptOcrErrorCode) { super(code); }
 }
@@ -36,7 +45,7 @@ export function ocrBaseUrl(): string | null {
   return url.toString().replace(/\/$/, '');
 }
 
-function isResult(value: unknown): value is ReceiptOcrResult {
+function isResult(value: unknown): value is Omit<ReceiptOcrResult, 'items'> & { items?: unknown } {
   if (!value || typeof value !== 'object') return false;
   const result = value as Partial<ReceiptOcrResult>;
   return (result.merchantName === null || typeof result.merchantName === 'string')
@@ -46,8 +55,11 @@ function isResult(value: unknown): value is ReceiptOcrResult {
     && Array.isArray(result.warnings) && result.warnings.every((warning) => typeof warning === 'string');
 }
 
-/** Uploads a photo already prepared by `prepareReceiptImage` (an upright JPEG named receipt.jpg). */
-export async function scanReceipt(image: ReceiptImage): Promise<ReceiptOcrResult> {
+/**
+ * Uploads a photo already prepared by `prepareReceiptImage` (an upright JPEG named receipt.jpg).
+ * `signal` cancels the request (Back or Retry during Reading); it then fails with `cancelled`.
+ */
+export async function scanReceipt(image: ReceiptImage, { signal }: { signal?: AbortSignal } = {}): Promise<ReceiptOcrResult> {
   const baseUrl = ocrBaseUrl();
   if (!baseUrl) throw new ReceiptOcrError('notConfigured');
   const mime = image.mimeType;
@@ -56,10 +68,16 @@ export async function scanReceipt(image: ReceiptImage): Promise<ReceiptOcrResult
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) throw new ReceiptOcrError('authRequired');
+  if (signal?.aborted) throw new ReceiptOcrError('cancelled');
 
   const name = image.fileName;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45000);
+  let timedOut = false;
+  const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 45000);
+  const cancel = () => controller.abort();
+  signal?.addEventListener('abort', cancel);
+  // A failure while sending is a cancellation, a timeout, or an upload (network) problem; never a reading failure.
+  const sendFailed = () => new ReceiptOcrError(signal?.aborted ? 'cancelled' : timedOut ? 'timeout' : 'network');
   try {
     let status: number;
     let body: unknown;
@@ -69,12 +87,17 @@ export async function scanReceipt(image: ReceiptImage): Promise<ReceiptOcrResult
       if (blob.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
       // The type is set explicitly so the multipart part says image/jpeg, matching the bytes the server checks.
       form.append('image', blob.type === mime ? blob : new Blob([blob], { type: mime }), name);
-      const response = await fetch(`${baseUrl}/api/ocr/receipt`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
-        body: form,
-        signal: controller.signal,
-      });
+      let response: Response;
+      try {
+        response = await fetch(`${baseUrl}/api/ocr/receipt`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          body: form,
+          signal: controller.signal,
+        });
+      } catch {
+        throw sendFailed();
+      }
       status = response.status;
       if (response.ok) body = await response.json();
     } else {
@@ -83,24 +106,34 @@ export async function scanReceipt(image: ReceiptImage): Promise<ReceiptOcrResult
       const file = new File(image.uri);
       if (!file.exists || file.size === 0) throw new ReceiptOcrError('invalidImage');
       if (file.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
-      const upload = await file.upload(`${baseUrl}/api/ocr/receipt`, {
-        httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: 'image', mimeType: mime,
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
-        signal: controller.signal,
-      });
+      let upload: Awaited<ReturnType<typeof file.upload>>;
+      try {
+        upload = await file.upload(`${baseUrl}/api/ocr/receipt`, {
+          httpMethod: 'POST', uploadType: UploadType.MULTIPART, fieldName: 'image', mimeType: mime,
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          signal: controller.signal,
+        });
+      } catch {
+        throw sendFailed();
+      }
       status = upload.status;
       if (status >= 200 && status < 300) body = JSON.parse(upload.body);
     }
+    if (signal?.aborted) throw new ReceiptOcrError('cancelled');
     if (status === 401) throw new ReceiptOcrError('authRequired');
     if (status === 413) throw new ReceiptOcrError('tooLarge');
     if (status === 415 || status === 400) throw new ReceiptOcrError('invalidImage');
     if (status < 200 || status >= 300) throw new ReceiptOcrError('unavailable');
     if (!isResult(body)) throw new ReceiptOcrError('unavailable');
-    return body;
+    const { merchantName, purchaseDate, totalAmount, rawText, warnings } = body;
+    return { merchantName, purchaseDate, totalAmount, rawText, warnings, items: receiptItems(body.items) };
   } catch (error) {
+    if (signal?.aborted) throw new ReceiptOcrError('cancelled');
     if (error instanceof ReceiptOcrError) throw error;
+    // The server answered, but the reply could not be read.
     throw new ReceiptOcrError('unavailable');
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', cancel);
   }
 }

@@ -10,6 +10,7 @@ import type { InsightFacts } from './insight-facts.js';
 import { GroqError, groqMessages, groqPayload, validateSummary } from './insight-summary.js';
 import type { GroqMessage, InsightSummary, SummaryLanguage } from './insight-summary.js';
 import { isCrisisMessage, parsePoofRequest, poofMessages, validatePoofReply } from './poof-chat.js';
+import { withReceiptItems } from './receipt-items.js';
 import { parseReceiptText } from './receipt-parser.js';
 import { parseTimetable } from './timetable-parser.js';
 import type { OcrPage } from './timetable-parser.js';
@@ -171,7 +172,8 @@ export function createApp({ verifyToken, detectText, insights, poof, readTimetab
       try {
         const detected = await detectText(image.buffer);
         const { text, pages } = typeof detected === 'string' ? { text: detected, pages: undefined } : detected;
-        response.json(parseReceiptText(text, pages));
+        // Items are added after parsing; merchant, date, and total come from the parser unchanged.
+        response.json(withReceiptItems(parseReceiptText(text, pages), pages));
       } catch {
         // Provider details, image content and access tokens must not reach clients or logs.
         errorResponse(response, 502, 'OCR_UNAVAILABLE', 'The receipt could not be read. Please retry or enter it manually.');

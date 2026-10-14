@@ -48,14 +48,14 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
 | `mobile/` | Expo SDK 57 (`expo ~57.0.27`), Expo Router 57 with **typed routes**, React Native 0.86, React 19.2, TypeScript strict. Read `mobile/AGENTS.md` before touching Expo APIs: fetch the v57 docs and never trust memory. |
 | `mobile/app/` | Routes. `_layout.tsx` is the auth and profile gate. `(auth)/`: login and create-account. `onboarding.tsx`. `(tabs)/`: `index` (Home), `wallet`, `quick` (centre + slot; a direct visit redirects Home), `planner`, `mind`, `profile` (hidden, `href:null`, opened from the Home avatar). |
 | `mobile/app/` stack screens | `add-expense`, `edit-expense`, `expense-detail`, `scan-receipt`, `set-budget` (param `period=weekly\|monthly`, default monthly), `subscriptions`, `subscription-entry` (param `id` for edit), `split-bills`, `split-bill` (param `id`), `split-bill-entry` (param `id` for edit), `add-task`, `edit-task`, `task-detail`, `reminders`, `my-semester`, `timetable`, `timetable-entry`, `timetable-import`, `settings`, `edit-profile`, `privacy-policy`, `terms-of-use`. |
-| `mobile/components/` | Grouped by feature: `home/` (CardDeck, DeckCards, ShadePicker), `finance/` (subscriptions, split bills, `ConfirmDialog`), `poof/`, `mascot/`, `wallet/`, `planner/`, `mind/`, `timetable/`, `profile/`, `auth/`, plus `Screen.tsx`, `Avatar.tsx`, `QuickActions.tsx`. |
+| `mobile/components/` | Grouped by feature: `home/` (CardDeck, DeckCards, ShadePicker), `finance/` (subscriptions, split bills, `ConfirmDialog`), `scan/` (receipt scan steps), `poof/`, `mascot/`, `wallet/`, `planner/`, `mind/`, `timetable/`, `profile/`, `auth/`, plus `Screen.tsx`, `Avatar.tsx`, `QuickActions.tsx`. |
 | `mobile/lib/` | Logic and data. Pure, tested rule modules: `dashboardFacts`, `poofFacts`, `poofEngine`, `budgetSummary`, `budgetPeriod`, `moodTrends`, `reminderMath`, `reminderHistory`, `subscriptions`, `splitBills`, `timetable`, `greeting`, `quickActions`, `cardShades`, `avatarIds`. Loaders: `*Data.ts`, `timetableEntries.ts`, `semesterCourses.ts`. Clients: `supabase.ts`, `receiptOcr.ts` (`ocrBaseUrl()`), `insights.ts`, `poofAi.ts`, `timetableImport.ts`, `taskReminders.ts`, `subscriptionReminders.ts`. |
 | `mobile/constants/` | `i18n.ts` (every string, English and Malay), `theme.ts` (tokens), `avatars.ts` (12-avatar manifest), `umpsa-academic-catalog.ts` (11 faculties, 6 Computing programmes), `reminder-timing.ts`. |
 | `mobile/providers/` | `AuthProvider` (`session`, `profile`, `refreshProfile`), `AppearanceProvider` (`tokens`), `LanguageProvider` (`t`, `language`, `saveLanguage`). |
 | `mobile/plugins/` | `withUnifydNotificationLargeIcon.js`, a config plugin for the Android notification large icon. |
 | `mobile/tests/*.test.mjs` | Node unit tests that import `.ts` files directly. |
 | `mobile/e2e/*.spec.ts` | Playwright on Expo Web: `unifyd`, `avatar`, `home`, `poof`, `mind`, `planner`, `reminders`, `semester`, `timetable`, plus `global-setup`, `test-client`, and `safe-reporter`. |
-| `server/` | Node 24 Express in TypeScript (ESM; imports use `.js` suffixes). Endpoints in §5. Receipt parsing: `receipt-parser.ts` composes `receipt-merchant.ts` (with the brand list `receipt-merchants.ts`), `receipt-total.ts`, `receipt-date.ts`, and `receipt-layout.ts` (rows from Vision word boxes). OCR evaluation: `receipt-eval.ts` plus `scripts/receipt-*.ts`. |
+| `server/` | Node 24 Express in TypeScript (ESM; imports use `.js` suffixes). Endpoints in §5. Receipt parsing: `receipt-parser.ts` composes `receipt-merchant.ts` (with the brand list `receipt-merchants.ts`), `receipt-total.ts`, `receipt-date.ts`, and `receipt-layout.ts` (rows from Vision word boxes). Line items: `receipt-items.ts`, outside the parser. OCR evaluation: `receipt-eval.ts` plus `scripts/receipt-*.ts`. |
 | `supabase/migrations/` | SQL migrations (§6). `supabase/seeds/2026_2027_fkom_catalog_courses.sql`: the course catalogue seed. |
 | Root `assets/` | Approved originals: avatars, logo, `poof-mascot.png`. The app bundles resized copies in `mobile/assets/`. |
 | `docs/design references/` | Reference screenshots only; never ship them. `/local-assets/` (storyboard) and `local data/` (UMPSA catalogue PDF) are local only and must not be shipped. |
@@ -77,7 +77,7 @@ npm run eval:receipts:final-setup                     # final test set in local-
 npm run eval:receipts:final-check                     # final labels format check only; never runs the parser
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 110, server 101, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 118, server 110, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -135,6 +135,7 @@ npm run eval:receipts:final-check                     # final labels format chec
   - Category always starts empty, and an undetected date stays blank.
   - Saving is explicit and sets `entry_source='ocr'`.
   - The image and raw text are never stored.
+  - **Scan flow** (2026-10-14, design system "Receipt scan flow"): one route, three steps in `app/scan-receipt.tsx` with `components/scan/`: **Start** (`ScanStart`: gradient icon tile, privacy line naming the Unifyd server and Google Cloud Vision, Scan with camera / Choose photo or screenshot / Add expense manually) → **Reading** (`ScanReading` + `ReceiptReadingRing`, RN `Animated` dotted ring; ≥ 1.2 s, Retry and Enter manually after 20 s, static under Reduce Motion) → **Review** (`ScanReview`: photo row with full-screen viewer, Details with amber "Check" marks from the warnings, `ReceiptItemsCard` only when the optional `items` field is present, `DetectedTextSheet`, fixed Save expense). Rules in `lib/scanFlow.ts`; form state shared with Add expense via `hooks/useExpenseDraft.ts`. `scanReceipt` takes an abort `signal` and reports `network`, `timeout`, and `cancelled` separately. Items are never saved.
 
 ### Planner
 - **Task fields:** title and subject required, description optional, deadline (`timestamptz`), priority `low|medium|high` (default medium), status `pending|ongoing|completed`.
@@ -197,10 +198,11 @@ npm run eval:receipts:final-check                     # final labels format chec
 
 ### Server endpoints (`server/README.md` has details)
 - `GET /health`.
-- `POST /api/ocr/receipt`: one `image` part, JPEG, PNG, or WEBP, up to 5 MiB; the signature is checked. Returns `{merchantName, purchaseDate, totalAmount, rawText, warnings}` (shape unchanged since Phase 1).
+- `POST /api/ocr/receipt`: one `image` part, JPEG, PNG, or WEBP, up to 5 MiB; the signature is checked. Returns `{merchantName, purchaseDate, totalAmount, rawText, warnings, items}` (the first five unchanged since Phase 1; `items` added 2026-10-14).
   - Parsing (2026-10-14): the endpoint passes the text **and** Vision word boxes from the same `documentTextDetection` call; the parser still works from text alone.
   - Merchant: a general list of nationwide Malaysian brands, then "THANK YOU FOR SHOPPING AT X", fuel brands over dealer companies, then generic header rules. Total: label/amount pairing on rebuilt rows, final labels over plain "Total", never subtotal/cash/change; unpaid orders and outstanding bills return `null`. Date: English/Malay month names, label/time context, never due/expiry dates.
   - Uncertain values reuse the three existing warning strings (the app maps them exactly).
+  - Items (2026-10-14): `receipt-items.ts` (`withReceiptItems`, applied in `app.ts` after `parseReceiptText`, so the evaluation never sees it) returns `{name, quantity, unitPrice, amount}` lines (discounts negative). It adds `Items may be incomplete.` when they miss the total by more than RM 0.05 after printed rounding/tax, and returns `[]` when there is no total, the order is unpaid, or the lines are more than 40% off. The app shows that warning on the Items card only.
 - `POST /api/timetable/import`: one `file` part, PNG, JPEG, or PDF; encrypted or truncated PDFs return 422. Returns `{candidates, warnings, pagesProcessed, totalPages}`. Raw text is never returned.
 - `POST /api/insights/generate`: `{language, timeZone}` returns facts plus a summary or fallback. It uses a 10-minute cache.
   - Groq model `GROQ_MODEL` (default `openai/gpt-oss-20b`), temperature 0.2, strict JSON schema.

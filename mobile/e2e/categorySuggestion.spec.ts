@@ -116,11 +116,10 @@ test('OCR review can show a suggestion from the draft title only, and saving sta
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('button', { name: 'Scan receipt' }).click();
   const fileChooser = page.waitForEvent('filechooser');
-  await page.getByRole('button', { name: 'Choose photo' }).click();
+  await page.getByRole('button', { name: 'Choose photo or screenshot' }).click();
   await (await fileChooser).setFiles({ name: 'receipt.png', mimeType: 'image/png',
     buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l4cAAAAASUVORK5CYII=', 'base64') });
-  await page.getByRole('button', { name: 'Extract details' }).click();
-  await expect(page.getByText('Review expense')).toBeVisible();
+  await expect(page.getByText('Review receipt')).toBeVisible();
 
   const card = page.getByTestId('category-suggestion');
   await expect(card).toContainText('Academic Materials · 90% confidence');
@@ -132,6 +131,6 @@ test('OCR review can show a suggestion from the draft title only, and saving sta
   await card.getByRole('button', { name: 'Use Academic Materials' }).click();
   await expect(page.getByRole('button', { name: 'Category: Academic Materials' })).toBeVisible();
   expect(writes).toEqual([]);
-  await page.getByRole('button', { name: 'Save receipt expense' }).click();
+  await page.getByTestId('scan-save-footer').getByRole('button', { name: 'Save expense' }).click();
   await expect.poll(() => writes).toEqual(['POST']);
 });

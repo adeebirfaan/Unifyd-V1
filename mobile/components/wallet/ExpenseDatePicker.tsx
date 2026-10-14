@@ -1,5 +1,6 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useState } from 'react';
+import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { spacing, radius, typography } from '@/constants/theme';
@@ -7,8 +8,15 @@ import { isValidISODate, localDateISO } from '@/lib/expenseForm';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
 
-/** `variant="row"` is the compact grouped-card row (label left, date and calendar icon right); the accessible name is unchanged. */
-export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle, variant = 'field' }: { value: string; onChange: (date: string) => void; error?: string; label?: string; pickerTitle?: string; variant?: 'field' | 'row' }) {
+/**
+ * `variant="row"` is the compact grouped-card row (label left, date and calendar icon right); the accessible name is unchanged.
+ * Row extras: `placeholder` replaces the label when no date is chosen, `accessory` sits after the label (the receipt
+ * Review "Check" marker), and `a11ySuffix` is added to the accessible name.
+ */
+export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle, variant = 'field', placeholder, accessory, a11ySuffix }: {
+  value: string; onChange: (date: string) => void; error?: string; label?: string; pickerTitle?: string; variant?: 'field' | 'row';
+  placeholder?: string; accessory?: ReactNode; a11ySuffix?: string;
+}) {
   const { tokens } = useAppearance();
   const { language, t } = useI18n();
   const initial = isValidISODate(value) ? new Date(`${value}T12:00:00`) : new Date();
@@ -18,7 +26,7 @@ export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle, 
   const monthLabel = new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(month);
   const selectedLabel = isValidISODate(value)
     ? new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'long', year: 'numeric' }).format(initial)
-    : (label ?? t('expense.date'));
+    : (placeholder ?? label ?? t('expense.date'));
   const leading = new Date(month.getFullYear(), month.getMonth(), 1).getDay();
   const days = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate();
   const cells = Array.from({ length: leading + days }, (_, index) => index < leading ? null : index - leading + 1);
@@ -29,8 +37,8 @@ export function ExpenseDatePicker({ value, onChange, error, label, pickerTitle, 
   }
 
   return <View style={variant === 'row' ? styles.rowField : styles.field}>
-    {variant === 'row' ? <Pressable accessibilityRole="button" accessibilityLabel={`${label ?? t('expense.date')}: ${selectedLabel}`} onPress={() => setVisible(true)} style={styles.row}>
-      <Text style={[styles.rowLabel, { color: tokens.cardText }]}>{label ?? t('expense.date')}</Text>
+    {variant === 'row' ? <Pressable accessibilityRole="button" accessibilityLabel={`${label ?? t('expense.date')}: ${selectedLabel}${a11ySuffix ? `, ${a11ySuffix}` : ''}`} onPress={() => setVisible(true)} style={styles.row}>
+      <View style={styles.rowLabelWrap}><Text style={[styles.rowLabel, { color: tokens.cardText }]}>{label ?? t('expense.date')}</Text>{accessory}</View>
       <Text style={[styles.rowValue, { color: error ? tokens.cardErrorText : tokens.cardMutedText }]} numberOfLines={1}>{selectedLabel}</Text>
       <Ionicons name="calendar-outline" size={18} color={tokens.brandCyan} />
     </Pressable> : <>
@@ -72,7 +80,7 @@ const styles = StyleSheet.create({
   control: { minHeight: 54, borderWidth: 1, borderRadius: radius.radiusMd, paddingHorizontal: spacing.space4, flexDirection: 'row', alignItems: 'center', gap: spacing.space3 },
   controlText: { ...typography.body, flex: 1 }, error: { ...typography.label },
   rowField: { gap: spacing.space1 }, row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.space2 },
-  rowLabel: { ...typography.body, flex: 1 }, rowValue: { ...typography.body, flexShrink: 0, maxWidth: '58%', textAlign: 'right' },
+  rowLabelWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: spacing.space2 }, rowLabel: { ...typography.body, flexShrink: 1 }, rowValue: { ...typography.body, flexShrink: 0, maxWidth: '58%', textAlign: 'right' },
   modalRoot: { flex: 1, justifyContent: 'center', padding: spacing.space4 }, scrim: { ...StyleSheet.absoluteFill },
   calendar: { width: '100%', maxWidth: 400, alignSelf: 'center', borderWidth: 1, borderRadius: radius.radiusLg, padding: spacing.space4 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, heading: { ...typography.sectionTitle, flex: 1 },

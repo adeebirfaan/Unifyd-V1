@@ -2,7 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import * as ImagePicker from 'expo-image-picker';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
@@ -12,6 +12,9 @@ import { radius, spacing, typography } from '@/constants/theme';
 import type { ExpenseInput } from '@/lib/expenseForm';
 import { FinanceNumber } from '@/components/FinanceNumber';
 import { formatExpenseDate, formatRinggit } from '@/lib/expenseHistory';
+import { ReceiptImageError } from '@/lib/receiptImage';
+import type { ReceiptImage } from '@/lib/receiptImage';
+import { prepareReceiptImage } from '@/lib/receiptImageTools';
 import { ReceiptOcrError, scanReceipt } from '@/lib/receiptOcr';
 import type { ReceiptOcrErrorCode, ReceiptOcrResult } from '@/lib/receiptOcr';
 import { supabase } from '@/lib/supabase';
@@ -36,9 +39,10 @@ export default function ScanReceiptScreen() {
   const { tokens } = useAppearance();
   const { language, t } = useI18n();
   const insets = useSafeAreaInsets();
-  const [asset, setAsset] = useState<ImagePicker.ImagePickerAsset | null>(null);
+  const [asset, setAsset] = useState<ReceiptImage | null>(null);
   const [result, setResult] = useState<ReceiptOcrResult | null>(null);
   const [picking, setPicking] = useState(false);
+  const [preparing, setPreparing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [errorKey, setErrorKey] = useState<TranslationKey | null>(null);
 
@@ -54,14 +58,20 @@ export default function ScanReceiptScreen() {
       const picked = source === 'camera'
         ? await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1 })
         : await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: false, quality: 1, allowsMultipleSelection: false });
-      if (!picked.canceled && picked.assets[0]) {
-        setAsset(picked.assets[0]);
-        setResult(null);
-        if ((picked.assets[0].fileSize ?? picked.assets[0].file?.size ?? 0) > 5 * 1024 * 1024) setErrorKey('scan.tooLarge');
+      if (picked.canceled || !picked.assets[0]) return;
+      setAsset(null);
+      setResult(null);
+      // Camera and library photos (often HEIC and over 5 MB) become an upright JPEG before any check or upload.
+      setPreparing(true);
+      try {
+        setAsset(await prepareReceiptImage(picked.assets[0].uri));
+      } catch (error) {
+        setErrorKey(error instanceof ReceiptImageError && error.code === 'tooLarge' ? 'scan.tooLarge' : 'scan.prepareError');
       }
     } catch {
       setErrorKey('scan.pickError');
     } finally {
+      setPreparing(false);
       setPicking(false);
     }
   }
@@ -123,6 +133,7 @@ export default function ScanReceiptScreen() {
             <Ionicons name="images-outline" size={20} color={tokens.cardText} /><Text style={[styles.choiceText, { color: tokens.cardText }]}>{t('scan.library')}</Text>
           </Pressable>
         </View>
+        {preparing && <View style={styles.preparing} accessibilityLiveRegion="polite"><ActivityIndicator color={tokens.brandCyan} /><Text style={[styles.note, { color: tokens.cardMutedText }]}>{t('scan.preparing')}</Text></View>}
         {errorKey && <Text accessibilityRole="alert" style={[styles.error, { color: tokens.cardErrorText }]}>{t(errorKey)}</Text>}
         <PrimaryButton onPress={() => { void extract(); }} disabled={!asset || picking} loading={scanning}>{scanning ? t('scan.scanning') : t('scan.scan')}</PrimaryButton>
       </View>
@@ -184,7 +195,7 @@ const styles = StyleSheet.create({
   cardLabel: { ...typography.label }, section: { ...typography.sectionTitle }, note: { ...typography.body, lineHeight: 22 },
   error: { ...typography.body, lineHeight: 22 },
   resultRow: { borderTopWidth: 1, paddingTop: spacing.space3, gap: spacing.space1 }, resultValue: { ...typography.body, fontWeight: '600' },
-  textBlock: { gap: spacing.space2 }, rawText: { ...typography.body, lineHeight: 22 },
+  textBlock: { gap: spacing.space2 }, preparing: { flexDirection: 'row', alignItems: 'center', gap: spacing.space3 }, rawText: { ...typography.body, lineHeight: 22 },
   reviewTitle: { marginBottom: spacing.space2 }, rawCard: { marginTop: spacing.space4 },
   manual: { minHeight: 48, alignItems: 'center', justifyContent: 'center' }, manualText: { ...typography.body, fontWeight: '600' },
 });

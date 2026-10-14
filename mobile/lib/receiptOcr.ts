@@ -1,8 +1,8 @@
-import type { ImagePickerAsset } from 'expo-image-picker';
 import Constants from 'expo-constants';
 import { File, UploadType } from 'expo-file-system';
 import { Platform } from 'react-native';
 
+import type { ReceiptImage } from '@/lib/receiptImage';
 import { supabase } from '@/lib/supabase';
 
 export type ReceiptOcrResult = {
@@ -46,17 +46,18 @@ function isResult(value: unknown): value is ReceiptOcrResult {
     && Array.isArray(result.warnings) && result.warnings.every((warning) => typeof warning === 'string');
 }
 
-export async function scanReceipt(asset: ImagePickerAsset): Promise<ReceiptOcrResult> {
+/** Uploads a photo already prepared by `prepareReceiptImage` (an upright JPEG named receipt.jpg). */
+export async function scanReceipt(image: ReceiptImage): Promise<ReceiptOcrResult> {
   const baseUrl = ocrBaseUrl();
   if (!baseUrl) throw new ReceiptOcrError('notConfigured');
-  const mime = asset.mimeType ?? asset.file?.type;
-  if (!mime || !ACCEPTED_TYPES.has(mime)) throw new ReceiptOcrError('invalidImage');
-  if ((asset.fileSize ?? asset.file?.size ?? 0) > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
+  const mime = image.mimeType;
+  if (!ACCEPTED_TYPES.has(mime)) throw new ReceiptOcrError('invalidImage');
+  if (image.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
 
   const { data, error } = await supabase.auth.getSession();
   if (error || !data.session?.access_token) throw new ReceiptOcrError('authRequired');
 
-  const name = asset.fileName || `receipt.${mime === 'image/png' ? 'png' : mime === 'image/webp' ? 'webp' : 'jpg'}`;
+  const name = image.fileName;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 45000);
   try {
@@ -64,13 +65,10 @@ export async function scanReceipt(asset: ImagePickerAsset): Promise<ReceiptOcrRe
     let body: unknown;
     if (Platform.OS === 'web') {
       const form = new FormData();
-      if (asset.file) {
-        form.append('image', asset.file, name);
-      } else {
-        const image = await fetch(asset.uri).then((response) => response.blob());
-        if (image.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
-        form.append('image', image, name);
-      }
+      const blob: Blob = image.file ? image.file : await (await fetch(image.uri)).blob();
+      if (blob.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
+      // The type is set explicitly so the multipart part says image/jpeg, matching the bytes the server checks.
+      form.append('image', blob.type === mime ? blob : new Blob([blob], { type: mime }), name);
       const response = await fetch(`${baseUrl}/api/ocr/receipt`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${data.session.access_token}` },
@@ -80,9 +78,9 @@ export async function scanReceipt(asset: ImagePickerAsset): Promise<ReceiptOcrRe
       status = response.status;
       if (response.ok) body = await response.json();
     } else {
-      // Expo's native uploader reads the ImagePicker file directly and builds
+      // Expo's native uploader reads the prepared JPEG directly and builds
       // multipart data without React Native's fragile file-URI FormData bridge.
-      const file = new File(asset.uri);
+      const file = new File(image.uri);
       if (!file.exists || file.size === 0) throw new ReceiptOcrError('invalidImage');
       if (file.size > MAX_IMAGE_BYTES) throw new ReceiptOcrError('tooLarge');
       const upload = await file.upload(`${baseUrl}/api/ocr/receipt`, {

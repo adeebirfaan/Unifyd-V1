@@ -75,7 +75,7 @@ npm run dev   |   npm run build && npm start          # 127.0.0.1:3001; set OCR_
 npm run eval:receipts:run                             # receipt OCR evaluation: labels.csv rows, cached Vision OCR, development scores
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 103, server 93, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-14, on `main`):** mobile unit 110, server 93, full Playwright e2e suite 82 (all passed). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -129,7 +129,7 @@ npm run eval:receipts:run                             # receipt OCR evaluation: 
   - Nothing is ever sent to participants.
 - **Wallet `FinanceSummaryCard`:** renewals in the next 7 days and the amount owed. Never part of spending totals.
 - **Wallet home layout** (2026-10-13): header and period switch → `FinanceDeck` (Home `CardDeck` with the cards `FinanceOverviewCard` on `colors.brandGradient`, `SpendingBreakdownCard` (donut, top 3), and `FinanceAttentionCard` (≤ 2 real items, only when present); dots "Finance card N of M", direct selection in one stable place via `CardDeck stableFront` with no Back to overview, a guide at the bottom of the overview card, test IDs `finance-deck-*`) → `FinanceQuickActions` (shared `IconQuickActions` 4-column grid: Add expense, Scan receipt, Budget, Split bills; row 2: Subscriptions tile) → compact recent rows grouped by day (`groupExpensesByDate`; newest 5 rows in total; "View all (N)" opens `AllExpensesSheet`, a Modal reusing the loaded rows, with sticky day headers). Composition lives in `lib/walletOverview.ts`; figures still come only from `calculateBudgetSummary`. The existing `budget-*` test IDs are kept.
-- **Receipt OCR** (`/scan-receipt`, camera or gallery; JPEG, PNG, or WEBP; up to 5 MiB) → server → editable review.
+- **Receipt OCR** (`/scan-receipt`, camera or gallery) → on-device preparation (`lib/receiptImage.ts` rules, `lib/receiptImageTools.ts`: upright JPEG, longest side ≤ 2400 px and never below 1600, quality 0.8 then one retry at 0.6, ≤ 5 MiB; HEIC accepted) → server (JPEG, PNG, or WEBP; up to 5 MiB) → editable review.
   - Category always starts empty, and an undetected date stays blank.
   - Saving is explicit and sets `entry_source='ocr'`.
   - The image and raw text are never stored.
@@ -257,7 +257,7 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 - **Dependencies:** add none without asking; use `npx expo install`.
   - Dev only: `simple-icons` (CC0; used by `scripts/generate-brand-marks.mjs` and the brand test, never bundled).
   - Never imported directly but required: `expo-symbols` (a dependency of `expo-router`), `expo-linking`, `react-native-screens`, `react-native-reanimated`, `react-native-worklets`, `react-dom`, `react-native-web`. `expo-web-browser` was removed on 2026-10-14 (unused).
-  - Installed: `expo-linear-gradient`, `expo-image-picker`, `expo-document-picker`, `expo-file-system`, `expo-notifications`, `react-native-svg`, `react-native-reanimated`, AsyncStorage, Ionicons.
+  - Installed: `expo-linear-gradient`, `expo-image-picker`, `expo-image-manipulator` (added 2026-10-14 for receipt photos), `expo-document-picker`, `expo-file-system`, `expo-notifications`, `react-native-svg`, `react-native-reanimated`, AsyncStorage, Ionicons.
   - Animations use RN `Animated`.
   - Gesture Handler is deliberately avoided (it mismatches Expo Go). No Lottie, no 3D.
 - **Style:** match the surrounding code: dense single-line JSX props, short "why" comments, and `testID`s for e2e.

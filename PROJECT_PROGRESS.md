@@ -156,6 +156,35 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt OCR: prepare camera and library photos as upright JPEGs before upload
+
+**Requirements implemented:**
+- SRS-FR-201 to SRS-FR-207 (camera and gallery receipt handling). Fix for iPhone photos being rejected.
+
+**Changed files:**
+- `mobile/lib/receiptImage.ts` (new, pure rules), `mobile/lib/receiptImageTools.ts` (new, `expo-image-manipulator` adapter), `mobile/lib/receiptOcr.ts`, `mobile/app/scan-receipt.tsx`, `mobile/constants/i18n.ts`, `mobile/package.json`, `mobile/package-lock.json`.
+- Tests: `mobile/tests/receiptImage.test.mjs` (new), `mobile/e2e/unifyd.spec.ts`.
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- Root cause: both errors came from the app, before any upload. "Take photo" failed the app's own 5 MB check on the picked full-resolution photo (`scan-receipt.tsx`, `scan.tooLarge`); a library photo from the iPhone camera arrived as HEIC, which failed the app's JPEG/PNG/WEBP check in `scanReceipt` (`scan.invalidImage`). The server never received either file.
+- Every picked photo (camera and library, iOS, Android, web) is now decoded with EXIF orientation applied, resized so the longest side is at most 2400 px (never upscaled, never below 1600 px), and saved as JPEG at quality 0.8; if that is still over 5 MiB it is saved once more at 0.6, and only then shows "Choose an image smaller than 5 MB."
+- The upload is always `image/jpeg` (`receipt.jpg` on web; the manipulator's `<uuid>.jpg` on native). "Preparing photo…" shows while converting; a failed conversion shows a new error (`scan.prepareError`, English and Malay) and nothing is uploaded.
+- Dependency added with owner approval: `expo-image-manipulator ~57.0.21` (`npx expo install`; included in Expo Go).
+- Unchanged: server 5 MiB limit and JPEG/PNG/WEBP signature check, receipt parser, OCR evaluation, labels, API response.
+
+**Tests performed:**
+- Mobile: typecheck and lint clean; unit **110/110** (7 new: HEIC to JPEG, resize, no upscale, 1600 px floor, under 5 MB with one retry, tooLarge after retry, conversion failure).
+- Playwright: `unifyd` + `categorySuggestion` 11/11 (upload now asserted as `receipt.jpg`, `image/jpeg`, JPEG bytes; new case: an undecodable HEIC shows the prepare error and is never uploaded; OCR endpoint mocked, no Vision call); `walletHome` + `home` 25/25.
+- Server: typecheck, 93/93 tests, build.
+- Not executed: iPhone or Android device test (needed to confirm HEIC decoding, orientation, and size on real photos).
+
+**Issues or decisions:**
+- Retry keeps the size and lowers quality only, so OCR resolution is never reduced below 2400 px by the retry.
+
+**Next action:**
+- Test camera and library scans on the iPhone in Expo Go (checklist in the session report), then on Android.
+
 ### 2026-10-14 — Maintenance: codebase review, safe cleanup, and documentation sync
 
 **Requirements implemented:**

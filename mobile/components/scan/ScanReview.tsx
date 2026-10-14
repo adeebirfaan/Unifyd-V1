@@ -129,7 +129,7 @@ export function ScanReview({ imageUri, result, onSave, onBack }: {
           </Pressable>}
       </View>
 
-      {result.items.length > 0 && <ReceiptItemsCard items={items} totalAmount={parseExpenseAmount(draft.amountText)} onChange={setItems} />}
+      {result.items.length > 0 && <ReceiptItemsCard items={items} totalAmount={parseExpenseAmount(draft.amountText)} incomplete={flags.itemsIncomplete} onChange={setItems} />}
 
       <Pressable testID="scan-view-text" accessibilityRole="button" onPress={() => setTextOpen(true)} style={styles.textLink}>
         <Ionicons name="document-text-outline" size={17} color={tokens.pageAccent} />

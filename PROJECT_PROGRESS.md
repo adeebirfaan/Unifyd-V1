@@ -156,6 +156,36 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 
 ## Completed work log
 
+### 2026-10-14 — Receipt OCR: line items as an additive, optional field (Phase C)
+
+**Requirements implemented:**
+- Receipt review support (SRS-FR-203 editable review); design system "Receipt scan flow" Items card.
+
+**Changed files:**
+- New: `server/src/receipt-items.ts`, `server/src/receipt-items.test.ts`.
+- Changed: `server/src/app.ts` (response adds `items` after `parseReceiptText`), `server/src/app.test.ts`, `server/README.md`; `mobile/lib/scanFlow.ts` (`unitPrice`, `shownUnitPrice`, `itemsIncomplete` flag), `mobile/components/scan/ReceiptItemsCard.tsx`, `mobile/components/scan/ScanReview.tsx`, `mobile/constants/i18n.ts`, `mobile/tests/scanFlow.test.mjs`, `mobile/e2e/scanFlow.spec.ts`.
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (Items section), `CLAUDE.md`, `PROJECT_PROGRESS.md`.
+
+**What changed:**
+- `receipt-items.ts` reads lines from the same rebuilt rows as the total (text lines without word boxes): two-line "name / barcode qty × unit amount" layouts, one-line items, leading quantities, price-qty-discount-amount columns, "@ unit xN", amounts alone on the next line, promotion lines ("02 6.99 -2.00") and named or nameless negative lines as discounts. Names must be real words (no prices, mostly-number or code-only text); summary, payment, tax, change, count, address, staff, document, and OCR-damaged labels ("otal", "nge", "Chang", "TCTAL", "Iten") are excluded.
+- Consistency: items must add up to the parsed total within RM 0.05, allowing printed rounding, tax, and service charge; when a line's printed amount disagrees with its own qty × unit, or an amount is illegible, the reading that adds up is used. A smaller gap adds `Items may be incomplete.`; more than 40% away, no total, or an unpaid order returns `[]`. The total is never changed.
+- The response gains `items: [{ name, quantity, unitPrice, amount }]`; the other five fields are unchanged. The warning names no field, so it never marks merchant, date, or total (and is not matched by the evaluation's flag rules).
+- Mobile shows "5 × RM 2.00" for printed unit prices and the incomplete note on the Items card only; editing drops a unit price that no longer agrees.
+
+**Tests performed:**
+- `npm run eval:receipts:run` output byte-identical to `reports/dev-after-improvements.txt` (twice; 0 images read by Vision; `final/` untouched; `--final` not run).
+- Server typecheck, **110/110** tests (8 in `receipt-items.test.ts`, 1 new endpoint test), build.
+- Mobile typecheck and lint clean; unit **118/118**; Playwright `scanFlow` 11/11 (items with the server's exact shape: unit price line, edit, add item and discount, incomplete note), `unifyd` + `categorySuggestion` 11/11.
+- Development split, cached OCR only (held-out receipts skipped by the evaluation hash): 31 of 42 receipts return items; 26 add up to the total within RM 0.05, 5 carry the incomplete warning, 11 return none (no total, unpaid, handwritten, or unreliable).
+- Not executed: held-out or final receipts (deliberately), device test.
+
+**Issues or decisions:**
+- Names are kept as printed, including chains' own truncation (a house brand's "HOUSEBRAND SCE") and OCR misspellings.
+- Items are never saved; storing them would need a table and a scope decision.
+
+**Next action:**
+- Try item reading on the phone with a few fresh receipts (not from the final set).
+
 ### 2026-10-14 — Receipt scan flow redesign: Start, Reading, Review (Phase B)
 
 **Requirements implemented:**

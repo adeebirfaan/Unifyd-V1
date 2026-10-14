@@ -7,7 +7,7 @@ import { ReceiptItemSheet } from '@/components/scan/ReceiptItemSheet';
 import type { ItemEditing } from '@/components/scan/ReceiptItemSheet';
 import { radius, spacing, typography } from '@/constants/theme';
 import { formatRinggit } from '@/lib/expenseHistory';
-import { ITEMS_PREVIEW, itemsMismatch, itemsTotalCents, visibleItems } from '@/lib/scanFlow';
+import { ITEMS_PREVIEW, itemsMismatch, itemsTotalCents, shownUnitPrice, visibleItems } from '@/lib/scanFlow';
 import type { DraftItem, ReceiptItem } from '@/lib/scanFlow';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
@@ -17,7 +17,9 @@ import { useI18n } from '@/providers/LanguageProvider';
  * starts collapsed. Names wrap (never cut off), amounts always have two decimals, and discounts carry an icon and a
  * minus sign. Items are a review aid only: they are never saved, and the Total field is never changed for them.
  */
-export function ReceiptItemsCard({ items, totalAmount, onChange }: { items: readonly DraftItem[]; totalAmount: number | null; onChange: (items: DraftItem[]) => void }) {
+export function ReceiptItemsCard({ items, totalAmount, incomplete, onChange }: {
+  items: readonly DraftItem[]; totalAmount: number | null; incomplete: boolean; onChange: (items: DraftItem[]) => void;
+}) {
   const { tokens } = useAppearance();
   const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
@@ -28,7 +30,8 @@ export function ReceiptItemsCard({ items, totalAmount, onChange }: { items: read
 
   function done(item: ReceiptItem) {
     if (!editing) return;
-    if (editing.id) onChange(items.map((current) => current.id === editing.id ? { ...item, id: current.id } : current));
+    // An edited line keeps its printed unit price only while quantity × unit still equals the amount.
+    if (editing.id) onChange(items.map((current) => current.id === editing.id ? { ...item, unitPrice: shownUnitPrice(item.quantity, current.unitPrice, item.amount), id: current.id } : current));
     else { onChange([...items, { ...item, id: `added-${nextId}` }]); setNextId((count) => count + 1); }
     setEditing(null);
   }
@@ -39,6 +42,10 @@ export function ReceiptItemsCard({ items, totalAmount, onChange }: { items: read
 
   return <View testID="scan-items" style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
     <Text accessibilityRole="header" style={[styles.heading, { color: tokens.cardMutedText }]}>{items.length === 1 ? t('scan.itemsOne') : t('scan.itemsMany', { count: items.length })}</Text>
+    {incomplete && <View testID="scan-items-incomplete" style={styles.note}>
+      <Ionicons name="alert-circle-outline" size={16} color={tokens.cardWarningText} />
+      <Text style={[styles.noteText, { color: tokens.cardWarningText }]}>{t('scan.itemsIncomplete')}</Text>
+    </View>}
     {shown.map((item, index) => {
       const discount = item.amount < 0;
       const amount = formatRinggit(Math.abs(item.amount));
@@ -48,8 +55,11 @@ export function ReceiptItemsCard({ items, totalAmount, onChange }: { items: read
           accessibilityLabel={discount ? t('scan.discountA11y', { name: item.name, amount }) : t('scan.itemA11y', { name: item.name, quantity: item.quantity, amount })}
           style={({ pressed }) => [styles.row, pressed && styles.pressed]}>
           {discount && <Ionicons name="pricetag-outline" size={16} color={tokens.cardMutedText} />}
-          <Text style={[styles.name, { color: tokens.cardText }]}>{item.name}</Text>
-          {!discount && item.quantity > 1 && <Text style={[styles.quantity, { color: tokens.cardMutedText }]}>{t('scan.itemQuantity', { count: item.quantity })}</Text>}
+          <View style={styles.nameBlock}>
+            <Text style={[styles.name, { color: tokens.cardText }]}>{item.name}</Text>
+            {!discount && item.unitPrice !== null && item.quantity > 1 && <Text style={[styles.unit, { color: tokens.cardMutedText }]}>{t('scan.itemUnit', { quantity: item.quantity, price: formatRinggit(item.unitPrice) })}</Text>}
+          </View>
+          {!discount && item.quantity > 1 && item.unitPrice === null && <Text style={[styles.quantity, { color: tokens.cardMutedText }]}>{t('scan.itemQuantity', { count: item.quantity })}</Text>}
           <FinanceNumber style={[styles.amount, { color: tokens.cardText }]}>{discount ? `−${amount}` : amount}</FinanceNumber>
         </Pressable>
       </View>;
@@ -82,7 +92,9 @@ const styles = StyleSheet.create({
   divider: { height: StyleSheet.hairlineWidth },
   row: { minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: spacing.space2, paddingVertical: spacing.space2 },
   pressed: { opacity: 0.75 },
-  name: { ...typography.body, flex: 1, lineHeight: 21 },
+  nameBlock: { flex: 1, gap: 2 },
+  name: { ...typography.body, lineHeight: 21 },
+  unit: { ...typography.label, fontWeight: '500' },
   quantity: { ...typography.label },
   amount: { fontSize: 15 },
   toggle: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: spacing.space1 },

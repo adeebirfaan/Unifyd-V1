@@ -12,7 +12,7 @@ export function remainingMinimumMs(startedAt: number, now: number, minimum = REA
 
 export type ReviewField = 'merchant' | 'date' | 'total';
 export const REVIEW_FIELDS: readonly ReviewField[] = ['merchant', 'date', 'total'];
-export type ReviewFlags = { fields: Record<ReviewField, boolean>; noText: boolean; other: boolean };
+export type ReviewFlags = { fields: Record<ReviewField, boolean>; noText: boolean; other: boolean; itemsIncomplete: boolean };
 
 // The server's exact warning strings (receipt-parser.ts). Nothing is inferred beyond them.
 const WARNING_FIELD: Record<string, ReviewField> = {
@@ -21,19 +21,23 @@ const WARNING_FIELD: Record<string, ReviewField> = {
   'Total amount needs review.': 'total',
 };
 const NO_TEXT = 'No readable text was detected.';
+// Added by the server when the items it read do not add up to the total (receipt-items.ts).
+const ITEMS_INCOMPLETE = 'Items may be incomplete.';
 
 /** Which Details fields to mark "Check", from the receipt endpoint's warnings. */
 export function reviewFlags(warnings: readonly string[]): ReviewFlags {
   const fields: Record<ReviewField, boolean> = { merchant: false, date: false, total: false };
   let noText = false;
   let other = false;
+  let itemsIncomplete = false;
   for (const warning of warnings) {
     const field = WARNING_FIELD[warning];
     if (field) fields[field] = true;
     else if (warning === NO_TEXT) noText = true;
+    else if (warning === ITEMS_INCOMPLETE) itemsIncomplete = true;
     else other = true;
   }
-  return { fields, noText, other };
+  return { fields, noText, other, itemsIncomplete };
 }
 
 /** An editable draft amount: two decimals, or empty when nothing was detected. */
@@ -42,10 +46,11 @@ export function draftAmount(amount: number | null): string {
 }
 
 /**
- * A receipt line returned by the server (Phase C, optional `items` field). `amount` is the line total in RM;
- * a negative amount is a discount. Items help the student check the total; they are never saved.
+ * A receipt line returned by the server (optional `items` field). `amount` is the line total in RM; a negative amount
+ * is a discount. `unitPrice` is set only when the receipt printed it and it agrees with the amount.
+ * Items help the student check the total; they are never saved.
  */
-export type ReceiptItem = { name: string; quantity: number; amount: number };
+export type ReceiptItem = { name: string; quantity: number; unitPrice: number | null; amount: number };
 export type DraftItem = ReceiptItem & { id: string };
 /** With more items than this, the list starts collapsed. */
 export const ITEMS_PREVIEW = 4;
@@ -56,13 +61,23 @@ const isItem = (value: unknown): value is ReceiptItem => {
   const item = value as Partial<ReceiptItem>;
   return typeof item.name === 'string' && item.name.trim().length > 0 && item.name.length <= 200
     && typeof item.quantity === 'number' && Number.isInteger(item.quantity) && item.quantity >= 1 && item.quantity <= 999
-    && typeof item.amount === 'number' && Number.isFinite(item.amount) && item.amount !== 0 && Math.abs(item.amount) < 1e9;
+    && typeof item.amount === 'number' && Number.isFinite(item.amount) && item.amount !== 0 && Math.abs(item.amount) < 1e9
+    && (item.unitPrice === undefined || item.unitPrice === null || (typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice) && item.unitPrice > 0));
 };
+
+/** The unit price to show: only when it still agrees with the quantity and amount (it is dropped once they change). */
+export function shownUnitPrice(quantity: number, unitPrice: number | null | undefined, amount: number): number | null {
+  if (unitPrice === null || unitPrice === undefined || amount <= 0) return null;
+  return Math.round(quantity * unitPrice * 100) === Math.round(amount * 100) ? unitPrice : null;
+}
 
 /** The optional `items` field: a valid list, or an empty one. A malformed field never breaks the scan. */
 export function receiptItems(value: unknown): ReceiptItem[] {
   if (!Array.isArray(value) || value.length > MAX_ITEMS || !value.every(isItem)) return [];
-  return value.map((item) => ({ name: item.name.trim(), quantity: item.quantity, amount: Math.round(item.amount * 100) / 100 }));
+  return value.map((item) => {
+    const amount = Math.round(item.amount * 100) / 100;
+    return { name: item.name.trim(), quantity: item.quantity, unitPrice: shownUnitPrice(item.quantity, item.unitPrice, amount), amount };
+  });
 }
 
 export function draftItems(items: readonly ReceiptItem[]): DraftItem[] {
@@ -99,5 +114,5 @@ export function parseItemInput(input: ItemInput, discount: boolean): { item: Rec
   const price = /^\d+(?:\.\d{1,2})?$/.test(priceText) ? Number(priceText) : NaN;
   if (!(price > 0 && price < 1e9)) errors.price = true;
   if (Object.keys(errors).length) return { item: null, errors };
-  return { item: { name, quantity, amount: discount ? -price : price }, errors };
+  return { item: { name, quantity, unitPrice: null, amount: discount ? -price : price }, errors };
 }

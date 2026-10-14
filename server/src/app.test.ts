@@ -41,7 +41,18 @@ test('one authenticated receipt returns only reviewable fields', async () => {
     .attach('image', jpeg, { filename: 'receipt.jpg', contentType: 'image/jpeg' }).expect(200);
   assert.deepEqual(response.body, {
     merchantName: 'Kedai Buku UMPSA', purchaseDate: '2026-10-08', totalAmount: 12.5,
-    rawText: sample, warnings: [],
+    rawText: sample, warnings: [], items: [],
+  });
+});
+
+test('receipt lines are returned as optional items beside the unchanged fields', async () => {
+  const text = 'Kedai Buku UMPSA\nDate: 08/10/2026 10:15\nPen blue 2 x 1.50 3.00\nNotebook A5 9.50\nTotal 12.50\nCash 20.00\nChange 7.50';
+  const withItems = createApp({ verifyToken: async () => true, detectText: async () => text });
+  const response = await request(withItems).post('/api/ocr/receipt').set('Authorization', 'Bearer valid-test-token')
+    .attach('image', jpeg, { filename: 'receipt.jpg', contentType: 'image/jpeg' }).expect(200);
+  assert.deepEqual(response.body, {
+    merchantName: 'Kedai Buku UMPSA', purchaseDate: '2026-10-08', totalAmount: 12.5, rawText: text, warnings: [],
+    items: [{ name: 'Pen blue', quantity: 2, unitPrice: 1.5, amount: 3 }, { name: 'Notebook A5', quantity: 1, unitPrice: null, amount: 9.5 }],
   });
 });
 
@@ -54,7 +65,7 @@ test('word boxes from the same Vision call pair a column-ordered total; the resp
   const withBoxes = createApp({ verifyToken: async () => true, detectText: async () => ({ text, pages }) });
   const response = await request(withBoxes).post('/api/ocr/receipt').set('Authorization', 'Bearer valid-test-token')
     .attach('image', jpeg, { filename: 'receipt.jpg', contentType: 'image/jpeg' }).expect(200);
-  assert.deepEqual(response.body, { merchantName: 'Kedai Buku UMPSA', purchaseDate: '2026-10-08', totalAmount: 12.5, rawText: text, warnings: [] });
+  assert.deepEqual(response.body, { merchantName: 'Kedai Buku UMPSA', purchaseDate: '2026-10-08', totalAmount: 12.5, rawText: text, warnings: [], items: [] });
 });
 
 test('missing, multiple, wrong-field, invalid-type and oversized uploads fail safely', async () => {

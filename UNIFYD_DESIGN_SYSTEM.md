@@ -504,12 +504,13 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
 - "No readable text was detected." shows one amber line at the top of the Details card: "We couldn't read any text. Enter the details yourself." Any unknown warning shows the existing "Check the extracted details before using them."
 - Validation errors stay red, with a red border and text, so they are distinct from the amber review markers.
 
-**Items** (UI built; item extraction is planned for Phase C)
-- The app reads an optional `items` field (`[{ name, quantity, amount }]`, `amount` the line total in RM, negative for a discount). The endpoint does not return it yet, so the card is hidden. A missing or malformed field never breaks a scan.
+**Items** (built 2026-10-14; the server reads the lines in `receipt-items.ts`)
+- The app reads the optional `items` field (`[{ name, quantity, unitPrice, amount }]`, `amount` the line total in RM, negative for a discount). The card is hidden when the list is empty (no total, unpaid order, or lines that could not be read reliably). A missing or malformed field never breaks a scan.
+- When the server adds "Items may be incomplete.", the card (not the Details card) shows an amber icon and "Some items may be missing or misread. Check them against your receipt."
 - Items are review-only: they are never saved (no schema change) and "Items help you check the total. Only the expense is saved." says so.
 - **Behaviour:**
   - The card is titled "Items (N)". With more than 4 items, the first 4 show, then "Show all N items"; it opens with every item when there are 4 or fewer.
-  - Each row has the name (wraps to two lines, never cut off), "× qty" when above 1, and the price in `FinanceNumber`, always with two decimals (RM 5.30).
+  - Each row has the name (wraps, never cut off), "5 × RM 2.00" under it when the receipt printed a unit price (otherwise "× qty" when above 1), and the price in `FinanceNumber`, always with two decimals (RM 5.30). An edited line keeps its unit price only while quantity × unit still equals the amount.
   - Discounts are negative lines with a `pricetag-outline` icon and a minus sign (−RM 5.00), never shown by colour alone.
   - Tapping a row opens a small item sheet (name, quantity, price, **Remove item**). "Add item" and "Add discount" rows end the list.
   - Total, subtotal, tax, service charge, rounding, cash, tendered, and change lines are never items.

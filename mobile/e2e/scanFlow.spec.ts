@@ -196,11 +196,12 @@ test('an unsupported photo stays on Start with its message and no upload', async
 });
 
 test('items from the server start collapsed, show discounts as minus lines, and hide when there are none', async ({ page }) => {
+  // The exact shape the receipt endpoint returns (server/src/receipt-items.ts).
   const items = [
-    { name: 'Sample Crisps Original 160g', quantity: 1, amount: 4.5 }, { name: 'Sample Biscuit Cup', quantity: 1, amount: 3.2 },
-    { name: 'Sample Chocolate 50g', quantity: 1, amount: 5.9 }, { name: 'Sample Wafer Stick', quantity: 1, amount: 2.4 },
-    { name: 'Sample Candy 15g', quantity: 5, amount: 9 }, { name: 'Bundle price promo', quantity: 1, amount: -4 },
-    { name: 'Sample Mineral Water', quantity: 1, amount: 6.1 },
+    { name: 'Sample Crisps Original 160g', quantity: 1, unitPrice: 4.5, amount: 4.5 }, { name: 'Sample Biscuit Cup', quantity: 1, unitPrice: null, amount: 3.2 },
+    { name: 'Sample Chocolate 50g', quantity: 1, unitPrice: null, amount: 5.9 }, { name: 'Sample Wafer Stick', quantity: 1, unitPrice: null, amount: 2.4 },
+    { name: 'Sample Candy 15g', quantity: 5, unitPrice: 1.8, amount: 9 }, { name: 'Bundle price promo', quantity: 1, unitPrice: null, amount: -4 },
+    { name: 'Sample Mineral Water', quantity: 1, unitPrice: null, amount: 6.1 },
   ];
   await mockOcr(page, ok({ ...RESULT, totalAmount: 27.1, items }));
   await openScan(page);
@@ -211,7 +212,9 @@ test('items from the server start collapsed, show discounts as minus lines, and 
   await card.getByTestId('scan-items-toggle').click();
   await expect(card.getByTestId('scan-item-row')).toHaveCount(7);
   await expect(card.getByRole('button', { name: 'Discount Bundle price promo, minus RM 4.00. Edit discount' })).toContainText('−RM 4.00');
-  await expect(card.getByRole('button', { name: /^Sample Candy 15g, quantity 5, RM 9.00/ })).toContainText('× 5');
+  const candy = card.getByRole('button', { name: /^Sample Candy 15g, quantity 5, RM 9.00/ });
+  await expect(candy).toContainText('5 × RM 1.80');
+  await expect(page.getByTestId('scan-items-incomplete')).toHaveCount(0);
   // 4.50 + 3.20 + 5.90 + 2.40 + 9.00 − 4.00 + 6.10 = 27.10, matching the total.
   await expect(page.getByTestId('scan-items-mismatch')).toHaveCount(0);
   await page.getByRole('textbox', { name: 'Total' }).fill('30.00');
@@ -220,6 +223,40 @@ test('items from the server start collapsed, show discounts as minus lines, and 
   await page.getByTestId('scan-item-remove').click();
   await expect(card).toContainText('Items (6)');
   await expect(card).toContainText('Only the expense is saved.');
+
+  // Editing a line: a new quantity and price replace the row, and the printed unit price no longer applies.
+  await candy.click();
+  const sheet = page.getByTestId('scan-item-sheet');
+  await expect(sheet.getByRole('textbox', { name: 'Name' })).toHaveValue('Sample Candy 15g');
+  await expect(sheet.getByRole('textbox', { name: 'Price for this line' })).toHaveValue('9.00');
+  await sheet.getByRole('textbox', { name: 'Quantity' }).fill('4');
+  await sheet.getByRole('textbox', { name: 'Price for this line' }).fill('8.50');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  const edited = card.getByRole('button', { name: /^Sample Candy 15g, quantity 4, RM 8.50/ });
+  await expect(edited).toContainText('× 4');
+  await expect(edited).not.toContainText('RM 1.80');
+  // Adding a line and a discount.
+  await card.getByTestId('scan-item-add').click();
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('Plastic bag');
+  await sheet.getByRole('textbox', { name: 'Price for this line' }).fill('0.20');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await card.getByTestId('scan-discount-add').click();
+  await sheet.getByRole('textbox', { name: 'Name' }).fill('Member discount');
+  await sheet.getByRole('textbox', { name: 'Discount amount' }).fill('1.00');
+  await sheet.getByRole('button', { name: 'Done' }).click();
+  await expect(card).toContainText('Items (8)');
+  await expect(card.getByRole('button', { name: 'Discount Member discount, minus RM 1.00. Edit discount' })).toBeVisible();
+});
+
+test('the server\'s "Items may be incomplete." warning shows on the Items card only', async ({ page }) => {
+  await mockOcr(page, ok({ ...RESULT, totalAmount: 20, warnings: ['Items may be incomplete.'],
+    items: [{ name: 'Nasi Lemak', quantity: 2, unitPrice: 6.5, amount: 13 }, { name: 'Teh Tarik', quantity: 1, unitPrice: null, amount: 2.5 }] }));
+  await openScan(page);
+  await choosePhoto(page);
+  await expect(page.getByTestId('scan-items-incomplete')).toContainText('Some items may be missing or misread. Check them against your receipt.');
+  await expect(page.getByTestId('scan-review-notice')).toHaveCount(0);
+  await expect(page.getByTestId('scan-flag-total')).toHaveCount(0);
+  await expect(page.getByTestId('scan-items')).toContainText('2 × RM 6.50');
 });
 
 test('Back from Review asks before discarding the scan', async ({ page }) => {

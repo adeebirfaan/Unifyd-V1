@@ -4,6 +4,15 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
 
 - **Rule 1:** if something is not stated here or in the code, do not assume it. Check the named source section, or ask.
 - **Rule 2:** open only the files a task needs. The long docs are listed under "Where to look".
+- **Rule 3:** at the end of every session, rewrite "Current status" below (a few lines, facts only).
+
+## 0. Current status (updated 2026-10-16)
+
+- **Scan-speed work merged into `main` (2026-10-16)** from branch `scan-speed`: optional stage timing, then warm-up, parallel sign-in check, single-pass photo. All tests passed (server 119, mobile unit 124, Playwright scan specs 22/22); dev eval byte-identical. Details: top two entries of `PROJECT_PROGRESS.md` work log.
+- **Speed before fixes** (owner's 5 iPhone scans): median 6.9 s (3.9–9.9 s). Upload of ~1 MB (~1.9 s, most variable) and Vision (~2.1 s) dominate. After-fix timed scans: not run yet.
+- **Next for receipts:** image-size check on the **development set only** (longest side 1600 / 2000 vs current 2400) and shrink uploads only if dev accuracy is unchanged; owner retimes scans; then set `SCAN_TIMING` / `EXPO_PUBLIC_SCAN_TIMING` off.
+- **Final eval is on hold:** the owner is still collecting the fresh 40–50-receipt final set. `--final` has **never** been run. Do not run it, do not edit `labels.csv` or final labels, and never tune the parser on held-out or final receipts.
+- **Meanwhile:** other work (e.g. UI revamp) may proceed on its own branch from `main`.
 
 ## 1. Project identity and scope
 

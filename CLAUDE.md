@@ -8,11 +8,11 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
 
 ## 0. Current status (updated 2026-10-16)
 
-- **Scan-speed work merged into `main` (2026-10-16)** from branch `scan-speed`: optional stage timing, then warm-up, parallel sign-in check, single-pass photo. All tests passed (server 119, mobile unit 124, Playwright scan specs 22/22); dev eval byte-identical. Details: top two entries of `PROJECT_PROGRESS.md` work log.
-- **Speed before fixes** (owner's 5 iPhone scans): median 6.9 s (3.9–9.9 s). Upload of ~1 MB (~1.9 s, most variable) and Vision (~2.1 s) dominate. After-fix timed scans: not run yet.
-- **Next for receipts:** image-size check on the **development set only** (longest side 1600 / 2000 vs current 2400) and shrink uploads only if dev accuracy is unchanged; owner retimes scans; then set `SCAN_TIMING` / `EXPO_PUBLIC_SCAN_TIMING` off.
-- **Final eval is on hold:** the owner is still collecting the fresh 40–50-receipt final set. `--final` has **never** been run. Do not run it, do not edit `labels.csv` or final labels, and never tune the parser on held-out or final receipts.
-- **Meanwhile:** other work (e.g. UI revamp) may proceed on its own branch from `main`.
+- **Unifyd Focus** (owner-approved Planner addition, 2026-10-16) is built one phase at a time, each with owner approval, on branch **`ui-revamp`** (it started equal to `main`; the work is **uncommitted** and not pushed). Phases 1 (design), 2 (timer and Focus screen), 3 (sync to Supabase; migration `20261016_001_focus_sessions` **applied per project owner 2026-10-16**, live checks 2/2), 4 (Focus insights), 5 (Poof companion, optional reflection, rule-based suggestions; migration `20261016_002_focus_session_reflections` **applied per project owner 2026-10-16**, live checks 3/3), and **6 (final QA and polish) are done**. **Status: development-complete, pending final device validation and UAT; not user-accepted or production-ready.** Final code review done 2026-10-16: no blocking findings (3 low-severity notes in `PROJECT_PROGRESS.md`, not fixed). **Nothing is committed, pushed, or merged** (HEAD is still `b832a2f`); commit and merge only with owner approval. Do not repeat Phases 1–6 or start new Focus work unasked.
+- **iPhone UAT is paused by owner decision (2026-10-16)** until all planned features are built. Do not resume it unless the owner asks. Recorded so far: item 4, both alerts delivered (PASS) but silent (minor finding; the optional Focus sound is a pending enhancement in `PROJECT_PROGRESS.md` "Deferred ideas"); item 5 Scenario 1 PASS. Everything else is **Deferred — Pending Full Application UAT** (list in `DEVELOPMENT_HANDOVER.md`). Keep running unit and e2e tests after every change; don't save all testing for the end.
+- **To resume Focus:** read SRS §5.11, SDD §7.10, and the top `PROJECT_PROGRESS.md` entries. Final tests (Phase 6): unit 167/167; `focus` 9/9, `focusInsights` 6/6, `focusCompanion` 5/5, `focusLive` 3/3 (real database), `studies` 6/6; full Playwright **117/117**. Known limitation: a round that finishes while Focus is closed is saved, but gets no celebration or reflection.
+- **Owner decisions for Poof on Focus (2026-10-16):** a compact row under the timer card; Poof holds still during focus rounds and pauses, floats when ready and on breaks, and celebrates once per completed round; the greeting is text only (`PoofMascot` is unchanged); suggestions appear only on Focus screens (Poof chat and its server contract are unchanged). Still pending: the deferred phone checks and a true cross-account RLS test (needs a second test account).
+- **Receipts (unchanged):** scan-speed work is merged into `main`; after-fix iPhone timings have not been run yet. Next: an image-size check on the **development set only**, then switch `SCAN_TIMING` / `EXPO_PUBLIC_SCAN_TIMING` off. **Final eval is on hold** (the fresh 40–50-receipt set is still being collected). `--final` has never been run: do not run it, do not edit `labels.csv` or final labels, and never tune the parser on held-out or final receipts. Leave the untracked `completed receipt data.md` alone.
 
 ## 1. Project identity and scope
 
@@ -29,7 +29,7 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
   7. Mood Tracking
   8. Integrated Dashboard and AI summary
 
-  Also built: My Semester subjects and the personal timetable (filed as "Module 7" phases in the SRS), and the **Poof** AI chat assistant.
+  Also built: My Semester subjects and the personal timetable (filed as "Module 7" phases in the SRS), the **Poof** AI chat assistant, and **Unifyd Focus** (owner-approved 2026-10-16, part of Planner; SRS §5.11).
 - **AI-assisted, not ML:**
   - Google Cloud Vision does OCR (receipts and timetables).
   - Groq writes **descriptive** text only, from facts the app or server calculated.
@@ -56,14 +56,14 @@ This file condenses every project document (Brief, PRD, SRS, SDD, Design System,
 |---|---|
 | `mobile/` | Expo SDK 57 (`expo ~57.0.27`), Expo Router 57 with **typed routes**, React Native 0.86, React 19.2, TypeScript strict. Read `mobile/AGENTS.md` before touching Expo APIs: fetch the v57 docs and never trust memory. |
 | `mobile/app/` | Routes. `_layout.tsx` is the auth and profile gate. `(auth)/`: login and create-account. `onboarding.tsx`. `(tabs)/`: `index` (Home), `wallet`, `quick` (centre + slot; a direct visit redirects Home), `planner`, `mind`, `profile` (hidden, `href:null`, opened from the Home avatar). |
-| `mobile/app/` stack screens | `add-expense`, `edit-expense`, `expense-detail`, `scan-receipt`, `set-budget` (param `period=weekly\|monthly`, default monthly), `subscriptions`, `subscription-entry` (param `id` for edit), `split-bills`, `split-bill` (param `id`), `split-bill-entry` (param `id` for edit), `add-task`, `edit-task`, `task-detail`, `reminders`, `my-semester`, `timetable`, `timetable-entry`, `timetable-import`, `settings`, `edit-profile`, `privacy-policy`, `terms-of-use`. |
-| `mobile/components/` | Grouped by feature: `home/` (CardDeck, DeckCards, ShadePicker), `finance/` (subscriptions, split bills, `ConfirmDialog`), `scan/` (receipt scan steps), `poof/`, `mascot/`, `wallet/`, `planner/`, `mind/`, `timetable/`, `profile/`, `auth/`, plus `Screen.tsx`, `Avatar.tsx`, `QuickActions.tsx`. |
-| `mobile/lib/` | Logic and data. Pure, tested rule modules: `dashboardFacts`, `poofFacts`, `poofEngine`, `budgetSummary`, `budgetPeriod`, `moodTrends`, `reminderMath`, `reminderHistory`, `subscriptions`, `splitBills`, `timetable`, `greeting`, `quickActions`, `cardShades`, `avatarIds`. Loaders: `*Data.ts`, `timetableEntries.ts`, `semesterCourses.ts`. Clients: `supabase.ts`, `receiptOcr.ts` (`ocrBaseUrl()`), `insights.ts`, `poofAi.ts`, `timetableImport.ts`, `taskReminders.ts`, `subscriptionReminders.ts`. |
+| `mobile/app/` stack screens | `add-expense`, `edit-expense`, `expense-detail`, `scan-receipt`, `set-budget` (param `period=weekly\|monthly`, default monthly), `subscriptions`, `subscription-entry` (param `id` for edit), `split-bills`, `split-bill` (param `id`), `split-bill-entry` (param `id` for edit), `add-task`, `edit-task`, `task-detail`, `reminders`, `focus`, `focus-insights`, `my-semester`, `timetable`, `timetable-entry`, `timetable-import`, `settings`, `edit-profile`, `privacy-policy`, `terms-of-use`. |
+| `mobile/components/` | Grouped by feature: `home/` (CardDeck, DeckCards, ShadePicker), `finance/` (subscriptions, split bills, `ConfirmDialog`), `scan/` (receipt scan steps), `focus/` (Unifyd Focus), `poof/`, `mascot/`, `wallet/`, `planner/`, `mind/`, `timetable/`, `profile/`, `auth/`, plus `Screen.tsx`, `Avatar.tsx`, `QuickActions.tsx`. |
+| `mobile/lib/` | Logic and data. Pure, tested rule modules: `dashboardFacts`, `poofFacts`, `poofEngine`, `budgetSummary`, `budgetPeriod`, `moodTrends`, `reminderMath`, `reminderHistory`, `subscriptions`, `splitBills`, `timetable`, `greeting`, `quickActions`, `cardShades`, `avatarIds`, `focusTimer` (incl. `companionState`), `focusSyncCore` (incl. reflections), `focusInsights` (incl. `focusSuggestions`). Loaders: `*Data.ts`, `timetableEntries.ts`, `semesterCourses.ts`, `focusHistory.ts`. Clients: `supabase.ts`, `receiptOcr.ts` (`ocrBaseUrl()`), `insights.ts`, `poofAi.ts`, `timetableImport.ts`, `taskReminders.ts`, `subscriptionReminders.ts`, `focusNotifications.ts`, `focusSync.ts`; device storage `focusStorage.ts`. |
 | `mobile/constants/` | `i18n.ts` (every string, English and Malay), `theme.ts` (tokens), `avatars.ts` (12-avatar manifest), `umpsa-academic-catalog.ts` (11 faculties, 6 Computing programmes), `reminder-timing.ts`. |
 | `mobile/providers/` | `AuthProvider` (`session`, `profile`, `refreshProfile`), `AppearanceProvider` (`tokens`), `LanguageProvider` (`t`, `language`, `saveLanguage`). |
 | `mobile/plugins/` | `withUnifydNotificationLargeIcon.js`, a config plugin for the Android notification large icon. |
 | `mobile/tests/*.test.mjs` | Node unit tests that import `.ts` files directly. |
-| `mobile/e2e/*.spec.ts` | Playwright on Expo Web: `unifyd`, `avatar`, `home`, `poof`, `mind`, `planner`, `reminders`, `semester`, `timetable`, plus `global-setup`, `test-client`, and `safe-reporter`. |
+| `mobile/e2e/*.spec.ts` | Playwright on Expo Web: `unifyd`, `avatar`, `home`, `poof`, `mind`, `planner`, `reminders`, `semester`, `timetable`, `studies`, `focus`, `focusInsights`, `focusCompanion`, `focusLive` (real database), plus `global-setup`, `test-client`, and `safe-reporter`. |
 | `server/` | Node 24 Express in TypeScript (ESM; imports use `.js` suffixes). Endpoints in §5. Receipt parsing: `receipt-parser.ts` composes `receipt-merchant.ts` (with the brand list `receipt-merchants.ts`), `receipt-total.ts`, `receipt-date.ts`, and `receipt-layout.ts` (rows from Vision word boxes). Line items: `receipt-items.ts`, outside the parser. OCR evaluation: `receipt-eval.ts` plus `scripts/receipt-*.ts`. |
 | `supabase/migrations/` | SQL migrations (§6). `supabase/seeds/2026_2027_fkom_catalog_courses.sql`: the course catalogue seed. |
 | Root `assets/` | Approved originals: avatars, logo, `poof-mascot.png`. The app bundles resized copies in `mobile/assets/`. |
@@ -86,7 +86,7 @@ npm run eval:receipts:final-setup                     # final test set in local-
 npm run eval:receipts:final-check                     # final labels format check only; never runs the parser
 ```
 
-- **Last known counts (2026-10-14, on `main`):** mobile unit 124, server 119, full Playwright e2e suite 93 (91 passed; `subscriptions` passed on re-run; `budget` failed-save test is intermittent on `main` too). Per spec, recent: Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
+- **Last known counts (2026-10-16, on `ui-revamp`):** mobile unit 167, server 119 (unchanged), full Playwright e2e suite 117/117 (2026-10-16, after Phase 6). The Wallet "no budget and no expenses" test is intermittent: it fails 1 in 2 on clean `main` too. The `budget` failed-save test has been intermittent on `main` since 2026-10-14. Per spec, recent: Focus 9, Focus insights 6, Focus companion 5, Focus live 3, Studies 6, Wallet home 13, budget 4, Home 11, Poof 2.
 - **Before calling a task done,** run typecheck, lint, and the relevant unit and e2e tests. If you change the server, also run server typecheck, test, and build.
 - **Screenshots:** copy a spec into `e2e/zz-*.spec.ts`, call `page.screenshot` into the scratchpad, run it with `-g`, then delete the copy.
 - **Server changes reach the phone** only after `npm run build && npm start` restarts the server.
@@ -150,11 +150,37 @@ npm run eval:receipts:final-check                     # final labels format chec
 - **Task fields:** title and subject required, description optional, deadline (`timestamptz`), priority `low|medium|high` (default medium), status `pending|ongoing|completed`.
 - **`completed_at`** is set exactly when the task is completed; reopening clears it.
 - **Order:** active tasks by nearest deadline, then completed tasks.
-- **Studies main page** (2026-10-13): header → `InsightDeck` `studies-deck` (Academic focus on `colors.brandGradient` as the default card with the only guide, then Today next class and Semester on dark cards) → dots → `IconQuickActions` (Add task, My semester, My timetable, Reminders; shared with Wallet's `FinanceQuickActions`) → Priority tasks (≤ 5 incomplete, `priorityTasks` in `lib/studiesOverview.ts`: overdue → today → High → Medium → Low → undated) with "View all (N)" opening `AllTasksSheet`. Rows (`TaskRow`) keep complete/reopen. `InsightDeck` (`components/home/`) is the shared measured deck behind `FinanceDeck`.
+- **Studies main page** (2026-10-13): header → `InsightDeck` `studies-deck` (Academic focus on `colors.brandGradient` as the default card with the only guide, then Today next class and Semester on dark cards) → dots → `IconQuickActions` with `columns={3}` (Add task, My semester, My timetable / Focus mode, Reminders: 3 + 2; Wallet's `FinanceQuickActions` keeps 4 columns) → Priority tasks (≤ 5 incomplete, `priorityTasks` in `lib/studiesOverview.ts`: overdue → today → High → Medium → Low → undated) with "View all (N)" opening `AllTasksSheet`. Rows (`TaskRow`) keep complete/reopen. `InsightDeck` (`components/home/`) is the shared measured deck behind `FinanceDeck`.
 - **Reminders** are per-task `reminder_offset_minutes`: none, 0, 60, or 1440.
   - They are scheduled with local `expo-notifications` on the Android channel `unifyd-task-reminders`.
   - The app reconciles them on start, foreground, language change, and task changes, and clears them on sign-out.
   - Tapping a reminder opens the task. Web does not deliver them.
+- **Unifyd Focus** (`/focus`, all 6 phases done, development-complete; device checks and UAT deferred; SDD §7.10):
+  - Timer rules in pure `lib/focusTimer.ts`: timestamps are the source of truth, and ticks only redraw (`FocusDial`). Presets Classic 25/5, Deep 50/10, Quick 15/3, plus Custom; a long break (default 15) after every 4th round. After a break, the next round waits for Start.
+  - Completed = reached its planned length; partial = ended early with ≥ 1 min of focus (kept); discarded = Reset or ended under 1 min (not kept). Breaks and paused time never count. Reset affects only the current round.
+  - Device storage: `unifyd:focus-session:<userId>` (state) and `unifyd:focus-blocks:<userId>` (kept rounds awaiting Phase 3 sync; never cleared on sign-out). Sign-out pauses the timer and clears alerts (channel `unifyd-focus`).
+  - Subject/task links are read-only (semester subjects or General study; open tasks filtered by exact subject text). The timer never changes a task. Rounds keep a copy of the task title and subject label.
+  - **Sync** (Phase 3): `lib/focusSyncCore.ts` holds the rules (pure); `lib/focusSync.ts` wires them to Supabase. A round leaves the outbox only after its insert succeeds, or after `23505` when the same ID is shown to be the student's own row.
+    - A deleted or foreign link: retry once without the links. A row the table refuses: keep it and count it. No network, a 15 s timeout, or a missing table: wait.
+    - Sending runs when a round is kept, when Focus opens, on sign-in, on foreground, and every 60 s while rounds that can still succeed wait (refused rounds are not retried every minute). It checks the signed-in user before every insert. One quiet status line (`focus-sync`) shows the state.
+  - **Focus insights** (`/focus-insights`, Phase 4; opened from the `focus-insights-link` row on Focus): Today and This week tiles, rounds this week, an optional goal, a Monday–Sunday bar chart, subjects over the last 30 days, and history in pages of 20.
+    - Rules in pure `lib/focusInsights.ts`. Only `focus_seconds` counts, never planned time. **A round counts on the local day it ended**; one total is stored per round, so midnight-crossing rounds are not split.
+    - Synced rows and device-outbox rounds are merged by ID (never counted twice), and device rounds are marked "On this device". Subjects group by the saved label (null = General study); percentages use the largest remainder, so they add up to 100.
+    - The goal is a device preference at `unifyd:focus-goal:<userId>` (daily 15–480 min or weekly 60–3000 min). There are no streaks.
+  - **Poof companion** (Phase 5, `components/focus/FocusCompanion.tsx`): the row under the timer.
+    - Poses come from `companionState`: still while focusing or paused (the same image on its disc), the `idle` float when ready or on breaks, and `celebrate` once for a round completed while Focus is open.
+    - It shows one message. When ready, that is the top suggestion, which may carry a "Focus on this task" action.
+    - Hide or show is stored at `unifyd:focus-poof-hidden:<userId>`. Not interactive. Reduce Motion is handled by `PoofMascot`.
+  - **Reflection** (Phase 5): after a round completes on screen, the student may answer "How was your study session?" (Great, Okay, Struggled, Tired) or Skip; it never blocks the timer.
+    - The answer waits at `unifyd:focus-reflections:<userId>` (first answer wins) and is sent after its round, by an update limited to `reflection is null`.
+    - Never interpreted, never sent to AI.
+  - **Suggestions** (`focusSuggestions`, on the device, no Groq), in this order:
+    - a task due later today or tomorrow;
+    - a reached goal, or a goal at least half-way;
+    - an hour or more of focus today;
+    - a semester subject with no focus time this week, only after some study this week;
+    - a starter tip when there are no rounds.
+    - Rules needing history are skipped when it fails to load. Focus shows 1 (in Poof's row when ready); Focus insights shows up to 3 (`focus-suggestions`).
 - **`/reminders` history** is derived from tasks (deadline minus offset): Upcoming, and Past 30 days. No `reminders` table exists.
 - **My Semester** (`/my-semester`) lets students pick 2026/2027 Faculty of Computing catalogue courses (169 rows, credits all `NULL`) or custom subjects.
   - There is **no minimum-credit rule**; a warning above 19 known credits never blocks saving.
@@ -239,6 +265,8 @@ npm run eval:receipts:final-check                     # final labels format chec
 | `20261009_001_profiles_avatar_default` | default `women_turban` | applied 2026-10-09 |
 | `20261009_002_timetable_entries` | `timetable_entries` | applied per project owner (checked 2026-10-12: RLS, 15 columns, 4 policies, index, trigger, grants). E2E tests still mock this table. |
 | `20261012_001_finance_subscriptions_split_bills` | `subscriptions`, `split_bills`, `split_bill_participants` (no `user_id`; RLS through the parent bill) | applied per project owner 2026-10-12; verified by `e2e/financeLive.spec.ts`. UI E2E specs still mock these tables. |
+| `20261016_001_focus_sessions` | `focus_sessions` (app-supplied UUID; insert/select/delete only; links to own task and semester subject only, set null on delete with copied labels) | applied per project owner 2026-10-16 (owner checked RLS and 14 columns); verified by `e2e/focusLive.spec.ts` 2/2. `focus`, `focusInsights`, and `focusCompanion` specs mock the table. |
+| `20261016_002_focus_session_reflections` | adds `focus_sessions.reflection` (`great\|okay\|struggled\|tired`, completed rounds only), an UPDATE grant on that column only, and an update policy (own row, `reflection is null`, completed) | applied per project owner 2026-10-16; verified by `e2e/focusLive.spec.ts` (15 columns; once only; own completed round only; no other column; signed-out blocked). |
 
 There are no `receipts` or `reminders` tables. The SDD diagram lists them as design entities, but they were never built.
 
@@ -289,6 +317,7 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 - Global setup forces the test profile to dark and English, and restores it afterwards. Tests clean up their own rows using unique prefixes.
 - Expo Web keeps earlier stack screens and dialogs in the DOM, so use exact or scoped selectors.
 - Wait for `data-phase="idle"` before measuring Poof.
+- Focus specs mock `**/rest/v1/focus_sessions*`; an unmocked run sends real rows. The Focus sync line includes an Ionicons glyph in its web text, so use `toContainText`.
 
 ## 10. Workflow
 
@@ -297,7 +326,7 @@ There are no `receipts` or `reminders` tables. The SDD diagram lists them as des
 3. **Other docs:** update `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, and `UNIFYD_DESIGN_SYSTEM.md` only in the sections the change affects.
 4. **Git:** don't commit unless asked. The working tree often holds the owner's uncommitted work; never revert it.
 
-**Status:** all SRS Must and Should features are implemented locally, and Poof Phase 1 is done. The full Expo Web e2e suite passed 82/82 on 2026-10-14. Still open:
+**Status:** all SRS Must and Should features are implemented locally, and Poof Phase 1 is done. The full Expo Web e2e suite passed 117/117 on 2026-10-16 (`ui-revamp`, with Unifyd Focus). Still open:
 - checks on a physical device (Poof feel, reminders, native pickers);
 - an automated two-account RLS test (cross-user isolation has been confirmed manually by the owner);
 - Phase 9 (evaluation, UAT, thesis evidence). **Started:** receipt OCR evaluation. 57 real receipts are labelled locally (42 development, 15 held out); development all-three-correct 21.4% → 78.6% after the 2026-10-14 parser work. **Pending:** a fresh 40–50-receipt final test set and one `--final` run, AI-summary samples, UAT, and the Likert questionnaire.

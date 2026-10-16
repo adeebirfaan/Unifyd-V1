@@ -57,7 +57,7 @@ The mobile application retains Expo Router navigation and uses the following fun
 | Authentication screens | Welcome, sign-up, login, password-recovery/approved login support, and required profile completion |
 | `app/(tabs)` | Protected primary navigation: Home/Dashboard, Wallet, a centre quick-actions slot, Planner, and Mind. Profile stays in `(tabs)` but is hidden from the bar (`href: null`) and opens from the Home avatar. The centre slot (`quick.tsx`) uses a custom `tabBarButton` that opens the quick-actions sheet; a direct visit redirects to Home. Students choose 1–4 of seven shortcuts. `mobile/lib/quickActions.ts` validates the choice, which is stored in AsyncStorage under `unifyd:quick-actions:<userId>`. It is device-local, not in the database; invalid or missing values fall back to the four defaults. |
 | Wallet screens | Expense history, add/edit expense, budget view, receipt scanning and review |
-| Planner screens | Task list, task detail, add/edit task, reminder history/settings access |
+| Planner screens | Task list, task detail, add/edit task, reminder history/settings access, Unifyd Focus (`app/focus.tsx`, a stack screen opened from a Planner shortcut; no new tab), and Focus insights (`app/focus-insights.tsx`, opened from Focus) |
 | Mind screens | Mood entry, mood history, wellness suggestion |
 | Home/Dashboard screens | Cross-module summary panels and detailed-module navigation |
 | Profile screens | Personal data, reminder preference, appearance settings, permissions guidance, and logout |
@@ -251,6 +251,7 @@ erDiagram
 | `budgets` | `id`, `user_id`, `amount`, `period_type`, `period_start`, `created_at`, `updated_at` | Auth-owned with cascade delete; positive `numeric(12,2)` amount; weekly starts Monday and monthly starts on day 1; unique (`user_id`, `period_type`, `period_start`) |
 | `subscriptions` | `id`, `user_id`, `name`, `amount`, `category`, `billing_frequency`, `next_billing_date`, `reminder_days_before`, `notifications_enabled`, `is_active`, `notes`, timestamps | Auth-owned with cascade delete; nonblank name; positive `numeric(12,2)` amount; optional Wallet category; frequency check; reminder days 0–30 (default 3); notes null or nonblank; index (`user_id`, `is_active`, `next_billing_date`); `updated_at` trigger. Applied per project owner 2026-10-12. |
 | `split_bills` | `id`, `user_id`, `title`, `total_amount`, `bill_date`, `category`, `notes`, timestamps | Auth-owned with cascade delete; nonblank title; positive total; optional Wallet category; notes null or nonblank; index (`user_id`, `bill_date desc`); `updated_at` trigger. Applied per project owner 2026-10-12. |
+| `focus_sessions` | `id` (app-supplied UUID), `user_id`, `semester_course_id`, `subject_label`, `task_id`, `task_title`, `preset`, `planned_focus_seconds`, `focus_seconds`, `round_number`, `started_at`, `ended_at`, `status`, `created_at` | Owner cascade; `semester_course_id` and `task_id` set null on delete, with their copies required while linked; preset and status lists; planned 300–7200 s; focus ≤ planned and ≤ the start–end span; completed = planned, partial ≥ 60 s and < planned; `ended_at ≥ started_at`; round ≥ 1. Indexes (`user_id`, `started_at desc`) and partial indexes on the two links. Applied per project owner 2026-10-16. Migration 002 (applied per project owner 2026-10-16) adds `reflection` with a check (four words, completed rounds only). |
 | `split_bill_participants` | `id`, `split_bill_id`, `participant_name`, `share_amount`, `is_self`, `is_settled`, `settled_at`, timestamps | Cascade-deleted with the bill; nonblank name; positive share; partial unique index for one `is_self` row per bill; self is always settled; `settled_at` is set exactly when settled; index (`split_bill_id`); `updated_at` trigger. Applied per project owner 2026-10-12. |
 | `tasks` | `id`, `user_id`, `title`, `subject`, `description`, `deadline`, `priority`, `status`, `completed_at`, `reminder_offset_minutes`, `created_at`, `updated_at` | Auth-owned with cascade delete; title/subject/deadline required; priority and status constrained; completion time matches completed status; nullable reminder offset permits 0, 60, or 1440 minutes |
 | `catalog_courses` | `id`, `academic_session`, `semester`, `faculty_code`, `campus`, `course_code`, `course_name`, `credit_hours`, `source_label`, `is_active`, timestamps | Curated reference only; nonblank identifying fields; semester 1 or 2; optional positive credit hours; unique session/semester/campus/course code, including null campus; authenticated students read only active rows |
@@ -358,6 +359,7 @@ Required policy behaviours:
 - Insert policies must require the inserted `user_id` to equal `auth.uid()`.
 - The backend uses a verified authenticated context or carefully scoped server access; it must still enforce ownership before reading user data.
 - Receipt images, if stored in Supabase Storage, must use user-owned paths and matching storage access policies.
+- `focus_sessions`: select and delete own rows; insert own rows only when any `task_id` is the student's task and any `semester_course_id` is the student's semester subject (`exists` checks, because foreign keys ignore RLS). Only the listed columns may be inserted (`created_at` is set by the database). Migration 002 (applied per project owner 2026-10-16) adds the only update: `grant update (reflection)` plus a policy whose `using` requires the student's own row, `reflection is null`, and `status = 'completed'`, and whose `with check` requires the student's own row with a reflection.
 - `split_bill_participants` has no `user_id`. Its select, insert, update, and delete policies require `exists (select 1 from split_bills where split_bills.id = split_bill_participants.split_bill_id and split_bills.user_id = (select auth.uid()))`. The delete policy also excludes the `is_self` row, which is removed only by the bill cascade. No policy uses participant names, and participants have no account access.
 - Column grants: clients cannot set IDs or timestamps. Clients cannot change `user_id` after insert, or a participant's `split_bill_id` or `is_self`. Each new table has its own `unifyd_private` `updated_at` trigger function (security invoker, `search_path = ''`) with client EXECUTE revoked.
 - Live checks (`mobile/e2e/financeLive.spec.ts`, 2026-10-12) confirm with the test account that RLS rejects another `user_id` and bills the student does not own, that column grants reject client-set IDs, timestamps, `user_id`, `split_bill_id`, and `is_self`, that the check constraints hold, that the You row cannot be unsettled, duplicated, or deleted alone, that bill deletion cascades, and that signed-out (anon) requests are denied. A second student account has not been tested.
@@ -556,6 +558,103 @@ Both features are private, owner-managed records. Neither verifies charges, move
 - It runs only on fictional fixtures in automated tests, never automatically on real students' data. A real evaluation needs enough labelled examples, gathered with consent.
 - Small or inconsistent personal histories and titles with unseen words lower accuracy. The fixture hold-out scored 0.25 for exactly that reason, which is why the thresholds refuse weak predictions.
 
+### 7.10 Unifyd Focus (study focus timer)
+
+Owner-approved addition (2026-10-16), part of Planner. Phases 2 (timer and UI), 3 (database sync; migration applied per project owner 2026-10-16), 4 (insights), and 5 (Poof companion, reflection, suggestions; migration 002 applied per project owner 2026-10-16) are implemented, and Phase 6 QA is done.
+
+**Phase 6 refinements:**
+- **Retry:** the 60 s retry runs only when a waiting round could still succeed, or reflections wait after a run that stopped early. Refused rounds are retried only on start, foreground, and opening Focus.
+- **Reloads:** Focus and Focus insights reload figures only when a sync run changed what is waiting (`onFocusSyncChange`), not after every run.
+- **Large text:** the dial's text honours system text size up to 1.2×, so the digits always fit the ring.
+- **Narrow phones:** steppers wrap their controls below the label when needed (320 pt, long Malay labels), and suggestion task titles are shortened to 48 characters.
+- **Known limitation:** a round that ends while Focus is closed is kept and synced, but gets no celebration or reflection.
+
+**Timer model** (`mobile/lib/focusTimer.ts`, pure, clock injected, unit-tested with a fake clock):
+- **State:** `status` (`idle`, `running`, `paused`), `phase` (`focus`, `shortBreak`, `longBreak`), `phaseMs` (planned length), `bankedMs` (time of this phase that ran before the current run), `runStartedAt` (wall-clock start of the current run), `blockId` and `blockStartedAt` (the current focus round), `completedRounds`, `settings`, `link` (subject and task), and a one-off `notice`.
+- **Time:** elapsed = `bankedMs` + (now − `runStartedAt`), clamped to the phase, so a backwards clock gives no time and nothing goes negative. Remaining = `phaseMs` − elapsed. Pause adds the run to `bankedMs`; resume sets a new `runStartedAt`. Interval ticks only redraw.
+- **Transitions** (`advanceFocus`, applied on load, on returning to the foreground, when the countdown reaches zero, and before every action): a finished focus round is kept as `completed` and its break starts at the moment the round ended (long after every fourth). A finished break returns to `idle`, waiting for Start. Several transitions can be applied at once after a long absence.
+- **Actions** (`applyFocusAction`): start, pause, resume, reset (discards only the current round), skip break, end (keeps a `partial` round with ≥ 60 s of focus; otherwise discarded), settings and link (only while idle). An action that does not fit the state changes nothing, so double taps are harmless.
+- **Kept round** (`FocusBlock`): ID (random UUID, so a retried save cannot duplicate it), status, preset, planned and actual focus seconds (pauses and breaks excluded), round number, start and end times, and the linked semester subject ID, subject label, and task ID.
+
+**Storage** (`mobile/lib/focusStorage.ts`, AsyncStorage, per student):
+- `unifyd:focus-session:<userId>`: the timer state, written on every change (never every second) and validated when read (`parseFocusState`); unreadable data starts a fresh timer.
+- `unifyd:focus-blocks:<userId>`: kept rounds waiting for Phase 3 sync. Added by ID, never removed by sign-out or network failure.
+- Reads and writes go through one queue, so a read never sees a half-finished write.
+
+**Screen and lifecycle.**
+- `hooks/useFocusSession.ts` restores and catches up whenever the screen gains focus and when the app becomes active, then saves, keeps rounds, and reschedules alerts on every change. Leaving the screen never resets the timer.
+- `components/focus/FocusDial.tsx` is the only part that ticks: a 250 ms interval, only while running, re-rendering once per displayed second. When the phase runs out it asks the hook to catch up.
+- `app/_layout.tsx` (`TaskReminderCoordinator`) refreshes focus alerts on sign-in and language change, opens Focus from an alert tap, and on sign-out clears the alerts and pauses the timer (`suspendFocusSession`), keeping any finished round.
+
+**Alerts** (`mobile/lib/focusNotifications.ts`): local `expo-notifications` on the Android channel `unifyd-focus`, one at the end of the focus round and one at the end of the break that follows, replaced on every change. Permission is asked only on Start or Resume. iOS does not run app code in the background; the scheduled alerts plus catching up on return cover a locked phone. Web has no alerts.
+
+**Links.** Subjects come from `student_semester_courses` for the semester saved in `unifyd:semester-choice:<userId>`, shown as `taskSubject()` labels. Open tasks come from `tasks` (`status <> 'completed'`, the caller's `user_id`). Tasks are filtered by exact subject text, because `tasks.subject` is free text. Choosing a task links its own subject. Nothing is written to either table.
+
+**Database** (`supabase/migrations/20261016_001_focus_sessions.sql`; applied per project owner 2026-10-16; verified by `e2e/focusLive.spec.ts`): one `focus_sessions` row per kept round, keyed by the app's round UUID. See §6.2 and §6.3. Rows are immutable (no UPDATE grant); deleting a task or semester subject sets the link to null and keeps the copied `task_title` / `subject_label`, so history stays readable.
+
+**Sync** (`lib/focusSyncCore.ts`, pure with injected storage, network, and session; `lib/focusSync.ts` wires Supabase):
+- The outbox is `unifyd:focus-blocks:<userId>`. A round leaves it only after its insert succeeds, or after a duplicate-key error (`23505`) when a read under RLS shows the same ID is already the student's own row.
+- **Rows are made to fit the checks** (`toFocusRow`). A link without its copy is dropped (Phase 2 rounds have no task title). Labels are trimmed to the column limits. If a changed device clock left the start too close to the end, the start moves back so the span covers the focus time.
+- **Errors:**
+  - `23503` or `42501` (the task or subject was deleted, or is not the student's): retry once without the links.
+  - `23514`, `23502`, or `22xxx`: the round is refused. It stays on the device, is counted, and is retried on every run.
+  - Anything else (no network, a 15 s timeout, a server error, or `PGRST205` before the migration): the run stops and the rounds wait.
+  - A duplicate ID that belongs to a row the student cannot see: the round gets a new UUID and is sent again.
+- **Account safety:** each run, and each insert, first checks that the signed-in user is the outbox's student, so rounds are never sent under another account. Sign-out never clears the outbox.
+- **Storage safety:** entries the app cannot read are kept as they are, and an unreadable list is copied to `unifyd:focus-blocks-unreadable:<userId>:<time>` before a new list starts.
+- **Triggers:** a round being kept (`useFocusSession`), Focus gaining focus, sign-in, the app returning to the foreground, and a 60 s retry while rounds are waiting (`TaskReminderCoordinator`). One run at a time per student; a request during a run queues one more.
+- **Status:** a small store (`useSyncExternalStore`) behind one quiet line under the stats: on this device / saving / refused / synced.
+
+**Insights** (`app/focus-insights.tsx`, opened from a row on Focus; rules in pure `lib/focusInsights.ts`; reads in `lib/focusHistory.ts`):
+- **Reads:**
+  - The summary reads synced rounds that started since the earlier of Monday this week and 29 days ago, minus one day (`started_at` is indexed).
+  - History is read separately, newest first by `started_at`, in pages of 20 (one extra row shows whether more exist).
+  - Device-outbox rounds are read too and merged by ID; the synced row wins.
+- **Counting:** only `focus_seconds` (real focus) counts. Each round counts on the **local calendar day of `ended_at`**. The table holds one total per round, not its active intervals, so a round that crosses midnight is not split; any split would be invented.
+- **Figures:**
+  - Today; this week (Monday–Sunday); completed and partial rounds this week; seven day totals for the chart.
+  - Subject totals over the last 30 days, grouped by the saved `subject_label` (null = General study), with whole percentages by the largest remainder so they add up to 100.
+  - Durations are rounded down to whole minutes.
+- **States:**
+  - loading, then ready;
+  - a failed synced read still shows device rounds, with a retry;
+  - empty messages for the chart, subjects, and history;
+  - "Load more" with its own error;
+  - a quiet reload after a sync finishes.
+- **Goal:** optional, daily or weekly, stored at `unifyd:focus-goal:<userId>` in AsyncStorage, like other per-student device preferences, so no table is needed. Progress is capped at 100% for the bar. There are no streaks.
+
+**Poof companion** (Phase 5; `components/focus/FocusCompanion.tsx`; owner decisions 2026-10-16):
+- **Place:** a compact row directly under the timer card, with Poof at 40 pt, one message, and a hide button. Hidden, it shrinks to "Show Poof" (`unifyd:focus-poof-hidden:<userId>`).
+- **Poses** (`companionState` in `lib/focusTimer.ts`):
+  - still during focus rounds and pauses: the approved image on the same disc, with no animation;
+  - the shared `PoofMascot` `idle` float when ready and on breaks;
+  - `celebrate` once, for a round completed while Focus is open (`useFocusSession` reports `lastCompleted` from live transitions only, not from rounds found finished on load).
+- **Animation:** `PoofMascot` is unchanged, and Reduce Motion keeps every pose still through it. Poof is not interactive here. The Home welcome rule (once per app session) is untouched; Focus greets with text.
+- **Messages:** ready, ready for the next round, focusing, paused, break, long break, and completed. When ready, the top suggestion replaces the greeting; a due-soon task offers "Focus on this task", which only links it.
+
+**Reflection** (Phase 5; migration `20261016_002_focus_session_reflections.sql`, applied per project owner 2026-10-16 and verified live):
+- **Prompt:** shown only for `lastCompleted`, under Poof's row; one answer or Skip. It never blocks the timer, and the round is already kept.
+- **Database:**
+  - `reflection` is nullable, one of four words, and allowed on completed rounds only.
+  - `grant update (reflection)` only.
+  - The update policy's `using` requires the student's own row, `reflection is null`, and `status = 'completed'`; its `with check` requires the student's own row with a reflection. So the first answer wins, nothing else can change, and inserts cannot carry a reflection.
+- **Sync** (`runReflectionSync` in `focusSyncCore.ts`, run after the round sync):
+  - Reflections wait at `unifyd:focus-reflections:<userId>` (one per round; the first answer wins).
+  - A reflection is skipped while its round is still in the outbox.
+  - It is sent as `update … where id, user_id, reflection is null`, and removed when that update matched, or when the round already has a reflection or no longer exists.
+  - It waits on no network, a timeout, or a missing column (before migration 002). A value the table rejects is dropped.
+  - The account is checked before every update, and a fresh round ID (duplicate case) is carried over to its reflection.
+- **Privacy:** never interpreted, never shown in analytics, never sent to AI.
+
+**Suggestions** (`focusSuggestions` in `lib/focusInsights.ts`): deterministic, on the device, no Groq. In order:
+1. The nearest task due later today or tomorrow (never overdue or completed).
+2. A reached goal, or a goal at least half-way.
+3. An hour or more of focus today.
+4. The first semester subject with no focus time this week, only after some study this week.
+5. A starter tip when there are no rounds.
+
+Rules needing history are skipped when history fails to load. Focus shows 1 (in Poof's row, ready only); Focus insights shows up to 3 in "Poof's suggestions". Subject names and task titles stay on the device. AI-written study suggestions remain a future enhancement, which would need aggregate-only facts.
+
 ## 8. Error-handling design
 
 | Situation | Application behaviour |
@@ -592,6 +691,7 @@ Both features are private, owner-managed records. Neither verifies charges, move
 | SRS-FR-701 to 710 | Sections 5.1–5.3 and 7.6–7.7 |
 | SRS-FR-801 to 815 | Sections 6.2–6.3 and 7.8 |
 | SRS-FR-901 to 909 | Sections 5.2 and 7.9 |
+| SRS-FR-1001 to 1022 | Sections 4.1, 6.2, 6.3, and 7.10 |
 | SRS-NFR-001 to 010 | Sections 2, 4.2–4.3, 6.3, 8, and 9 |
 
 ## 11. Implementation guardrails

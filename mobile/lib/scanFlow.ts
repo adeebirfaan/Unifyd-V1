@@ -40,6 +40,17 @@ export function reviewFlags(warnings: readonly string[]): ReviewFlags {
   return { fields, noText, other, itemsIncomplete };
 }
 
+/** With this many uncertain fields (of merchant, date, total), the photo itself was probably hard to read. */
+export const RETAKE_FLAGGED_FIELDS = 2;
+
+/**
+ * Whether to suggest retaking the photo: no readable text, or at least two of the three fields need review. One
+ * uncertain field is normal on a good photo, so it never prompts on its own.
+ */
+export function suggestRetake(flags: ReviewFlags): boolean {
+  return flags.noText || REVIEW_FIELDS.filter((field) => flags.fields[field]).length >= RETAKE_FLAGGED_FIELDS;
+}
+
 /** An editable draft amount: two decimals, or empty when nothing was detected. */
 export function draftAmount(amount: number | null): string {
   return amount !== null && Number.isFinite(amount) && amount > 0 ? amount.toFixed(2) : '';

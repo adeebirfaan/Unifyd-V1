@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useEffectEvent, useState } from 'react';
-import { Animated, Platform, Pressable, ScrollView, StyleSheet, View } from 'react-native';
-import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { Animated, Platform, Pressable, StyleSheet, View } from 'react-native';
+import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent, ScrollViewInstance } from 'react-native';
 
 import { radius, spacing } from '@/constants/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -50,8 +50,8 @@ export function CardDeck({ cards, height = DECK_CARD_HEIGHT, testID, dotLabel, s
   const [index, setIndex] = useState(0);
   const [scrollX] = useState(() => new Animated.Value(0));
   // Held in state (via a callback ref) so cards can be given goTo during render.
-  const [scroller, setScroller] = useState<ScrollView | null>(null);
-  const attachScroller = useCallback((node: unknown) => setScroller(node as ScrollView | null), []);
+  const [scroller, setScroller] = useState<ScrollViewInstance | null>(null);
+  const attachScroller = useCallback((node: ScrollViewInstance | null) => setScroller(node), []);
 
   const reduceMotion = useReducedMotion();
   const goTo = (target: number) => {

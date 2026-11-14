@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useLocalSearchParams, useNavigation } from 'expo-router';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { FinanceNumber, financeFontStyle } from '@/components/FinanceNumber';
@@ -48,7 +49,7 @@ export default function SetBudgetScreen() {
   const requestVersion = useRef(0);
   // Set from a valid submit until it fails; never cleared after a confirmed save. Blocks duplicate saves.
   const submitting = useRef(false);
-  const amountInput = useRef<TextInput>(null);
+  const amountInput = useRef<TextInputInstance>(null);
   const { session } = useAuth();
   const { tokens } = useAppearance();
   const { t, language } = useI18n();

@@ -1,7 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
-import type { GestureResponderEvent, LayoutChangeEvent } from 'react-native';
+import type { GestureResponderEvent, LayoutChangeEvent, ViewInstance } from 'react-native';
 
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { useReducedMotion } from '@/hooks/useReducedMotion';
@@ -32,7 +32,7 @@ export function SwipeToSave({ label, onComplete, disabled = false, resetKey, tes
   const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
   const [position] = useState(() => new Animated.Value(0));
-  const thumb = useRef<View>(null);
+  const thumb = useRef<ViewInstance>(null);
   // The track's 1 pt border sits outside the thumb's travel.
   const travel = swipeTravel(width - BORDER * 2, SWIPE_THUMB, INSET);
   // Latest props for the touch handlers and animation callbacks.

@@ -81,6 +81,10 @@ function RootNavigator() {
         <Stack.Screen name="split-bill" />
         <Stack.Screen name="split-bill-entry" />
         <Stack.Screen name="settings" />
+        <Stack.Screen name="get-help" />
+        <Stack.Screen name="breathing" />
+        <Stack.Screen name="how-have-you-been" />
+        <Stack.Screen name="mood-history" />
         <Stack.Screen name="privacy-policy" />
         <Stack.Screen name="terms-of-use" />
       </Stack.Protected>

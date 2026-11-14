@@ -174,24 +174,9 @@ export default function WalletScreen() {
     renderItem={({ item, index, section }) => <ExpenseHistoryRow expense={item} first={index === 0} last={index === section.data.length - 1} onPress={() => openExpense(item)} />}
     refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { void loadWallet('refresh'); void loadPeriod(); }} tintColor={tokens.brandCyan} colors={[tokens.brandCyan]} accessibilityLabel={t('wallet.refreshing')} />}
     ListHeaderComponent={<View style={styles.header}>
-      {/* 1. Compact header: title, period switch, and a secondary date range. */}
-      <View style={styles.titleRow}>
-        <View style={styles.titleCopy}>
-          <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>{t('wallet.eyebrow')}</Text>
-          <Text style={[styles.title, { color: tokens.screenText }]}>{t('tab.wallet')}</Text>
-        </View>
-        <View style={[styles.periodSwitch, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
-          {(['weekly', 'monthly'] as const).map((choice) => {
-            const selected = selectedPeriod === choice;
-            return <Pressable key={choice} accessibilityRole="button" accessibilityLabel={t(`budget.${choice}`)} accessibilityState={{ selected }}
-              onPress={() => { if (!selected) router.setParams({ budgetPeriod: choice }); }}
-              style={[styles.periodButton, selected && { backgroundColor: tokens.cardElevated }]}>
-              <Text style={[styles.periodText, { color: selected ? tokens.cardText : tokens.cardMutedText }]}>{t(`budget.${choice}`)}</Text>
-            </Pressable>;
-          })}
-        </View>
-      </View>
-      <Text testID="wallet-period-range" style={[styles.range, { color: tokens.mutedText }]}>{formatExpenseDate(dates.start, language)} – {formatExpenseDate(dates.end, language)}</Text>
+      {/* 1. Compact header, the same as Studies and Mind (eyebrow and title only), so every page's deck starts at the same height. */}
+      <Text style={[styles.eyebrow, { color: tokens.pageAccent }]}>{t('wallet.eyebrow')}</Text>
+      <Text accessibilityRole="header" style={[styles.title, { color: tokens.screenText }]}>{t('tab.wallet')}</Text>
       {state === 'ready' && (saved === '1' || updated === '1' || deleted === '1') && notice(deleted === '1' ? t('wallet.deleted') : updated === '1' ? t('wallet.updated') : t('wallet.saved'))}
 
       {/* 2. Insight deck (same stacked, swipeable deck as Home): overview first, then by category, then
@@ -207,6 +192,20 @@ export default function WalletScreen() {
         ...(attention.length ? [{ key: 'attention', name: t('wallet.deckAttention'), surface: 'plain' as const, render: () => <FinanceAttentionCard embedded items={attention} period={selectedPeriod}
           onBudget={openBudget} onSubscriptions={() => router.push('/subscriptions')} onSplitBills={() => router.push('/split-bills')} /> }] : []),
       ]} />
+      {/* 2b. The period the deck shows, right under it: date range and the Weekly/Monthly switch (moved from the header 2026-11-15). */}
+      <View style={styles.periodRow}>
+        <Text testID="wallet-period-range" style={[styles.range, { color: tokens.mutedText }]}>{formatExpenseDate(dates.start, language)} – {formatExpenseDate(dates.end, language)}</Text>
+        <View style={[styles.periodSwitch, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
+          {(['weekly', 'monthly'] as const).map((choice) => {
+            const selected = selectedPeriod === choice;
+            return <Pressable key={choice} accessibilityRole="button" accessibilityLabel={t(`budget.${choice}`)} accessibilityState={{ selected }}
+              onPress={() => { if (!selected) router.setParams({ budgetPeriod: choice }); }}
+              style={[styles.periodButton, selected && { backgroundColor: tokens.cardElevated }]}>
+              <Text style={[styles.periodText, { color: selected ? tokens.cardText : tokens.cardMutedText }]}>{t(`budget.${choice}`)}</Text>
+            </Pressable>;
+          })}
+        </View>
+      </View>
       {/* 3. Compact shortcuts. */}
       <FinanceQuickActions hasBudget={!!budget} onAddExpense={addExpense}
         onScan={() => router.push({ pathname: '/scan-receipt', params: { budgetPeriod: selectedPeriod } })}
@@ -253,13 +252,13 @@ export default function WalletScreen() {
 const styles = StyleSheet.create({
   content: { flexGrow: 1, width: '100%', maxWidth: 520, alignSelf: 'center', paddingHorizontal: spacing.space6, paddingBottom: 112 },
   header: { gap: spacing.space3, marginBottom: spacing.space3 },
-  titleRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: spacing.space3 },
-  titleCopy: { flexShrink: 1 },
-  eyebrow: { ...typography.label, letterSpacing: 2, marginBottom: spacing.space1 }, title: { ...typography.screenTitle },
+  // Same rhythm as Studies and Mind: eyebrow, 12 pt, title with 8 pt below, 12 pt, deck.
+  eyebrow: { ...typography.label, letterSpacing: 2 }, title: { ...typography.screenTitle, marginBottom: spacing.space2 },
+  periodRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.space3 },
   periodSwitch: { flexDirection: 'row', borderWidth: 1, borderRadius: radius.radiusFull, padding: 3 },
   periodButton: { minHeight: 38, minWidth: 44, paddingHorizontal: spacing.space3, borderRadius: radius.radiusFull, alignItems: 'center', justifyContent: 'center' },
   periodText: { ...typography.label, fontWeight: '600' },
-  range: { ...typography.label, marginTop: -spacing.space2 },
+  range: { ...typography.label, flexShrink: 1 },
   success: { flexDirection: 'row', alignItems: 'center', gap: spacing.space2, padding: spacing.space3, borderRadius: radius.radiusMd, borderWidth: 1 },
   successText: { ...typography.body, flex: 1 },
   recentHeader: { gap: spacing.space1, marginTop: spacing.space2 },

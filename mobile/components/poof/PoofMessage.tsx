@@ -4,6 +4,7 @@ import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PoofAvatar } from '@/components/mascot/PoofAvatar';
 import type { TranslationKey } from '@/constants/i18n';
+import { SUPPORT_LINES } from '@/constants/supportLines';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import type { PoofActionId, PoofNotice } from '@/lib/poofEngine';
 import { useAppearance } from '@/providers/AppearanceProvider';
@@ -17,13 +18,6 @@ export const ACTION_ICONS: Record<PoofActionId, IconName> = {
   openWallet: 'wallet-outline', setBudget: 'pie-chart-outline', addExpense: 'add-circle-outline', openPlanner: 'calendar-outline',
   addTask: 'create-outline', mySemester: 'school-outline', openTimetable: 'time-outline', openMind: 'heart-outline', completeProfile: 'person-outline',
 };
-
-// Malaysian support lines shown for crisis messages. Tapping one opens the phone dialler; nothing is called automatically.
-const SUPPORT_LINES = [
-  { key: 'poof.crisis.emergency', tel: '999' },
-  { key: 'poof.crisis.befrienders', tel: '0376272929' },
-  { key: 'poof.crisis.heal', tel: '15555' },
-] as const satisfies readonly { key: TranslationKey; tel: string }[];
 
 export function PoofActionButton({ id, onPress }: { id: PoofActionId; onPress: (id: PoofActionId) => void }) {
   const { tokens } = useAppearance();

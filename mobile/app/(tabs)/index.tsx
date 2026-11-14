@@ -6,16 +6,20 @@ import { ActivityIndicator, Image, Pressable, RefreshControl, StyleSheet, Text, 
 import { Avatar } from '@/components/Avatar';
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { CardDeck } from '@/components/home/CardDeck';
+import { HomeInviteCard } from '@/components/home/HomeInviteCard';
 import { MoneyCard, OverviewCard, StudiesCard, WellbeingCard } from '@/components/home/DeckCards';
 import { ShadePicker } from '@/components/home/ShadePicker';
 import { PoofAssistant } from '@/components/poof/PoofAssistant';
 import { PoofLauncher } from '@/components/poof/PoofLauncher';
 import { Screen } from '@/components/Screen';
+import { useCheckInInvite } from '@/hooks/useCheckInInvite';
+import { useReflectionInvite } from '@/hooks/useReflectionInvite';
 import { colors, radius, spacing, typography } from '@/constants/theme';
 import { CARD_SHADES, DEFAULT_CARD_SHADES, cardShadesStorageKey, parseCardShades } from '@/lib/cardShades';
 import type { CardShade, CardShadeChoice, ModuleCardKey } from '@/lib/cardShades';
 import { loadDashboardFacts } from '@/lib/dashboardData';
 import { greetingKey } from '@/lib/greeting';
+import { localDateKey, shouldInviteReflection } from '@/lib/wellbeing';
 import type { DashboardFacts } from '@/lib/dashboardFacts';
 import { useAuth } from '@/providers/AuthProvider';
 import { useAppearance } from '@/providers/AppearanceProvider';
@@ -35,6 +39,8 @@ export default function HomeScreen() {
   const [shades, setShades] = useState<CardShadeChoice>({ ...DEFAULT_CARD_SHADES });
   const [picking, setPicking] = useState<ModuleCardKey | null>(null);
   const [poofOpen, setPoofOpen] = useState(false);
+  const [invite, dismissInvite] = useCheckInInvite(userId);
+  const [reflectNotNow, snoozeReflect] = useReflectionInvite(userId);
   // Re-read on each visit so the greeting stays right if the app stays open across periods.
   const [hour, setHour] = useState(() => new Date().getHours());
   const factsRequest = useRef(0);
@@ -79,6 +85,7 @@ export default function HomeScreen() {
   }
 
   const facts = factsState.status === 'ready' ? factsState.facts : null;
+  const reflectInvite = !!facts && reflectNotNow !== undefined && shouldInviteReflection(facts.wellness.repeatedLowMood, reflectNotNow, localDateKey(new Date()));
   const open = (path: '/(tabs)/wallet' | '/(tabs)/planner' | '/(tabs)/mind') => router.navigate(path);
 
   return (
@@ -119,6 +126,13 @@ export default function HomeScreen() {
         { key: 'studies', name: t('home.panelStudies'), render: ({ goTo }) => <StudiesCard facts={facts} shade={CARD_SHADES[shades.studies]} onCustomise={() => setPicking('studies')} onOverview={() => goTo(0)} onOpen={() => open('/(tabs)/planner')} /> },
         { key: 'wellbeing', name: t('home.panelWellbeing'), render: ({ goTo }) => <WellbeingCard facts={facts} shade={CARD_SHADES[shades.wellbeing]} onCustomise={() => setPicking('wellbeing')} onOverview={() => goTo(0)} onOpen={() => open('/(tabs)/mind')} /> },
       ]} />}
+
+      {/* One wellbeing invite at a time: the reflection (low-mood rule, SRS-FR-1106) comes before the daily check-in (SRS-FR-1104). */}
+      {reflectInvite
+        ? <HomeInviteCard testID="home-reflect-invite" icon="chatbubbles-outline" title={t('wellbeing.reflect.title')} actionLabel={t('wellbeing.breathe.start')}
+            onDismiss={snoozeReflect} onAction={() => { snoozeReflect(); router.push('/how-have-you-been'); }} />
+        : invite && <HomeInviteCard testID="home-checkin-invite" icon="heart-outline" title={t('wellbeing.invite.title')} actionLabel={t('wellbeing.invite.checkIn')}
+            onDismiss={dismissInvite} onAction={() => { dismissInvite(); open('/(tabs)/mind'); }} />}
 
       <ShadePicker cardName={picking ? t(picking === 'money' ? 'home.panelMoney' : picking === 'studies' ? 'home.panelStudies' : 'home.panelWellbeing') : null}
         value={picking ? shades[picking] : DEFAULT_CARD_SHADES.money} onChange={(shade) => { if (picking) chooseShade(picking, shade); }} onClose={() => setPicking(null)} />

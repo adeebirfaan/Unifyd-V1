@@ -18,13 +18,16 @@ export type InsightDeckCard = {
   render: (front: boolean) => ReactNode;
 };
 
-const INITIAL_HEIGHT = 220;
+// One card height for every module's deck (Wallet, Studies, Mind), so the pages look the same (owner request 2026-11-15).
+// It fits the fullest Studies card (Academic focus with tasks) at normal text size; a card only grows past it when
+// large system text needs more room, so nothing is ever cut off.
+export const STANDARD_DECK_CARD_HEIGHT = 272;
 
 /**
  * A page's insight cards (Wallet's Finance cards, the Studies cards) in the same stacked, swipeable deck as Home
- * (`CardDeck`: native paging, peeking cards, dots, Reduce Motion aware). The deck is as tall as its tallest card,
- * measured from the content, so every card fits on any phone and text size, and it never shrinks while cards
- * change. Cards change like slides in one fixed place (`stableFront`): there is no "back to overview" step.
+ * (`CardDeck`: native paging, peeking cards, dots, Reduce Motion aware). Every deck uses the same standard card height
+ * (`STANDARD_DECK_CARD_HEIGHT`); a deck grows past it only when its tallest card needs more room (large text), so
+ * every card fits on any phone and text size, and it never shrinks while cards change. Cards change like slides in one fixed place (`stableFront`): there is no "back to overview" step.
  * `hint` is a quiet guide pinned to the bottom of the first card only.
  * A single card is shown as a normal card with no deck affordances.
  */
@@ -45,9 +48,9 @@ export function InsightDeck({ cards, hint, testID, dotLabel }: {
 
   if (cards.length === 1) {
     const [only] = cards;
-    return <View testID={`${testID}-single`}>{surface(only, only.render(true), false)}</View>;
+    return <View testID={`${testID}-single`}>{surface(only, <View style={{ minHeight: STANDARD_DECK_CARD_HEIGHT }}>{only.render(true)}</View>, false)}</View>;
   }
-  const height = Math.max(INITIAL_HEIGHT, ...cards.map((card) => heights[card.key] ?? 0));
+  const height = Math.max(STANDARD_DECK_CARD_HEIGHT, ...cards.map((card) => heights[card.key] ?? 0));
   return <CardDeck
     testID={testID}
     height={height}

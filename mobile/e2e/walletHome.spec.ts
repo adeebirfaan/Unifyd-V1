@@ -259,7 +259,7 @@ test('Light mode keeps cards dark and readable, and a 320 px phone shows everyth
       const card = [...document.querySelectorAll('[data-testid="spending-breakdown"]')].find((el) => (el as HTMLElement).offsetParent !== null)!;
       const heroAncestor = (() => { let node: Element | null = [...document.querySelectorAll('[data-testid="budget-summary"]')].find((el) => (el as HTMLElement).offsetParent !== null)!; while (node && !getComputedStyle(node).backgroundImage.includes('gradient')) node = node.parentElement; return node; })();
       const amount = [...document.querySelectorAll('[data-testid="budget-summary"] [data-testid="budget-amount"]')].find((el) => (el as HTMLElement).offsetParent !== null)!;
-      const title = [...document.querySelectorAll('div')].find((el) => el.textContent === 'Wallet' && (el as HTMLElement).offsetParent !== null && el.children.length === 0)!;
+      const title = [...document.querySelectorAll('div, h1, h2, [role="heading"]')].find((el) => el.textContent === 'Wallet' && (el as HTMLElement).offsetParent !== null && el.children.length === 0)!;
       return { card: bg(card), page: bg(title), title: getComputedStyle(title).color,
         hero: heroAncestor ? getComputedStyle(heroAncestor).backgroundImage : '', heroText: getComputedStyle(amount).color };
     });

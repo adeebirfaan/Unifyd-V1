@@ -53,6 +53,8 @@ test('private mood check-ins validate, save, order, and delete safely', async ({
     await page.getByRole('button', { name: 'Save check-in' }).click();
     await expect(page.getByText('Choose a stress level.')).toBeVisible();
     await page.getByRole('radio', { name: 'Stress: Moderate' }).click();
+    // The note is tucked behind Add a note (Mind revamp).
+    await page.getByTestId('mind-add-note').click();
     await page.getByRole('textbox', { name: 'Private note (optional)' }).fill(`  ${prefix} first  `);
 
     const failSave = async (route: Route) => {
@@ -68,6 +70,9 @@ test('private mood check-ins validate, save, order, and delete safely', async ({
 
     await page.getByRole('button', { name: 'Save check-in' }).click();
     await expect(page.getByText('Check-in saved.')).toBeVisible();
+    await expect(page.getByTestId('mind-add-note')).toBeVisible();
+    // History has its own page, opened from the History shortcut (Mind revamp).
+    await page.getByTestId('mind-history').click();
     await expect(page.getByText(`${prefix} first`)).toBeVisible();
     await expect.poll(() => createdIds.size).toBe(1);
     const firstId = [...createdIds][0];
@@ -79,10 +84,12 @@ test('private mood check-ins validate, save, order, and delete safely', async ({
       expect(first.data).toMatchObject({ user_id: userId, mood_level: 4, stress_level: 3, note: `${prefix} first` });
     } finally { await client.auth.signOut(); }
 
+    await page.getByRole('button', { name: 'Go back' }).last().click();
     await page.getByRole('radio', { name: 'Mood: Very good' }).click();
     await page.getByRole('radio', { name: 'Stress: Low' }).click();
     await page.getByRole('button', { name: 'Save check-in' }).click();
     await expect.poll(() => createdIds.size).toBe(2);
+    await page.getByTestId('mind-history').click();
     const secondId = [...createdIds][1];
     const secondRow = page.locator(`[data-testid="mind-entry-${secondId}"]`);
     await expect(secondRow).toBeVisible();
@@ -160,37 +167,42 @@ test('recent trends show only dated owned check-ins and keep notes out of summar
   await page.getByRole('textbox', { name: 'Password' }).fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.getByRole('tab', { name: 'Mind' }).click();
-  const trendCard = page.getByTestId('mind-trend-card');
+  const week = page.getByTestId('mind-week');
+  const daily = page.getByTestId('mind-daily');
   const ideas = page.getByTestId('mind-for-you-card');
-  await expect(trendCard.getByText('No check-ins in this period yet. Save a private check-in to see your daily averages.')).toBeVisible();
-  await expect(trendCard.getByText('Compared with the previous period')).toHaveCount(0);
-  await expect(ideas.getByText('A few general ideas to consider:')).toBeVisible();
+  await expect(week).toContainText('No check-ins this week.');
+  await expect(page.getByTestId('mind-week-comparison')).toHaveCount(0);
+  await expect(ideas).toContainText('IDEAS');
 
   stage = 'single';
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('tab', { name: 'Mind' }).click();
-  await expect(trendCard.getByText('1 check-in in this period')).toBeVisible();
-  await expect(trendCard.getByText('2.0')).toBeVisible();
-  await expect(trendCard.getByText('Compared with the previous period')).toHaveCount(0);
+  await expect(page.getByTestId('mind-week-count')).toHaveAttribute('aria-label', 'Check-ins: 1');
+  await expect(page.getByTestId('mind-week-mood')).toHaveAttribute('aria-label', 'Average mood: 2.0');
+  await expect(page.getByTestId('mind-week-comparison')).toHaveCount(0);
 
   stage = 'populated';
   await page.getByRole('tab', { name: 'Wallet' }).click();
   await page.getByRole('tab', { name: 'Mind' }).click();
-  await expect(trendCard.getByText('3 check-ins in this period')).toBeVisible();
-  await expect(trendCard.getByText('3.7')).toBeVisible();
-  await expect(trendCard.getByText('3.0')).toBeVisible();
-  await expect(trendCard.getByText('Your average mood was higher than in the previous period.')).toBeVisible();
-  await expect(trendCard.getByText('Your average stress was lower than in the previous period.')).toBeVisible();
-  await expect(trendCard.getByTestId('mind-trend-day-6')).toHaveAttribute('aria-label', /average mood 3\.0 out of 5; average stress 4\.0 out of 5/);
-  await expect(trendCard.getByTestId('mind-trend-day-5')).toHaveAttribute('aria-label', /no check-ins/);
-  await expect(ideas.getByText('Take a short break from your screen.')).toBeVisible();
-  await expect(ideas.getByText('Consider talking with someone you trust.')).toBeVisible();
-  await expect(trendCard.getByText(privateNote)).toHaveCount(0);
-  await expect(ideas.getByText(privateNote)).toHaveCount(0);
-  await expect(page.getByText(privateNote)).toBeVisible();
+  await expect(page.getByTestId('mind-week-count')).toHaveAttribute('aria-label', 'Check-ins: 3');
+  await expect(page.getByTestId('mind-week-mood')).toHaveAttribute('aria-label', 'Average mood: 3.7');
+  await expect(page.getByTestId('mind-week-stress')).toHaveAttribute('aria-label', 'Average stress: 3.0');
+  await expect(page.getByTestId('mind-week-comparison')).toHaveText('Mood is higher. Stress is lower.');
+  await expect(daily.getByTestId('mind-trend-day-6')).toHaveAttribute('aria-label', /average mood 3\.0 out of 5; average stress 4\.0 out of 5/);
+  await expect(daily.getByTestId('mind-trend-day-5')).toHaveAttribute('aria-label', /no check-ins/);
+  await expect(ideas).toContainText('Take a short break from your screen.');
+  await expect(ideas).toContainText('Consider talking with someone you trust.');
+  await expect(page.getByTestId('mind-deck')).not.toContainText(privateNote);
 
-  await trendCard.getByRole('button', { name: 'Last 30 days' }).click();
-  await expect(trendCard.getByText('5 check-ins in this period')).toBeVisible();
+  // History: the note appears only in the check-in list; the 30-day trend is one switch away.
+  await page.getByTestId('mind-history').click();
+  await expect(page.getByText(privateNote)).toBeVisible();
+  await page.getByTestId('mind-view-trends').click();
+  const trendCard = page.getByTestId('mind-trend-card');
+  await expect(trendCard.getByText('3 check-ins', { exact: true })).toBeVisible();
+  await expect(trendCard.getByText(privateNote)).toHaveCount(0);
+  await trendCard.getByRole('button', { name: '30 days' }).click();
+  await expect(trendCard.getByText('5 check-ins', { exact: true })).toBeVisible();
   expect(trendQueries.length).toBeGreaterThan(0);
   for (const url of trendQueries) {
     expect(url.searchParams.get('user_id')).toBe(`eq.${userId}`);
@@ -224,6 +236,7 @@ test('a check-in can be edited without changing its recorded time or owner', asy
     await page.getByRole('textbox', { name: 'Password' }).fill(password);
     await page.getByRole('button', { name: 'Sign in' }).click();
     await page.getByRole('tab', { name: 'Mind' }).click();
+    await page.getByTestId('mind-history').click();
     const row = page.locator(`[data-testid="mind-entry-${entryId}"]`);
     await expect(row.getByText(`${prefix} edit original`)).toBeVisible();
 

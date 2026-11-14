@@ -8,7 +8,7 @@
 |---|---|
 | Overall stage | All SRS Must and Should features implemented locally, plus Unifyd Focus (owner-approved 2026-10-16); full Expo Web e2e suite 117/117 (2026-10-16, `ui-revamp`) |
 | Current phase | Phase 9 - Evaluation, hardening, and thesis evidence (receipt OCR evaluation started 2026-10-14) |
-| Current task | Unifyd Focus Phases 1–6 **development-complete** on `ui-revamp` (uncommitted; code review done; both migrations applied per owner 2026-10-16). It is pending final device validation and UAT, and is not user-accepted or production-ready. iPhone UAT and full UAT are **paused by owner decision (2026-10-16)** until all planned features are built. Waiting on: the owner's commit and merge decision, then the next feature. Receipt OCR: collect a fresh 40–50-receipt final test set |
+| Current task | Unifyd Focus Phases 1–6 **development-complete** on `ui-revamp` (committed as `42a5dfc`, not merged or pushed; code review done; both migrations applied per owner 2026-10-16). It is pending final device validation and UAT, and is not user-accepted or production-ready. iPhone UAT and full UAT are **paused by owner decision (2026-10-16)** until all planned features are built. Waiting on: the owner's commit and merge decision, then the next feature. Receipt OCR: collect a fresh 40–50-receipt final test set |
 | Next milestone | Remaining development, then full-application device checks and UAT, the final OCR evaluation, AI-summary samples, and the Likert questionnaire |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
 | Custom ML / prediction | Prediction not in scope. One owner-approved exception (2026-10-13): the Naive Bayes expense-category suggester trained per request on the student's own titles |
@@ -30,7 +30,7 @@ Status words: **verified** = implemented and its automated Expo Web or server te
 
 ### B. In progress
 
-- **Phase 9 OCR evaluation:** development set done; the final evaluation on a fresh receipt set is not yet run (the 15 held-out receipts are still unscored).
+- **Phase 9 OCR evaluation:** the single `--final` run was done 2026-11-14 (41.4% all-three-correct on 58 unseen receipts); the final set was then merged into development (100 receipts) and the parser improved (development all-three 61.1% → 75.0%). An "after" score needs a new fresh set.
 - **Physical-device verification** of recently changed screens (Wallet, budget, Studies) and of OCR with the new parser (needs a server restart: `npm run build && npm start`).
 
 ### C. Pending work, limitations, and technical debt
@@ -45,7 +45,7 @@ Status words: **verified** = implemented and its automated Expo Web or server te
 
 1. **Commit and push** the 2026-10-14 maintenance changes after review.
 2. **Phone checks:** restart the server, scan several receipts, and run the device checklist in C. These confirm work already built and need no new code.
-3. **Final OCR evaluation:** before freezing the parser, decide whether any further tuning is wanted (on development receipts only). Then collect about 40–50 fresh receipts, label them by hand, and run `npm run eval:receipts -- --final` once. Prerequisite: no parser changes after the fresh set is collected.
+3. **Final OCR evaluation:** done 2026-11-14 (41.4% on 58 unseen receipts), then merged into development. For an "after" score: collect 20–30 fresh receipts, label them, run `final-setup`, `final-check`, and `npm run eval:receipts -- --final` once, with no parser change after collecting.
 4. **Two-account RLS test:** prerequisite: a second test account added to the ignored `mobile/.env.test`.
 5. **Remaining Phase 9 evidence:** AI-summary samples (prerequisite: `GROQ_API_KEY` in `server/.env`), then UAT and the Likert questionnaire (prerequisite: participants and an approved questionnaire).
 6. **Housekeeping:** done on 2026-10-14 (see the maintenance entry). The insights module stays until the AI-summary samples are collected.
@@ -155,6 +155,176 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-11-14 — Receipt scan: Retake hint on hard-to-read photos
+
+**Changed files:**
+- `mobile/lib/scanFlow.ts` (`suggestRetake`, `RETAKE_FLAGGED_FIELDS`), `mobile/components/scan/ScanReview.tsx` (notice text and Retake button; `onRetake` prop), `mobile/app/scan-receipt.tsx` (Retake returns to Start), `mobile/constants/i18n.ts` (`scan.retakeHint`, `scan.retake`, English and Malay).
+- Tests: `mobile/tests/scanFlow.test.mjs` (1 new), `mobile/e2e/scanFlow.spec.ts` (2 new).
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (Receipt scan flow, Uncertain fields), `CLAUDE.md`.
+
+**What changed:**
+- Owner phone test: a blurred sideways photo read badly; a retake read fine. Review now suggests a retake when there is no readable text or two or more of Merchant, Date, and Total are flagged. The notice reads "Parts of this photo were hard to read. It may be blurry, dark, or sideways." with a "Retake photo" button; both disappear once a field is edited, so retaking never discards edits and needs no discard question.
+- On the 100 saved receipts the rule would fire on 25 (17 of them hard or handwritten) and never on receipts with zero or one flag.
+
+**Tests performed:**
+- Mobile typecheck and lint clean; unit **168/168**; `e2e/scanFlow.spec.ts` **14/14** (one test rerun alone after the known Expo Web out-of-memory crash). Phone-width screenshot checked.
+- Owner checked on the phone (2026-11-14): works.
+
+**Next action:**
+- Owner tries a blurry or sideways scan on the phone; later, collect a fresh unseen receipt set for the honest "after" score.
+
+### 2026-11-14 — Receipt OCR: merchant rules (general)
+
+**Changed files:** `server/src/receipt-merchant.ts`, `server/src/receipt-merchant.test.ts` (2 new tests, fictional names), `CLAUDE.md`.
+
+**What changed:**
+- A header line carrying its company registration (`(001234567-K)`, `(Co. No. …)`) gives a confident name; such numbers no longer end the header as if they were barcodes.
+- The header loop keeps the first plausible line but replaces it with a later, better-supported one (business word, company line below, or registration).
+- Never names: "Since/Est. …", "Cash Sales", "No. Pendaftaran"/"No. Syarikat", store/outlet/branch codes, lines starting with `(` or `&`, and lines over six words (company words not counted). "Shop" added as a business word.
+
+**Tests performed:**
+- Development split (72): merchant 83.3% → **87.5%**, all three 73.6% → **75.0%**, silent 2. Report: `reports/dev-after-merchants-2026-11-14.txt`.
+- Merchant changes across all 100 receipts: 3 fixed, 1 correct name now confident, no other change (three side effects found during the work were fixed before finishing).
+- Server typecheck, **127/127** tests, build.
+
+**Issues or decisions:**
+- Not fixed (OCR or handwriting damage): `004`, `046`, `072`, `094` (OCR dropped letters), `097`, `098`; `005`/`052`/`073` are label-specific cases.
+
+**Next action:**
+- Owner decision: collect a fresh unseen set to measure the improved parser, or test on the phone first.
+
+### 2026-11-14 — Receipt OCR: date rules (general)
+
+**Changed files:** `server/src/receipt-date.ts`, `server/src/receipt-date.test.ts` (2 new tests, fictional dates), `server/README.md`, `CLAUDE.md`.
+
+**What changed:**
+- A time with seconds is recognised even with an OCR dash or spaces (for example `12-30 : 45`), so it supports its date.
+- A four-digit year read as 29xx is corrected to 20xx and always flagged.
+- When two different dates have the same support, the earliest is kept but flagged.
+
+**Tests performed:**
+- Development split (72): date 87.5% → **90.3%**, all three 72.2% → **73.6%**, silent 3 → 2. Report: `reports/dev-after-dates-2026-11-14.txt`.
+- Date changes across all 100 receipts: 3 better (one found, one corrected, one silent error now flagged); 2 correct dates now carry a review warning (a second, different date with equal support).
+- Server typecheck, **125/125** tests, build.
+
+**Issues or decisions:**
+- Not fixed: dates OCR garbled beyond a safe rule (a month name read as digits, a month name read as one digit, handwriting), and a year misread as another valid year (indistinguishable from a real date).
+
+**Next action:**
+- Merchant names: header noise taken as the shop name.
+
+### 2026-11-14 — Receipt OCR: total rules (general, no shop-specific rules)
+
+**Changed files:**
+- `server/src/receipt-layout.ts`, `server/src/receipt-total.ts`, `server/src/receipt-total.test.ts` (4 new tests, fictional receipts only), `server/README.md`, `CLAUDE.md`.
+- Labels: two supermarket receipts' merchant labels changed to the store's brand name (owner decision).
+
+**What changed:**
+- Sideways photos: when most words are tall and narrow, word boxes are turned upright (direction from Vision's reading order) before rows are rebuilt.
+- New final labels: "Total Payment" and "Total (incl tax)"; "Tctal"/"T0tal" read as "Total".
+- No total label: the lowest card/QR/e-wallet payment amount (card numbers, approvals, points skipped), else cash minus change; always with the review warning.
+- A labelled total that disagrees with the card/e-wallet amount by more than RM 0.05 gets the review warning.
+
+**Tests performed:**
+- Development split (72): total 80.6% → **93.1%**, all three 61.1% → **72.2%**, silent 5 → 3. Report: `reports/dev-after-totals-2026-11-14.txt`.
+- Server typecheck, **123/123** tests, build.
+
+**Next action:**
+- Dates (month names damaged by OCR, missing time context), then merchant header noise.
+
+### 2026-11-14 — Receipt OCR: final set merged into the development labels
+
+**What changed (git-ignored data only; no code change):** the 43 scored final receipts were copied into `server/local-data/receipt-eval/images/`, their cached OCR into `ocr/`, and their label rows appended to `labels.csv`. The scored folder was renamed `final-2026-11-14-scored/` (archive), so a future `final-setup` starts a fresh, empty `final/`. The split is a hash of the file name: the original 57 keep their sides; **100 receipts = 72 development + 28 held-out**.
+
+**Result:** `eval:receipts:run`, development split 72: all three correct **61.1%** (merchant 81.9%, date 87.5%, total 80.6%; 5 silent). Report: `reports/dev-after-merge-2026-11-14.txt`.
+- Main failure groups: totals not found or wrong (label and amount apart, "Total Payment (Rounding)", amounts split by OCR such as `24 60`, a fast-food pre-discount TOTAL); dates with damaged month names; header noise taken as merchant (`Since 1993`, garbled first lines); OCR misreads (wrong year) that rules cannot fix.
+- Label question for the owner: two supermarket receipts are labelled with the company name; the parser returns the store's brand name.
+
+**Next action:**
+- Owner picks which failure group to fix first; general rules only, with server tests after each change.
+
+### 2026-11-14 — Receipt OCR: the single `--final` run (thesis score on unseen receipts)
+
+**What ran:** `npm run eval:receipts -- --final` on the owner-checked final labels (43 receipts) plus the 15 held-out receipts. No parser change since 2026-10-14. Output saved to `server/local-data/receipt-eval/reports/final-2026-11-14.txt` (git-ignored).
+
+**Results (all three fields correct):**
+- Development split (tuned on, 42): 78.6%. Held-out (15): **53.3%**. Final set (43): **37.2%** (merchant 65.1%, date 74.4%, total 67.4%; 10 receipts wrong with no warning). Held-out + final combined (58 unseen receipts): **41.4%** (merchant 62.1%, date 81.0%, total 72.4%).
+- By type (combined): digital 100% (2), chain retail 58.8% (17), local shop 45.5% (11), food and drink 31.3% (16), handwritten 10.0% (10). Clean 61.3%, hard 18.5%.
+- The gap between development and unseen receipts shows the 2026-10-14 rules fit the development receipts more than receipts in general.
+
+**Next action:**
+- Owner decision: merge the 43 final receipts into the development set and improve the parser with general rules only (no shop-specific rules); measure the improved parser later on a fresh unseen set.
+
+### 2026-11-14 — Receipt OCR final test set prepared (labels drafted by Claude, pending owner check)
+
+**What changed (local, git-ignored data only; no code change):**
+- 45 new receipt photos were renamed to `receipt-NNN` (handwritten ones end in `-hw`) in `local data/receipt-eval/images/` and copied to `server/local-data/receipt-eval/final/images/`. `final-setup` read them with Google Vision (45 read, 0 failed; inside the free monthly 1,000).
+- `receipt-099` and `receipt-100` were removed from the final set: they are lower-resolution copies of development receipts `037` and `042` (the same downloaded photos). The originals stay in `local data`. **Final set: 43 receipts** (chain_retail 11, food_beverage 11, local_shop 10, handwritten 7, digital 2, other 2; clean 25, hard 18).
+- At the owner's request, Claude drafted `final/labels.csv` from the photos (OCR text used only as a reading aid; the parser was not run). The owner is checking it. `final-check`: Labels OK.
+- Decisions to confirm: deposit receipts (`063`, `097`, `101`, `102`) use the bill total, not the deposit; dates without a year (`095`, `098`) or hidden by a finger (`071`) are blank; `063`'s only date is a delivery date (left blank); `080`'s day is hard to read; `096` prints a template placeholder instead of a shop name.
+
+**Next action:**
+- Owner checks the labels, then the single `npm run eval:receipts -- --final` run. No parser changes before it.
+
+### 2026-11-14 — Fix: tab bar off-centre (empty Profile slot)
+
+**Changed files:**
+- `mobile/app/(tabs)/_layout.tsx`
+- `mobile/e2e/home.spec.ts`
+
+**What changed:**
+- On iPhone, the tab bar had six slots: the hidden Profile tab (`tabBarButton: () => null`) still kept its `flex: 1` item wrapper. Planner ended up under the + button, and Mind moved off-centre. Fixed by adding `tabBarItemStyle: { display: 'none' }` to Profile.
+- The Home e2e now checks that Wallet and Planner sit evenly on either side of the + button, with Planner clear of it.
+
+**Tests performed:**
+- Typecheck and lint pass. `e2e/home.spec.ts` 12/12 (two tests rerun with `-g` after the known Expo Web out-of-memory crash). With the fix removed, the new check fails (65 px off-centre), so it catches this bug.
+- Not yet rechecked on the phone.
+
+**Next action:**
+- Owner reloads Expo Go and confirms the bar shows Home · Wallet · [+] · Planner · Mind evenly spaced.
+
+### 2026-10-16 — Pre-push privacy audit: receipt text found in unpushed history (nothing pushed)
+
+**Scope:** all 13 commits that a push of `ui-revamp` would send (`origin/main..ui-revamp`: the 12 unpushed `main` commits plus `42a5dfc`), checked across the full history, not just the final tree. Read-only; nothing pushed, rewritten, or changed in Git.
+- **No problems found in:** binary files, images, `local-data/`, `labels.csv`, OCR caches, reports, `.env` files, secrets, or tokens. No path is added and later deleted. The `.env.example` changes are flags set to `0`.
+- **Problem:** every added line was matched against the 57 cached OCR texts (read locally only; never copied into the repo). In commit **`ff4f044`**, `server/src/receipt-items.test.ts` contains 17 lines copied from the owner's real receipts:
+  - an invoice number and a store staff name;
+  - a fuel purchase line (litres, price, total);
+  - dine-in orders, product lines, and barcodes.
+  - `server/src/receipt-items.ts` comments contain 3 product examples (low risk).
+- **Low risk, not counted as private:** the scan-flow fixtures in `mobile/e2e/scanFlow.spec.ts` and `mobile/tests/scanFlow.test.mjs` use a made-up merchant and common product names, with no matching merchant, date, or total.
+- **Already on GitHub (before today):** earlier receipt test files hold some receipt-derived strings, mostly shop names and labels, plus one total line. Cleaning those would mean rewriting published history.
+- `ff4f044` is on no remote, so it can be cleaned before the first push without a force push.
+
+**Next action:**
+- Owner chooses how to clean the history; then rerun the server and mobile tests, then push.
+
+### 2026-10-16 — Unifyd Focus committed (`42a5dfc`); Module 8 AI summary analysis (no code)
+
+**Commit (owner-approved):** `42a5dfc feat: implement Unifyd Focus and study analytics` on `ui-revamp`: 38 files (Focus code, tests, both migrations, Focus documentation). **Not merged or pushed.**
+- Before staging, every hunk was checked as Focus or status, the i18n changes as only `focus.*` keys, and the files were scanned for secrets, env files, and test artifacts (none found).
+- Left out: the owner's **Rule 4** line in `CLAUDE.md` (staged without it, pending owner approval), and the untracked `completed receipt data.md`.
+
+**Module 8 analysis (owner chose Option A: an AI summary inside Poof's sheet):**
+- **What `/api/insights/generate` covers:**
+  - finance for this local calendar month, **monthly budget only**;
+  - academic = **task counts only** (pending, ongoing, overdue, due in 7 days, completed in 7 days);
+  - wellbeing = 7-day mood and stress, the previous-7-day comparison, and the low-mood flag.
+- **Not covered:** weekly budgets, semester and timetable, subscriptions, split bills, and Focus.
+- **Inconsistencies found:**
+  - SRS §5.8 status still describes the removed Home card and its refresh button.
+  - SDD §7.6 says Poof's chat replaces the summary.
+  - The endpoint ignores weekly budgets, which Wallet and Poof support.
+  - The endpoint has no rate limit; only successful summaries are cached, for 10 minutes.
+  - `mobile/lib/insights.ts` is unused, drops the returned `facts`, and reports every non-OK status as `unavailable`.
+  - The Privacy Policy says Unifyd "does not use a custom machine-learning model", which contradicts the approved category suggester.
+- The plan (UI, backend reuse, privacy, files, tests, docs, phases) is in the session summary given to the owner.
+
+**Tests:** none run for this entry (documentation and analysis only; the Focus results are unchanged from earlier the same day).
+
+**Next action:**
+- Owner approves (or changes) the Module 8 plan; decides on Rule 4 and on merging `ui-revamp`.
 
 ### 2026-10-16 — iPhone UAT paused; Unifyd Focus marked development-complete
 

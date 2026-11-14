@@ -536,6 +536,7 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
 - The marker clears once the student edits that field. It is a prompt, not an error, and never blocks saving.
 - "No readable text was detected." shows one amber line at the top of the Details card: "We couldn't read any text. Enter the details yourself." Any unknown warning shows the existing "Check the extracted details before using them."
 - Validation errors stay red, with a red border and text, so they are distinct from the amber review markers.
+- **Retake hint** (2026-11-14): when the photo was hard to read (no readable text, or two or more of Merchant, Date, and Total flagged; `suggestRetake` in `lib/scanFlow.ts`), the amber notice at the top of the Details card reads "Parts of this photo were hard to read. It may be blurry, dark, or sideways." (the no-text message keeps its own wording) and a 44 pt dark pill button, **Retake photo** (`camera-outline`), sits below it. Retake returns to Start with no discard question. The hint and button disappear once the student edits any of the three fields, so retaking never discards edits. One flagged field never shows it.
 
 **Items** (built 2026-10-14; the server reads the lines in `receipt-items.ts`)
 - The app reads the optional `items` field (`[{ name, quantity, unitPrice, amount }]`, `amount` the line total in RM, negative for a discount). The card is hidden when the list is empty (no total, unpaid order, or lines that could not be read reliably). A missing or malformed field never breaks a scan.

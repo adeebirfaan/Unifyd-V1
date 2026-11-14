@@ -4,7 +4,7 @@ Short, practical state for resuming work. Details: `PROJECT_PROGRESS.md` (handov
 
 ## Current project status
 
-- Unifyd is an Expo (SDK 57) + Node/Express + Supabase student app with eight approved modules: account/profile, financial tracking, receipt OCR, budgets, academic tasks, reminders, mood tracking, and the Home dashboard with the Poof assistant.
+- Unifyd is an Expo (SDK 58) + Node/Express + Supabase student app with eight approved modules: account/profile, financial tracking, receipt OCR, budgets, academic tasks, reminders, mood tracking, and the Home dashboard with the Poof assistant.
 - All SRS Must and Should features are **implemented locally and pass automated tests** (Expo Web and server).
 - **Not yet confirmed on a phone:** reminder delivery, native pickers, Poof feel, and OCR with the new parser.
 - Phase 9 (evaluation and thesis evidence) has **started** with the receipt OCR evaluation.
@@ -14,9 +14,8 @@ Short, practical state for resuming work. Details: `PROJECT_PROGRESS.md` (handov
 **Read this first.** Sections further down headed 2026-10-14 (Current focus, Next recommended task, Git status, Continuation prompt) are older and superseded by this one.
 
 - **State:**
-  - Branch `ui-revamp`, HEAD `b832a2f` (equal to `main`).
-  - All Unifyd Focus work is **uncommitted**: 13 modified tracked files and 22 untracked paths, listed in `git status --short`.
-  - Nothing has been committed, pushed, merged, or deployed. The untracked `completed receipt data.md` and the receipt evaluation are untouched; nothing under `server/` changed.
+  - Branch `ui-revamp`. Unifyd Focus is committed as **`ca7ebb3`** on top of `f9e1718` (= `main`; hashes changed in the 2026-11-14 history rewrite): 38 files, owner-approved 2026-10-16.
+  - **Not merged, pushed, or deployed.** Still uncommitted: the owner's Rule 4 line in `CLAUDE.md` (left out of the commit pending owner approval), later status edits to these docs, and the untracked `completed receipt data.md`. The untracked `completed receipt data.md` and the receipt evaluation are untouched; nothing under `server/` changed.
 - **Implemented:** Unifyd Focus Phases 1–6. The details are in the section below; the design is in SDD §7.10 and SRS §5.11 (SRS-FR-1001 to 1022).
 - **Focus status:** **development-complete; pending final device validation and UAT.** It is not user-accepted or production-ready.
 - **UAT paused (owner decision, 2026-10-16):** iPhone UAT and full user acceptance testing are postponed until all planned features are built. Do not resume them until the owner asks. The remaining checklist items are marked **Deferred — Pending Full Application UAT** below. Unit, integration, and e2e tests still run after every change.
@@ -39,7 +38,7 @@ Short, practical state for resuming work. Details: `PROJECT_PROGRESS.md` (handov
   2. The rest of the iPhone checklist below (**Deferred — Pending Full Application UAT**).
   3. A true cross-account RLS test (needs a second test account).
   4. User acceptance testing (deferred with the checklist).
-  5. Owner approval to commit and merge into `main`.
+  5. ~~Commit~~ (done, `ca7ebb3`); owner approval to merge into `main` and push.
   6. Pending enhancement: an optional Focus alert sound (`PROJECT_PROGRESS.md` "Deferred ideas").
 - **Resuming safely:**
   1. Run `git status --short` and confirm `ui-revamp` and the files above.

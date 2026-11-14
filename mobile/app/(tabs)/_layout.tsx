@@ -18,7 +18,7 @@ type IconName = ComponentProps<typeof Ionicons>['name'];
 
 function tabIcon(outline: IconName, filled: IconName) {
   return function TabIcon({ color, focused }: { color: ColorValue; focused: boolean }) {
-    return <Ionicons name={focused ? filled : outline} size={24} color={color} />;
+    return <Ionicons name={focused ? filled : outline} size={24} color={typeof color === 'string' ? color : colors.brandCyan} />;
   };
 }
 
@@ -98,8 +98,10 @@ export default function TabLayout() {
         }} />
         <Tabs.Screen name="planner" options={{ title: t('tab.planner'), tabBarAccessibilityLabel: t('tab.planner'), tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
         <Tabs.Screen name="mind" options={{ title: t('tab.mind'), tabBarAccessibilityLabel: t('tab.mind'), tabBarIcon: tabIcon('heart-outline', 'heart') }} />
-        {/* Profile opens from the Home avatar; hiding it keeps the bar balanced around the centre action. */}
-        <Tabs.Screen name="profile" options={{ title: t('tab.profile'), href: null }} />
+        {/* Profile opens from the Home avatar; hiding it keeps the bar balanced around the centre action.
+            No button instead of `href: null`: since SDK 58 a hidden tab redirects to Home, so Profile would be unreachable.
+            `display: 'none'` removes the item's flex:1 wrapper too; without it an empty sixth slot pushes Planner under the + button. */}
+        <Tabs.Screen name="profile" options={{ title: t('tab.profile'), tabBarButton: () => null, tabBarItemStyle: { display: 'none' } }} />
       </Tabs>
       {sheetMounted && <QuickActionsSheet open={quickOpen} progress={progress} bottom={barHeight} actions={actions} onClose={() => setQuick(false)} onSelect={selectAction} onSave={saveActions} />}
       <QuickActionsButton open={quickOpen} progress={progress} barHeight={barHeight} onPress={() => setQuick(!quickOpen)} />

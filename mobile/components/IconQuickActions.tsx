@@ -16,9 +16,9 @@ const MIN_LABEL_SIZE = 10; // reached only on 320 pt phones
 const GLYPH = 0.53;
 
 /** One label size for the whole grid: the largest (up to 13 pt) at which its longest word fits a tile. */
-export function quickLabelSize(gridWidth: number, labels: readonly string[]): number {
+export function quickLabelSize(gridWidth: number, labels: readonly string[], columns = COLUMNS): number {
   if (!gridWidth) return LABEL_SIZE;
-  const room = (gridWidth - spacing.space2 * (COLUMNS - 1)) / COLUMNS + spacing.space1 * 2;
+  const room = (gridWidth - spacing.space2 * (columns - 1)) / columns + spacing.space1 * 2;
   const longest = Math.max(1, ...labels.flatMap((label) => label.split(/\s+/).map((word) => word.length)));
   return Math.max(MIN_LABEL_SIZE, Math.min(LABEL_SIZE, Math.floor((room / (longest * GLYPH)) * 2) / 2));
 }
@@ -28,15 +28,15 @@ export function quickLabelSize(gridWidth: number, labels: readonly string[]): nu
  * The primary action is filled Unifyd blue; the rest use the dark card surface with a cyan icon.
  * Four equal columns: more actions continue on the next row in order, and a short last row stays left-aligned
  * with the same tile width (empty spacers fill it), so a single extra tile is never stretched. Four fit a 320 pt
- * phone. Labels wrap between words onto two lines; every label shares one size, reduced (to no less than 10 pt, on 320 pt phones only)
+ * phone. `columns` (default 4) lets a screen balance its rows instead (Studies uses 3, so its five shortcuts read 3 + 2). Labels wrap between words onto two lines; every label shares one size, reduced (to no less than 10 pt, on 320 pt phones only)
  * only when the longest word ("Subscriptions") would otherwise break inside a narrow tile.
  */
-export function IconQuickActions({ actions, testIDPrefix }: { actions: IconQuickAction[]; testIDPrefix: string }) {
+export function IconQuickActions({ actions, testIDPrefix, columns = COLUMNS }: { actions: IconQuickAction[]; testIDPrefix: string; columns?: number }) {
   const { tokens } = useAppearance();
   const [width, setWidth] = useState(0);
-  const size = quickLabelSize(width, actions.map((action) => action.label));
+  const size = quickLabelSize(width, actions.map((action) => action.label), columns);
   const rows: IconQuickAction[][] = [];
-  for (let index = 0; index < actions.length; index += COLUMNS) rows.push(actions.slice(index, index + COLUMNS));
+  for (let index = 0; index < actions.length; index += columns) rows.push(actions.slice(index, index + columns));
   return <View style={styles.grid} onLayout={(event) => setWidth(Math.round(event.nativeEvent.layout.width))}>{rows.map((row, rowIndex) => <View key={rowIndex} style={styles.row}>
     {row.map((action) => <Pressable key={action.key} testID={`${testIDPrefix}-${action.key}`} accessibilityRole="button" accessibilityLabel={action.a11y} accessibilityHint={action.hint} onPress={action.onPress}
       style={({ pressed }) => [styles.tile, pressed && styles.pressed]}>
@@ -47,7 +47,7 @@ export function IconQuickActions({ actions, testIDPrefix }: { actions: IconQuick
       </View>
       <Text style={[styles.label, { color: tokens.screenText, fontSize: size, lineHeight: size + 3 }, action.primary && styles.primaryLabel]} numberOfLines={2}>{action.label}</Text>
     </Pressable>)}
-    {Array.from({ length: COLUMNS - row.length }, (_, index) => <View key={`spacer-${index}`} style={styles.tile} />)}
+    {Array.from({ length: columns - row.length }, (_, index) => <View key={`spacer-${index}`} style={styles.tile} />)}
   </View>)}</View>;
 }
 

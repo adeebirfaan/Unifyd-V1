@@ -74,20 +74,27 @@ const sample: Task[] = [
   { title: 'Overdue oldest', priority: 'low', deadline: at(-48 * HOUR) },
 ];
 
-test('the long rows are replaced by four icon shortcuts that open the existing screens', async ({ page }) => {
+test('five icon shortcuts in a balanced 3 + 2 grid open their screens', async ({ page }) => {
   await mockStudies(page, { tasks: sample, choice: true, courses: [{ code: 'BCS3153', name: 'Software Evolution', credits: 3 }], classes: true });
   await openStudies(page);
   await expect(page.getByText('Keep assignments and deadlines in view.')).toHaveCount(0);
   const quick = visible(page, 'planner-quick-actions');
-  await expect(quick.getByRole('button')).toHaveCount(4);
-  for (const [name, url] of [['Add task', /\/add-task/], ['My semester', /\/my-semester/], ['My timetable', /\/timetable/], ['Reminders', /\/reminders/]] as const) {
+  await expect(quick.getByRole('button')).toHaveCount(5);
+  // Three on the first row; Focus mode and Reminders on the second, at the same tile width, starting from the left.
+  const boxes = await Promise.all(['add', 'semester', 'timetable', 'focus', 'reminders'].map(async (key) => (await visible(page, `planner-quick-${key}`).boundingBox())!));
+  expect(new Set(boxes.slice(0, 3).map((box) => Math.round(box.y))).size).toBe(1);
+  expect(Math.round(boxes[3].y)).toBe(Math.round(boxes[4].y));
+  expect(boxes[3].y).toBeGreaterThan(boxes[0].y + boxes[0].height - 1);
+  expect(Math.abs(boxes[3].x - boxes[0].x)).toBeLessThan(1);
+  expect(Math.abs(boxes[3].width - boxes[0].width)).toBeLessThan(1);
+  for (const [name, url] of [['Add task', /\/add-task/], ['My semester', /\/my-semester/], ['My timetable', /\/timetable/], ['Unifyd Focus', /\/focus/], ['Reminders', /\/reminders/]] as const) {
     await quick.getByRole('button', { name, exact: true }).click();
     await expect(page).toHaveURL(url);
     await page.goBack();
     await expect(visible(page, 'planner-quick-actions')).toBeVisible();
   }
   // Every shortcut keeps a 44 pt target.
-  for (const key of ['add', 'semester', 'timetable', 'reminders']) expect((await visible(page, `planner-quick-${key}`).boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  for (const key of ['add', 'semester', 'timetable', 'focus', 'reminders']) expect((await visible(page, `planner-quick-${key}`).boundingBox())!.height).toBeGreaterThanOrEqual(44);
 });
 
 test('priority tasks follow the rules, show at most five incomplete tasks, and View all lists every task', async ({ page }) => {

@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useRef, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { ScrollViewInstance, TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
@@ -19,7 +20,7 @@ import { useKeyboardVisible } from '@/hooks/useKeyboardVisible';
 import { EXPENSE_CATEGORIES, parseExpenseAmount } from '@/lib/expenseForm';
 import type { ExpenseCategory, ExpenseInput } from '@/lib/expenseForm';
 import type { ReceiptOcrResult } from '@/lib/receiptOcr';
-import { draftAmount, draftItems, reviewFlags } from '@/lib/scanFlow';
+import { draftAmount, draftItems, reviewFlags, suggestRetake } from '@/lib/scanFlow';
 import type { DraftItem, ReviewField } from '@/lib/scanFlow';
 import { useAppearance } from '@/providers/AppearanceProvider';
 import { useI18n } from '@/providers/LanguageProvider';
@@ -29,9 +30,11 @@ import { useI18n } from '@/providers/LanguageProvider';
  * uncertain fields marked "Check" → Items (only when the server returned them) → "View detected text" (a sheet).
  * "Save expense" is fixed at the bottom outside the scroll area, hidden only while the keyboard is open.
  * Category always starts empty; the optional suggestion is applied only when tapped. Nothing is saved until Save.
+ * When the photo was hard to read (no text, or two or more uncertain fields), the notice offers "Retake photo" until
+ * the student edits a field, so retaking never discards their changes.
  */
-export function ScanReview({ imageUri, result, onSave, onBack }: {
-  imageUri: string; result: ReceiptOcrResult; onSave: (input: ExpenseInput) => Promise<boolean>; onBack: () => void;
+export function ScanReview({ imageUri, result, onSave, onBack, onRetake }: {
+  imageUri: string; result: ReceiptOcrResult; onSave: (input: ExpenseInput) => Promise<boolean>; onBack: () => void; onRetake: () => void;
 }) {
   const { tokens } = useAppearance();
   const { t } = useI18n();
@@ -46,12 +49,13 @@ export function ScanReview({ imageUri, result, onSave, onBack }: {
   const [items, setItems] = useState<DraftItem[]>(() => draftItems(result.items));
   const [noteOpen, setNoteOpen] = useState(false);
   const [textOpen, setTextOpen] = useState(false);
-  const scroll = useRef<ScrollView>(null);
-  const merchantInput = useRef<TextInput>(null);
-  const amountInput = useRef<TextInput>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
+  const merchantInput = useRef<TextInputInstance>(null);
+  const amountInput = useRef<TextInputInstance>(null);
   const layout = useRef<{ card: number; fields: Partial<Record<ExpenseDraftField, number>> }>({ card: 0, fields: {} });
   const { errors } = draft;
   const flagged = (field: ReviewField) => flags.fields[field] && !edited[field];
+  const retake = suggestRetake(flags) && !Object.values(edited).some(Boolean);
   const markEdited = (field: ReviewField) => setEdited((current) => current[field] ? current : { ...current, [field]: true });
   const a11y = (label: string, field: ReviewField) => flagged(field) ? `${label}, ${t('scan.needsReview')}` : label;
   const categoryOptions = EXPENSE_CATEGORIES.map((id) => ({ id, label: t(`expense.category.${id}`) }));
@@ -83,9 +87,18 @@ export function ScanReview({ imageUri, result, onSave, onBack }: {
 
       <View testID="scan-details" onLayout={(event) => { layout.current.card = event.nativeEvent.layout.y; }} style={[styles.card, { backgroundColor: tokens.cardBackground, borderColor: tokens.border }]}>
         <Text accessibilityRole="header" style={[styles.heading, { color: tokens.cardMutedText }]}>{t('scan.details')}</Text>
-        {(flags.noText || flags.other) && <View testID="scan-review-notice" style={styles.notice}>
-          <Ionicons name="alert-circle-outline" size={18} color={tokens.cardWarningText} />
-          <Text style={[styles.noticeText, { color: tokens.cardWarningText }]}>{t(flags.noText ? 'scan.warningNoText' : 'scan.warningOther')}</Text>
+        {(retake || flags.noText || flags.other) && <View testID="scan-review-notice" style={styles.noticeBlock}>
+          <View style={styles.notice}>
+            <Ionicons name="alert-circle-outline" size={18} color={tokens.cardWarningText} />
+            <Text accessibilityLiveRegion="polite" style={[styles.noticeText, { color: tokens.cardWarningText }]}>
+              {t(flags.noText ? 'scan.warningNoText' : retake ? 'scan.retakeHint' : 'scan.warningOther')}
+            </Text>
+          </View>
+          {retake && <Pressable testID="scan-retake" onPress={onRetake} accessibilityRole="button"
+            style={({ pressed }) => [styles.retake, { borderColor: tokens.border, backgroundColor: tokens.cardElevated }, pressed && styles.pressed]}>
+            <Ionicons name="camera-outline" size={18} color={tokens.cardText} />
+            <Text style={[styles.retakeText, { color: tokens.cardText }]}>{t('scan.retake')}</Text>
+          </Pressable>}
         </View>}
 
         <View onLayout={(event) => { layout.current.fields.title = event.nativeEvent.layout.y; }} style={styles.field}>
@@ -155,7 +168,11 @@ const styles = StyleSheet.create({
   title: { ...typography.screenTitle, flex: 1 },
   card: { borderWidth: 1, borderRadius: radius.radiusLg, padding: spacing.space4, gap: spacing.space3 },
   heading: { ...typography.label },
+  noticeBlock: { gap: spacing.space3 },
   notice: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.space2 },
+  retake: { minHeight: 44, alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: spacing.space2, borderWidth: 1, borderRadius: radius.radiusFull, paddingHorizontal: spacing.space4 },
+  retakeText: { ...typography.label, fontWeight: '600' },
+  pressed: { opacity: 0.7 },
   noticeText: { ...typography.label, fontWeight: '500', lineHeight: 19, flex: 1 },
   divider: { height: StyleSheet.hairlineWidth },
   field: { gap: spacing.space2 },

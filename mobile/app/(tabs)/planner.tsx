@@ -29,7 +29,7 @@ const PAGE_SIZE = 500;
 
 /**
  * Studies main page (2026-10-13 revamp, matching Wallet): a compact header, the Studies deck (Academic focus, Today's next class, Semester) with
- * the four icon shortcuts (Add task, My semester, My timetable, Reminders) below it, and
+ * the five icon shortcuts (Add task, My semester, My timetable, then Focus mode and Reminders: 3 + 2) below it, and
  * stable direct selection (Academic focus first, on the brand gradient), then Priority tasks: at most five incomplete tasks in `priorityTasks` order, with
  * "View all (N)" opening every task in a sheet. Task loading, completing/reopening, and every route are unchanged.
  */
@@ -153,11 +153,12 @@ export default function PlannerScreen() {
           { key: 'semester', name: t('studies.cardSemester'), surface: 'plain', render: () => <SemesterDeckCard semester={semester} onOpenSemester={() => router.push('/my-semester')} /> },
         ]} />
 
-      {/* 3. Icon shortcuts to the existing screens, below the deck as on Wallet. */}
-      <View testID="planner-quick-actions"><IconQuickActions testIDPrefix="planner-quick" actions={[
+      {/* 3. Icon shortcuts below the deck as on Wallet; three columns, so the five read as a balanced 3 + 2. */}
+      <View testID="planner-quick-actions"><IconQuickActions testIDPrefix="planner-quick" columns={3} actions={[
         { key: 'add', icon: 'add', label: t('task.add'), a11y: t('task.add'), onPress: addTask, primary: true },
         { key: 'semester', icon: 'book-outline', label: t('studies.actionSemester'), a11y: t('semester.title'), onPress: () => router.push('/my-semester') },
         { key: 'timetable', icon: 'grid-outline', label: t('studies.actionTimetable'), a11y: t('timetable.title'), onPress: () => router.push('/timetable') },
+        { key: 'focus', icon: 'timer-outline', label: t('focus.actionLabel'), a11y: t('focus.actionA11y'), onPress: () => router.push('/focus') },
         { key: 'reminders', icon: 'notifications-outline', label: t('reminders.title'), a11y: t('reminders.title'), onPress: () => router.push('/reminders') },
       ]} /></View>
 

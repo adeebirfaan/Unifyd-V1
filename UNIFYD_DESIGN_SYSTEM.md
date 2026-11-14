@@ -283,12 +283,45 @@ The same order as Wallet: header → stable card deck → dots → icon shortcut
   2. **Today** (dark card): the "NEXT CLASS" eyebrow with a clock icon, the course code and name, the day and time, and the location when saved. "Starts in N min" or "N h M min" appears only for a later class today. With no class, no semester, or a failed read, it says "No upcoming classes in your timetable" with a "View timetable" action.
   3. **Semester** (dark card): "N subjects", "2026/2027 · Semester 1", and the credit total only when every subject's credits are known (otherwise "Credits not verified"), with "View subjects". With nothing selected it says "No subjects selected yet" and offers "Choose subjects". Nothing is presented as a requirement.
   - **Dots:** named "Studies card N of 3: {name}". Each card is at least the deck's height, so nothing resizes when cards change.
-- **Shortcuts (below the dots, as on Wallet):** the shared `IconQuickActions` row: **Add task** (filled Unifyd blue), then My semester, My timetable, and Reminders (dark tiles with cyan icons). They open the same routes as before. Labels may wrap to two lines and use half of each gap, so Malay fits a 320 pt phone; the Malay tiles use the shorter "Semester saya" and "Jadual waktu", while screen readers hear the full names.
+- **Shortcuts (below the dots, as on Wallet):** the shared `IconQuickActions` grid with **three columns** (2026-10-16), so five shortcuts read as a balanced 3 + 2: **Add task** (filled Unifyd blue), My semester, My timetable, then **Focus mode** (`timer-outline`, opens Unifyd Focus) and Reminders (dark tiles with cyan icons). The second row keeps the tile width and starts from the left. Wallet keeps four columns. Labels may wrap to two lines and use half of each gap, so Malay fits a 320 pt phone; the Malay tiles use the shorter "Semester saya" and "Jadual waktu", while screen readers hear the full names.
 - **Priority tasks:** a section title with a right-aligned "View all (N)" (N = every task), matching Recent expenses. At most 5 incomplete tasks in one grouped dark card with hairline dividers.
   - **Order (`lib/studiesOverview.ts`):** overdue → due later today → High → Medium → Low (each by nearest deadline) → no readable deadline. Ties go to the higher priority, then the earlier created task, then the ID. Completed tasks never appear here.
   - **Row:** a leading complete circle (the existing complete/reopen action, 44 pt), the title, the subject, then a wrap line with "Overdue" or "Due today" (icon and word), the priority flag badge, and the due date or "No due date", then a chevron. The rest of the row opens the task.
   - **Empty:** "You’re all caught up" (with completed tasks) or "Your planner is ready." (none at all), with an "Add a task" button.
 - **All tasks sheet:** the Wallet history sheet pattern (`useSheetDrag`, close button, backdrop, Android back, Reduce Motion). It shows "To do (N)" in the priority order, then "Completed (N)" (most recent first, crossed through, with Reopen). It has pull to refresh, and a failed reload offers a retry.
+
+### Unifyd Focus (Phase 2, 2026-10-16)
+
+A stack screen opened from the Planner shortcut, with no new tab. It has one scroll area and no gradient: the blue Start/Pause button is the focal element.
+- **Header:** the Planner page header (back, "YOUR PLANNER", "Unifyd Focus", "Study smarter, stay focused.").
+- **Notice** (only after an event): one dark row with an icon, a sentence ("Round complete. Enjoy your break.", "Break’s over…", "Session ended. Your focus time was kept.", "That round wasn’t kept…"), and a 44 pt dismiss button.
+- **Timer card:**
+  - **Dial:** a 10 pt ring on the elevated surface, 200–260 pt wide depending on the phone. Progress fills clockwise from twelve o'clock: cyan for focus, Unifyd blue for breaks. Inside are the phase word (cyan for focus), the time, and "Round N". The phase word always names the state, so colour is never the only cue.
+  - **Controls:** a full-width blue primary button (Start focus / Start round N / Pause / Resume), then up to three equal dark buttons as needed: Reset round, Skip break, End session. Reset and End confirm with the shared `ConfirmDialog`; Reset is destructive.
+  - **Notes:** small grey lines for the timer state (alerts unavailable on the web, notifications off, device could not save).
+- **Stats row:** two small dark cards, Completed rounds and Next break ("5 min short break" / "15 min long break").
+- **Session setup card:** Subject and Task rows (open bottom sheets in the All tasks sheet pattern, with radio rows and a tick), then a 2 × 2 preset grid (name and "25 min focus · 5 min break"; the chosen preset has a cyan border and tick). Custom adds three steppers (− value +, 44 pt buttons, disabled at the limits) and a note about the long break. While a round or break runs, the card is dimmed and locked, with "You can change these between rounds."
+- **Motion:** the ring steps once a second. Poof moves only as described below, and Reduce Motion keeps it still.
+- **Poof row (Phase 5)** under the timer card: a dark row (min 64 pt) with Poof (40 pt, the approved image on its disc), one message (15 pt), and a 44 pt chevron to hide it.
+  - Hidden, it leaves a small right-aligned "Show Poof" button (eye icon).
+  - Poof holds still during focus rounds and pauses, floats gently (the shared idle loop) when ready and on breaks, and plays the shared celebration once for a round completed on screen. Not tappable.
+  - When ready, the message is Poof's top suggestion; a task due soon adds a "Focus on this task" text button.
+- **Narrow phones (Phase 6):** custom-duration and goal steppers keep label and controls on one row when they fit (375 pt and wider); otherwise the − value + group wraps below the label, right-aligned (320 pt, long Malay labels). The dial's text grows with system text size up to 1.2×.
+- **Reflection card (Phase 5)** under Poof's row after a completed round: "How was your study session?", Skip at the right, four equal 44 pt choices (Great, Okay, Struggled, Tired), and "Optional and private. Only you can see it." After an answer: a tick and "Thanks. Saved privately with this round." No colours or icons rank the answers.
+- **Insights row** (Phase 4): a dark row under the stats (stats-chart icon, "Focus insights", "Your focus time, subjects, and history", chevron) opens Focus insights.
+- **Intentional differences from the type scale:** the timer uses 52 pt (44 pt on narrow phones), bold, with tabular numerals, larger than Display (32). This is a glanceable clock, not a finance number, so it uses the system font, not `FinanceNumber`.
+
+### Focus insights (Phase 4, 2026-10-16)
+
+A stack screen opened from Focus, with no gradient, one scroll area, and pull to refresh.
+- **Header:** the Planner page header ("Focus insights", "Only real focus time counts. Breaks and pauses never do.").
+- **Notes:** a quiet cloud-offline line when device rounds are included. A dark error card with "Try again" when synced history cannot load (device rounds still show).
+- **Poof's suggestions (Phase 5):** a dark card after the tiles, only when there is something to say. It has a small floating Poof (28 pt), the title, and up to three lines, each with a sparkles icon.
+- **Tiles:** Today and This week (side by side), then Rounds this week with "N completed · N partial". Durations read "1 h 25 min" / "25 min".
+- **Focus goal card:** "No goal set. A goal is optional." with "Set a goal"; when set, "25 min of 45 min today" and an 8 pt cyan bar, plus a tick and "Goal reached. Nice work." The editor has Off / Daily / Weekly chips, a 44 pt stepper, the note "Progress starts fresh each day or week. There are no streaks to keep.", and Done.
+- **Week chart:** an SVG bar per day, Monday to Sunday, on the elevated track; today's bar is cyan and the rest Unifyd blue; days still to come have a faint track only. The scale is at least 30 minutes, so a short day never fills the chart. Weekday labels sit below, with today in bold, and each day is announced with its time.
+- **Subjects card:** up to five rows plus "Other subjects", each with a name, "35 min · 23%", and a 6 pt bar (cyan for the top subject).
+- **History:** one grouped dark card, newest first. Each row has a tick (completed) or pie icon (partial), the subject (or General study), the task, the end date and time, the duration, and the word Completed or Partial; device rounds carry "On this device". "Load more" adds 20 at a time.
 
 ### Subscriptions
 
@@ -503,6 +536,7 @@ Replaces the single long `/scan-receipt` page (photo, buttons, extracted draft, 
 - The marker clears once the student edits that field. It is a prompt, not an error, and never blocks saving.
 - "No readable text was detected." shows one amber line at the top of the Details card: "We couldn't read any text. Enter the details yourself." Any unknown warning shows the existing "Check the extracted details before using them."
 - Validation errors stay red, with a red border and text, so they are distinct from the amber review markers.
+- **Retake hint** (2026-11-14): when the photo was hard to read (no readable text, or two or more of Merchant, Date, and Total flagged; `suggestRetake` in `lib/scanFlow.ts`), the amber notice at the top of the Details card reads "Parts of this photo were hard to read. It may be blurry, dark, or sideways." (the no-text message keeps its own wording) and a 44 pt dark pill button, **Retake photo** (`camera-outline`), sits below it. Retake returns to Start with no discard question. The hint and button disappear once the student edits any of the three fields, so retaking never discards edits. One flagged field never shows it.
 
 **Items** (built 2026-10-14; the server reads the lines in `receipt-items.ts`)
 - The app reads the optional `items` field (`[{ name, quantity, unitPrice, amount }]`, `amount` the line total in RM, negative for a discount). The card is hidden when the list is empty (no total, unpaid order, or lines that could not be read reliably). A missing or malformed field never breaks a scan.

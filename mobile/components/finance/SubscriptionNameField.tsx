@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import type { PressableInstance, TextInputInstance } from 'react-native';
 
 import { SubscriptionBrandIcon } from '@/components/finance/SubscriptionBrandIcon';
 import { radius, spacing, typography } from '@/constants/theme';
@@ -25,8 +26,8 @@ export function SubscriptionNameField({ value, onChangeText, error }: { value: s
   const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [focused, setFocused] = useState(false);
-  const input = useRef<TextInput>(null);
-  const options = useRef<(View | null)[]>([]);
+  const input = useRef<TextInputInstance>(null);
+  const options = useRef<(PressableInstance | null)[]>([]);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   // After a choice on the web, focus returns to the field without reopening the list.
   const skipNextFocus = useRef(false);

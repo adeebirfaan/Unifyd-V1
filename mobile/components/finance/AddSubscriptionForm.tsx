@@ -2,6 +2,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps, ReactNode } from 'react';
 import { useCallback, useRef, useState } from 'react';
 import { AccessibilityInfo, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
+import type { ScrollViewInstance, TextInputInstance } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SubscriptionSavedOverlay } from '@/components/finance/SubscriptionSavedOverlay';
@@ -66,8 +67,8 @@ export function AddSubscriptionForm({ onBack, onCreate, onRetryReminder, onConti
   const [saved, setSaved] = useState<{ input: SubscriptionInput; issue: SubscriptionReminderIssue } | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [resetKey, setResetKey] = useState(0);
-  const scroll = useRef<ScrollView>(null);
-  const amountInput = useRef<TextInput>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
+  const amountInput = useRef<TextInputInstance>(null);
   const sectionY = useRef<Partial<Record<Section, number>>>({});
   // Set from a valid submit until it fails; never cleared after a confirmed save. Blocks duplicate inserts.
   const submitting = useRef(false);

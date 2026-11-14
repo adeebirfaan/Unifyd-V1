@@ -38,6 +38,8 @@ Develop and evaluate an AI-assisted mobile application that helps Malaysian univ
 | Mood Tracking | Support self-awareness | One mood log per day, note, history, trends, basic self-care suggestion |
 | Integrated Dashboard | Combine the three domains | Financial, academic, and wellness panels with descriptive summaries |
 
+Owner-approved additions built on these modules: subscriptions and split bills (2026-10-12), the expense category suggester (2026-10-13), and **Unifyd Focus** (2026-10-16), a Pomodoro-style study timer inside Planner.
+
 ## 5. AI-assisted design
 
 Unifyd is **AI-assisted**, not a custom machine-learning or predictive system.

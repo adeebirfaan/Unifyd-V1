@@ -3,7 +3,7 @@ import test from 'node:test';
 
 import {
   ITEMS_PREVIEW, READING_MIN_MS, READING_SLOW_MS, draftAmount, draftItems, itemsMismatch, itemsTotalCents, parseItemInput,
-  receiptItems, remainingMinimumMs, reviewFlags, shownUnitPrice, visibleItems,
+  receiptItems, remainingMinimumMs, reviewFlags, shownUnitPrice, suggestRetake, visibleItems,
 } from '../lib/scanFlow.ts';
 
 test('Reading stays at least 1.2 s, and a slow result adds no extra delay', () => {
@@ -82,4 +82,17 @@ test('an edited item keeps its printed unit price only while quantity × unit st
   assert.equal(shownUnitPrice(5, 2, 9.99), null);
   assert.equal(shownUnitPrice(1, null, 5), null);
   assert.equal(shownUnitPrice(1, 5, -5), null);
+});
+
+test('a retake is suggested only when the photo was hard to read: no text, or two or more uncertain fields', () => {
+  const merchant = 'Merchant name needs review.';
+  const date = 'Purchase date needs review.';
+  const total = 'Total amount needs review.';
+  assert.equal(suggestRetake(reviewFlags([])), false);
+  // One uncertain field is normal on a good photo.
+  assert.equal(suggestRetake(reviewFlags([date])), false);
+  assert.equal(suggestRetake(reviewFlags([total, 'Items may be incomplete.'])), false);
+  assert.equal(suggestRetake(reviewFlags([merchant, date])), true);
+  assert.equal(suggestRetake(reviewFlags([merchant, date, total])), true);
+  assert.equal(suggestRetake(reviewFlags(['No readable text was detected.'])), true);
 });

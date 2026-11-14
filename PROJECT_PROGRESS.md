@@ -6,10 +6,10 @@
 
 | Item | Current value |
 |---|---|
-| Overall stage | All SRS Must and Should features implemented locally; full Expo Web e2e suite 82/82 (2026-10-14) |
+| Overall stage | All SRS Must and Should features implemented locally, plus Unifyd Focus (owner-approved 2026-10-16); full Expo Web e2e suite 117/117 (2026-10-16, `ui-revamp`) |
 | Current phase | Phase 9 - Evaluation, hardening, and thesis evidence (receipt OCR evaluation started 2026-10-14) |
-| Current task | Receipt OCR: collect a fresh 40–50-receipt final test set; physical-device checks (reminders, OCR on the phone, native pickers) |
-| Next milestone | Final OCR evaluation, AI-summary samples, UAT, and the Likert questionnaire |
+| Current task | Unifyd Focus Phases 1–6 **development-complete** on `ui-revamp` (committed as `42a5dfc`, not merged or pushed; code review done; both migrations applied per owner 2026-10-16). It is pending final device validation and UAT, and is not user-accepted or production-ready. iPhone UAT and full UAT are **paused by owner decision (2026-10-16)** until all planned features are built. Waiting on: the owner's commit and merge decision, then the next feature. Receipt OCR: collect a fresh 40–50-receipt final test set |
+| Next milestone | Remaining development, then full-application device checks and UAT, the final OCR evaluation, AI-summary samples, and the Likert questionnaire |
 | Product direction | AI-assisted; OCR plus Groq descriptive summaries with deterministic fallback |
 | Custom ML / prediction | Prediction not in scope. One owner-approved exception (2026-10-13): the Naive Bayes expense-category suggester trained per request on the student's own titles |
 
@@ -30,7 +30,7 @@ Status words: **verified** = implemented and its automated Expo Web or server te
 
 ### B. In progress
 
-- **Phase 9 OCR evaluation:** development set done; the final evaluation on a fresh receipt set is not yet run (the 15 held-out receipts are still unscored).
+- **Phase 9 OCR evaluation:** the single `--final` run was done 2026-11-14 (41.4% all-three-correct on 58 unseen receipts); the final set was then merged into development (100 receipts) and the parser improved (development all-three 61.1% → 75.0%). An "after" score needs a new fresh set.
 - **Physical-device verification** of recently changed screens (Wallet, budget, Studies) and of OCR with the new parser (needs a server restart: `npm run build && npm start`).
 
 ### C. Pending work, limitations, and technical debt
@@ -45,7 +45,7 @@ Status words: **verified** = implemented and its automated Expo Web or server te
 
 1. **Commit and push** the 2026-10-14 maintenance changes after review.
 2. **Phone checks:** restart the server, scan several receipts, and run the device checklist in C. These confirm work already built and need no new code.
-3. **Final OCR evaluation:** before freezing the parser, decide whether any further tuning is wanted (on development receipts only). Then collect about 40–50 fresh receipts, label them by hand, and run `npm run eval:receipts -- --final` once. Prerequisite: no parser changes after the fresh set is collected.
+3. **Final OCR evaluation:** done 2026-11-14 (41.4% on 58 unseen receipts), then merged into development. For an "after" score: collect 20–30 fresh receipts, label them, run `final-setup`, `final-check`, and `npm run eval:receipts -- --final` once, with no parser change after collecting.
 4. **Two-account RLS test:** prerequisite: a second test account added to the ignored `mobile/.env.test`.
 5. **Remaining Phase 9 evidence:** AI-summary samples (prerequisite: `GROQ_API_KEY` in `server/.env`), then UAT and the Likert questionnaire (prerequisite: participants and an approved questionnaire).
 6. **Housekeeping:** done on 2026-10-14 (see the maintenance entry). The insights module stays until the AI-summary samples are collected.
@@ -155,6 +155,483 @@ Phases 1–6 and 8 above keep their older notes for history. As of 2026-10-14 ea
 - [ ] Verify the app still launches after any Phase 0 documentation/configuration-only changes.
 
 ## Completed work log
+
+### 2026-11-14 — Receipt scan: Retake hint on hard-to-read photos
+
+**Changed files:**
+- `mobile/lib/scanFlow.ts` (`suggestRetake`, `RETAKE_FLAGGED_FIELDS`), `mobile/components/scan/ScanReview.tsx` (notice text and Retake button; `onRetake` prop), `mobile/app/scan-receipt.tsx` (Retake returns to Start), `mobile/constants/i18n.ts` (`scan.retakeHint`, `scan.retake`, English and Malay).
+- Tests: `mobile/tests/scanFlow.test.mjs` (1 new), `mobile/e2e/scanFlow.spec.ts` (2 new).
+- Docs: `UNIFYD_DESIGN_SYSTEM.md` (Receipt scan flow, Uncertain fields), `CLAUDE.md`.
+
+**What changed:**
+- Owner phone test: a blurred sideways photo read badly; a retake read fine. Review now suggests a retake when there is no readable text or two or more of Merchant, Date, and Total are flagged. The notice reads "Parts of this photo were hard to read. It may be blurry, dark, or sideways." with a "Retake photo" button; both disappear once a field is edited, so retaking never discards edits and needs no discard question.
+- On the 100 saved receipts the rule would fire on 25 (17 of them hard or handwritten) and never on receipts with zero or one flag.
+
+**Tests performed:**
+- Mobile typecheck and lint clean; unit **168/168**; `e2e/scanFlow.spec.ts` **14/14** (one test rerun alone after the known Expo Web out-of-memory crash). Phone-width screenshot checked.
+- Owner checked on the phone (2026-11-14): works.
+
+**Next action:**
+- Owner tries a blurry or sideways scan on the phone; later, collect a fresh unseen receipt set for the honest "after" score.
+
+### 2026-11-14 — Receipt OCR: merchant rules (general)
+
+**Changed files:** `server/src/receipt-merchant.ts`, `server/src/receipt-merchant.test.ts` (2 new tests, fictional names), `CLAUDE.md`.
+
+**What changed:**
+- A header line carrying its company registration (`(001234567-K)`, `(Co. No. …)`) gives a confident name; such numbers no longer end the header as if they were barcodes.
+- The header loop keeps the first plausible line but replaces it with a later, better-supported one (business word, company line below, or registration).
+- Never names: "Since/Est. …", "Cash Sales", "No. Pendaftaran"/"No. Syarikat", store/outlet/branch codes, lines starting with `(` or `&`, and lines over six words (company words not counted). "Shop" added as a business word.
+
+**Tests performed:**
+- Development split (72): merchant 83.3% → **87.5%**, all three 73.6% → **75.0%**, silent 2. Report: `reports/dev-after-merchants-2026-11-14.txt`.
+- Merchant changes across all 100 receipts: 3 fixed, 1 correct name now confident, no other change (three side effects found during the work were fixed before finishing).
+- Server typecheck, **127/127** tests, build.
+
+**Issues or decisions:**
+- Not fixed (OCR or handwriting damage): `004`, `046`, `072`, `094` (OCR dropped letters), `097`, `098`; `005`/`052`/`073` are label-specific cases.
+
+**Next action:**
+- Owner decision: collect a fresh unseen set to measure the improved parser, or test on the phone first.
+
+### 2026-11-14 — Receipt OCR: date rules (general)
+
+**Changed files:** `server/src/receipt-date.ts`, `server/src/receipt-date.test.ts` (2 new tests, fictional dates), `server/README.md`, `CLAUDE.md`.
+
+**What changed:**
+- A time with seconds is recognised even with an OCR dash or spaces (for example `12-30 : 45`), so it supports its date.
+- A four-digit year read as 29xx is corrected to 20xx and always flagged.
+- When two different dates have the same support, the earliest is kept but flagged.
+
+**Tests performed:**
+- Development split (72): date 87.5% → **90.3%**, all three 72.2% → **73.6%**, silent 3 → 2. Report: `reports/dev-after-dates-2026-11-14.txt`.
+- Date changes across all 100 receipts: 3 better (one found, one corrected, one silent error now flagged); 2 correct dates now carry a review warning (a second, different date with equal support).
+- Server typecheck, **125/125** tests, build.
+
+**Issues or decisions:**
+- Not fixed: dates OCR garbled beyond a safe rule (a month name read as digits, a month name read as one digit, handwriting), and a year misread as another valid year (indistinguishable from a real date).
+
+**Next action:**
+- Merchant names: header noise taken as the shop name.
+
+### 2026-11-14 — Receipt OCR: total rules (general, no shop-specific rules)
+
+**Changed files:**
+- `server/src/receipt-layout.ts`, `server/src/receipt-total.ts`, `server/src/receipt-total.test.ts` (4 new tests, fictional receipts only), `server/README.md`, `CLAUDE.md`.
+- Labels: two supermarket receipts' merchant labels changed to the store's brand name (owner decision).
+
+**What changed:**
+- Sideways photos: when most words are tall and narrow, word boxes are turned upright (direction from Vision's reading order) before rows are rebuilt.
+- New final labels: "Total Payment" and "Total (incl tax)"; "Tctal"/"T0tal" read as "Total".
+- No total label: the lowest card/QR/e-wallet payment amount (card numbers, approvals, points skipped), else cash minus change; always with the review warning.
+- A labelled total that disagrees with the card/e-wallet amount by more than RM 0.05 gets the review warning.
+
+**Tests performed:**
+- Development split (72): total 80.6% → **93.1%**, all three 61.1% → **72.2%**, silent 5 → 3. Report: `reports/dev-after-totals-2026-11-14.txt`.
+- Server typecheck, **123/123** tests, build.
+
+**Next action:**
+- Dates (month names damaged by OCR, missing time context), then merchant header noise.
+
+### 2026-11-14 — Receipt OCR: final set merged into the development labels
+
+**What changed (git-ignored data only; no code change):** the 43 scored final receipts were copied into `server/local-data/receipt-eval/images/`, their cached OCR into `ocr/`, and their label rows appended to `labels.csv`. The scored folder was renamed `final-2026-11-14-scored/` (archive), so a future `final-setup` starts a fresh, empty `final/`. The split is a hash of the file name: the original 57 keep their sides; **100 receipts = 72 development + 28 held-out**.
+
+**Result:** `eval:receipts:run`, development split 72: all three correct **61.1%** (merchant 81.9%, date 87.5%, total 80.6%; 5 silent). Report: `reports/dev-after-merge-2026-11-14.txt`.
+- Main failure groups: totals not found or wrong (label and amount apart, "Total Payment (Rounding)", amounts split by OCR such as `24 60`, a fast-food pre-discount TOTAL); dates with damaged month names; header noise taken as merchant (`Since 1993`, garbled first lines); OCR misreads (wrong year) that rules cannot fix.
+- Label question for the owner: two supermarket receipts are labelled with the company name; the parser returns the store's brand name.
+
+**Next action:**
+- Owner picks which failure group to fix first; general rules only, with server tests after each change.
+
+### 2026-11-14 — Receipt OCR: the single `--final` run (thesis score on unseen receipts)
+
+**What ran:** `npm run eval:receipts -- --final` on the owner-checked final labels (43 receipts) plus the 15 held-out receipts. No parser change since 2026-10-14. Output saved to `server/local-data/receipt-eval/reports/final-2026-11-14.txt` (git-ignored).
+
+**Results (all three fields correct):**
+- Development split (tuned on, 42): 78.6%. Held-out (15): **53.3%**. Final set (43): **37.2%** (merchant 65.1%, date 74.4%, total 67.4%; 10 receipts wrong with no warning). Held-out + final combined (58 unseen receipts): **41.4%** (merchant 62.1%, date 81.0%, total 72.4%).
+- By type (combined): digital 100% (2), chain retail 58.8% (17), local shop 45.5% (11), food and drink 31.3% (16), handwritten 10.0% (10). Clean 61.3%, hard 18.5%.
+- The gap between development and unseen receipts shows the 2026-10-14 rules fit the development receipts more than receipts in general.
+
+**Next action:**
+- Owner decision: merge the 43 final receipts into the development set and improve the parser with general rules only (no shop-specific rules); measure the improved parser later on a fresh unseen set.
+
+### 2026-11-14 — Receipt OCR final test set prepared (labels drafted by Claude, pending owner check)
+
+**What changed (local, git-ignored data only; no code change):**
+- 45 new receipt photos were renamed to `receipt-NNN` (handwritten ones end in `-hw`) in `local data/receipt-eval/images/` and copied to `server/local-data/receipt-eval/final/images/`. `final-setup` read them with Google Vision (45 read, 0 failed; inside the free monthly 1,000).
+- `receipt-099` and `receipt-100` were removed from the final set: they are lower-resolution copies of development receipts `037` and `042` (the same downloaded photos). The originals stay in `local data`. **Final set: 43 receipts** (chain_retail 11, food_beverage 11, local_shop 10, handwritten 7, digital 2, other 2; clean 25, hard 18).
+- At the owner's request, Claude drafted `final/labels.csv` from the photos (OCR text used only as a reading aid; the parser was not run). The owner is checking it. `final-check`: Labels OK.
+- Decisions to confirm: deposit receipts (`063`, `097`, `101`, `102`) use the bill total, not the deposit; dates without a year (`095`, `098`) or hidden by a finger (`071`) are blank; `063`'s only date is a delivery date (left blank); `080`'s day is hard to read; `096` prints a template placeholder instead of a shop name.
+
+**Next action:**
+- Owner checks the labels, then the single `npm run eval:receipts -- --final` run. No parser changes before it.
+
+### 2026-11-14 — Fix: tab bar off-centre (empty Profile slot)
+
+**Changed files:**
+- `mobile/app/(tabs)/_layout.tsx`
+- `mobile/e2e/home.spec.ts`
+
+**What changed:**
+- On iPhone, the tab bar had six slots: the hidden Profile tab (`tabBarButton: () => null`) still kept its `flex: 1` item wrapper. Planner ended up under the + button, and Mind moved off-centre. Fixed by adding `tabBarItemStyle: { display: 'none' }` to Profile.
+- The Home e2e now checks that Wallet and Planner sit evenly on either side of the + button, with Planner clear of it.
+
+**Tests performed:**
+- Typecheck and lint pass. `e2e/home.spec.ts` 12/12 (two tests rerun with `-g` after the known Expo Web out-of-memory crash). With the fix removed, the new check fails (65 px off-centre), so it catches this bug.
+- Not yet rechecked on the phone.
+
+**Next action:**
+- Owner reloads Expo Go and confirms the bar shows Home · Wallet · [+] · Planner · Mind evenly spaced.
+
+### 2026-10-16 — Pre-push privacy audit: receipt text found in unpushed history (nothing pushed)
+
+**Scope:** all 13 commits that a push of `ui-revamp` would send (`origin/main..ui-revamp`: the 12 unpushed `main` commits plus `42a5dfc`), checked across the full history, not just the final tree. Read-only; nothing pushed, rewritten, or changed in Git.
+- **No problems found in:** binary files, images, `local-data/`, `labels.csv`, OCR caches, reports, `.env` files, secrets, or tokens. No path is added and later deleted. The `.env.example` changes are flags set to `0`.
+- **Problem:** every added line was matched against the 57 cached OCR texts (read locally only; never copied into the repo). In commit **`ff4f044`**, `server/src/receipt-items.test.ts` contains 17 lines copied from the owner's real receipts:
+  - an invoice number and a store staff name;
+  - a fuel purchase line (litres, price, total);
+  - dine-in orders, product lines, and barcodes.
+  - `server/src/receipt-items.ts` comments contain 3 product examples (low risk).
+- **Low risk, not counted as private:** the scan-flow fixtures in `mobile/e2e/scanFlow.spec.ts` and `mobile/tests/scanFlow.test.mjs` use a made-up merchant and common product names, with no matching merchant, date, or total.
+- **Already on GitHub (before today):** earlier receipt test files hold some receipt-derived strings, mostly shop names and labels, plus one total line. Cleaning those would mean rewriting published history.
+- `ff4f044` is on no remote, so it can be cleaned before the first push without a force push.
+
+**Next action:**
+- Owner chooses how to clean the history; then rerun the server and mobile tests, then push.
+
+### 2026-10-16 — Unifyd Focus committed (`42a5dfc`); Module 8 AI summary analysis (no code)
+
+**Commit (owner-approved):** `42a5dfc feat: implement Unifyd Focus and study analytics` on `ui-revamp`: 38 files (Focus code, tests, both migrations, Focus documentation). **Not merged or pushed.**
+- Before staging, every hunk was checked as Focus or status, the i18n changes as only `focus.*` keys, and the files were scanned for secrets, env files, and test artifacts (none found).
+- Left out: the owner's **Rule 4** line in `CLAUDE.md` (staged without it, pending owner approval), and the untracked `completed receipt data.md`.
+
+**Module 8 analysis (owner chose Option A: an AI summary inside Poof's sheet):**
+- **What `/api/insights/generate` covers:**
+  - finance for this local calendar month, **monthly budget only**;
+  - academic = **task counts only** (pending, ongoing, overdue, due in 7 days, completed in 7 days);
+  - wellbeing = 7-day mood and stress, the previous-7-day comparison, and the low-mood flag.
+- **Not covered:** weekly budgets, semester and timetable, subscriptions, split bills, and Focus.
+- **Inconsistencies found:**
+  - SRS §5.8 status still describes the removed Home card and its refresh button.
+  - SDD §7.6 says Poof's chat replaces the summary.
+  - The endpoint ignores weekly budgets, which Wallet and Poof support.
+  - The endpoint has no rate limit; only successful summaries are cached, for 10 minutes.
+  - `mobile/lib/insights.ts` is unused, drops the returned `facts`, and reports every non-OK status as `unavailable`.
+  - The Privacy Policy says Unifyd "does not use a custom machine-learning model", which contradicts the approved category suggester.
+- The plan (UI, backend reuse, privacy, files, tests, docs, phases) is in the session summary given to the owner.
+
+**Tests:** none run for this entry (documentation and analysis only; the Focus results are unchanged from earlier the same day).
+
+**Next action:**
+- Owner approves (or changes) the Module 8 plan; decides on Rule 4 and on merging `ui-revamp`.
+
+### 2026-10-16 — iPhone UAT paused; Unifyd Focus marked development-complete
+
+**Decision (owner):** iPhone UAT and full user acceptance testing are postponed until all planned features are implemented. Unifyd Focus Phases 1–6 are **development-complete** (automated tests and code review done). They are **pending final device validation and UAT**, and are not user-accepted or production-ready. Unit, integration, and e2e tests keep running after every change.
+
+**UAT recorded before the pause (owner, iPhone, Expo Go):**
+- Item 4: "Focus round complete" PASS and "Break's over" PASS; sound silent (minor finding; the optional Focus alert sound is a pending enhancement under "Deferred ideas").
+- Item 5 Scenario 1 (running round restored after force-quit, Custom 5/1/5): PASS; times were not recorded.
+- Everything else, including item 5 Scenarios 2–4 (Scenario 2 was given but not reported), the item 4 sound retest and permission denial, and items 1–3 and 6–10: **Deferred — Pending Full Application UAT** (table in `DEVELOPMENT_HANDOVER.md`).
+
+**Unchanged and still documented:** automated results (unit 167/167, full Playwright 117/117 on the Phase 6 run, review rerun 26/26), the known limitations, and the pending cross-account RLS test (needs a second test account).
+
+**Remaining-work review (documents only; nothing implemented):**
+- All eight approved modules, plus My Semester, Timetable, Poof Phase 1, Subscriptions, Split bills, the category suggester, and Unifyd Focus, are built. No SRS requirement is listed as unbuilt, and no further feature is planned in any document.
+- **Gap against the Brief's success criteria:** "generates integrated, descriptive insights" and "AI-summary evaluation". The Home AI summary card was removed on 2026-10-10, and `/api/insights/generate` is unused. SRS §5.8 still describes a summary card and refresh button (`CLAUDE.md` §11). Needs an owner decision: re-show the validated summary in the app, or formally treat Poof's AI answers as Module 8's summary.
+- **Other open items:** commit and merge `ui-revamp`; the automated two-account RLS test; deployment preparation (a reachable server and a development or EAS build for UAT participants, also needed for native notification icons and custom sounds); the final OCR evaluation (on hold); AI-summary samples; UAT and the Likert questionnaire; switching off `SCAN_TIMING` / `EXPO_PUBLIC_SCAN_TIMING`.
+- **Proposed, not approved:** the Focus delayed reflection, and the optional Focus alert sound (approved in principle, postponed).
+
+**Changed files:** `CLAUDE.md`, `DEVELOPMENT_HANDOVER.md`, `PROJECT_PROGRESS.md` (status sections only). No code, tests, migrations, or database changes.
+
+**Next action:**
+- Owner decides on committing and merging `ui-revamp`, and on the Module 8 AI-summary gap.
+
+### 2026-10-16 — Final code review of the `ui-revamp` diff (Unifyd Focus)
+
+**Scope:** every changed or new code path on `ui-revamp`: `lib/focus*.ts`, `hooks/useFocusSession.ts`, `app/focus.tsx`, `app/focus-insights.tsx`, `components/focus/*`, the `_layout.tsx` / `planner.tsx` / `IconQuickActions.tsx` / `studies.spec.ts` diffs, and both Focus migrations. Read-only; no code, migration, or database changes. Nothing committed.
+
+**Result: no blocking findings.** Timer maths (timestamps, clamping, restore validation), the outbox (serialised writes, never dropped, ID replacement carries reflections), sync (user check before each insert, link/duplicate handling, timeouts), RLS and grants, and the one-time reflection update all hold up. The three notification modules set identical foreground handlers, so they do not conflict.
+
+**Low-severity notes (not fixed; owner to decide):**
+- Focus insights: a sync finishing while the screen is open reloads history from page 1, so pages loaded with Load more collapse back to 20 rows. The server orders history by `started_at` and the merged list by `ended_at`, so a round with long pauses can sit slightly out of place after Load more.
+- Focus: if a round finishes while the "End session?" dialog is open, confirming keeps the full round (correct), but the dialog's "keeps N minutes" text was worked out when it opened.
+- No reminder (task, subscription, or Focus) sets a notification `sound`. *Corrected the same day after reading the native code:* expo-notifications 57.0.22 on iOS plays the **default sound** when `sound` is left out (`NotificationRecords.swift`), so alerts are silent only in the foreground (the shared handler has `shouldPlaySound: false`) or because of iPhone settings.
+
+**iPhone UAT, checklist item 4 (owner, 2026-10-16):** "Focus round complete" PASS; "Break's over" PASS; sound **silent**, a minor finding under investigation. Cause, from the code:
+- **App open (foreground):** the app silences it. All three modules set the same global handler, with `shouldPlaySound: false`.
+- **Locked or backgrounded:** the notification asks for the default sound, so silence comes from iPhone settings: Silent mode, a Focus or Do Not Disturb mode, Settings → Expo Go → Notifications → Sounds, Scheduled Summary, or volume.
+- **Expo Go:** the alerts belong to Expo Go, so Expo Go's notification settings apply, and custom sound files need a development build. The default sound works in Expo Go.
+
+Recommended fix (not built; needs owner approval): an optional Focus-only sound. A shared handler module would let only `unifydKind: 'focus'` alerts play in the foreground, and Focus alerts would set `sound` explicitly. On Android this needs a second, silent channel, because channel sound cannot change after creation. Task and Subscription reminders stay unchanged.
+
+**Tests performed:** mobile typecheck and lint clean; unit **167/167**; Playwright `focus` 9/9, `focusInsights` 6/6, `focusCompanion` 5/5, `studies` 6/6 (26/26). `focusLive` was not rerun (it writes to the real database).
+
+**Changed files:** `CLAUDE.md`, `DEVELOPMENT_HANDOVER.md`, `PROJECT_PROGRESS.md` (status only).
+
+**Next action:**
+- Owner runs the iPhone checklist in `DEVELOPMENT_HANDOVER.md`.
+
+### 2026-10-16 — Session closure: Unifyd Focus Phases 1–6 complete, awaiting review and phone checks
+
+**Status:**
+- Unifyd Focus Phases 1–6 are implemented on `ui-revamp`; both Focus migrations were applied per project owner and verified live.
+- **Nothing committed, pushed, or merged** (HEAD `b832a2f`).
+
+**Final automated QA (Phase 6 run, 16 Oct; not rerun at closure):**
+- typecheck and lint clean;
+- unit 167/167;
+- full Playwright 117/117, including live `focusLive` 3/3.
+
+**Changed files (this closure):** documentation only (`CLAUDE.md`, `DEVELOPMENT_HANDOVER.md`, `PROJECT_PROGRESS.md`). No code, migrations, or database changes.
+
+**Outstanding:**
+- a final code review of the `ui-revamp` diff;
+- the iPhone (Expo Go) checklist in `DEVELOPMENT_HANDOVER.md`;
+- a true cross-account RLS test (second test account);
+- UAT;
+- the commit and merge decision.
+
+**Next action:**
+- Code review of all `ui-revamp` changes, then the owner's iPhone checks.
+
+### 2026-10-16 — Unifyd Focus, Phase 5 verification and Phase 6: final QA and polish (branch `ui-revamp`)
+
+**Phase 5 verification (real database, test account only):**
+- The owner applied `20261016_002_focus_session_reflections.sql` on 2026-10-16.
+- `e2e/focusLive.spec.ts` **3/3**, checked by behaviour, not by policy listings:
+  - `select *` returns exactly the 15 expected columns;
+  - a reflection is set once on the student's own completed round, and a second answer, with or without the empty filter, changes nothing;
+  - partial rounds take none;
+  - invalid values, clearing, other columns, and changing status through the update are refused;
+  - an insert cannot carry a reflection;
+  - a signed-out client can do nothing;
+  - a reflection given in the real app is saved on the same row once.
+- RLS is enabled (signed-out reads return nothing), and earlier rounds and links are intact (the Phase 3 live test still passes).
+- A read-only check found 0 leftover rows, and the test profile was back to English.
+- **Not executable:** a true cross-account RLS test (no second test account).
+- Phase 5 regression: unit 167/167; full Playwright **116/117**. The one failure was the known intermittent Wallet "no budget and no expenses" test (it fails 1 in 2 on clean `main`; Wallet unchanged). Phase 5 marked complete.
+
+**Phase 6 changes (targeted; no new features, no schema change):**
+- `mobile/lib/focusSync.ts`:
+  - The 60 s retry no longer fires for rounds the database refused, or for reflections waiting on them. Those still retry on start, foreground, and opening Focus.
+  - New `onFocusSyncChange`: screens reload only when a sync changed something.
+- `mobile/app/focus.tsx`, `mobile/app/focus-insights.tsx`: use `onFocusSyncChange` (fewer requests while offline).
+- `mobile/components/focus/FocusDial.tsx`: dial text capped at 1.2× system text size.
+- `mobile/components/focus/FocusSetup.tsx`, `mobile/components/focus/FocusInsightCards.tsx`: steppers wrap on narrow phones (found at 320 pt in Malay, where the + button overflowed the card); goal chip text 14 pt.
+- `mobile/components/focus/FocusCompanion.tsx`: long task titles in suggestions are shortened to 48 characters.
+- `mobile/e2e/focusLive.spec.ts`: column check, and a reflection saved from the real app.
+
+**QA review (findings with no change needed):**
+- **Timer:** start, pause, resume, reset, end, presets, custom times, breaks, round counting, pauses, suspension and restart, expiry, duplicates, clock changes, and per-user state are covered by 16 unit and 9 e2e tests. Notifications are cancelled and rescheduled on every change.
+- **Sync:** ownership, idempotency, offline, timeouts, account switching, reflections, deleted links, and no double counting are covered by unit, mocked, and live tests.
+- **Insights:** figures match the stored rows. Rounds count on the local day they ended; midnight-crossing rounds are not split (documented).
+- **Poof:** still during focus; celebrates only rounds completed on screen; Reduce Motion; hide kept; no listeners left behind (listeners and intervals cleaned up on blur or unmount).
+- **Suggestions:** real data only, no Groq, no predictions, skipped when data is missing.
+- **Layout:** checked at 320, 375, 390, and 430 pt and in Malay at 320 pt; no sideways scrolling (asserted).
+
+**Tests performed (final):**
+- Mobile typecheck and lint clean; unit **167/167**.
+- `focus` 9/9, `focusInsights` 6/6, `focusCompanion` 5/5, `focusLive` 3/3, `studies` 6/6.
+- **Full Playwright 117/117.**
+- In one combined run, `focus.spec` "presets and custom durations" failed once. It then passed 4/4 alone, 9/9 in its spec, and in the full suite; it was not reproduced.
+- **No physical-device testing has been done.** See the iPhone checklist in `DEVELOPMENT_HANDOVER.md`.
+
+**Known limitations:**
+- A round that finishes while Focus is closed gets no celebration or reflection (accepted).
+- Midnight-crossing rounds count on the day they ended.
+- Subject-to-task matching uses exact text.
+- No true cross-account RLS test yet.
+- Web has no alerts.
+- Only the owner's device can confirm iOS background behaviour.
+
+**Proposal (not built): delayed reflection.** When Focus opens and the newest round in the last 2 hours is completed, has no reflection, and was not skipped, offer the same optional card once ("How was your last round?"). It needs only a per-student "asked" marker on the device; no schema change.
+
+**Next action:**
+- Owner runs the iPhone checklist, reviews, and decides on commit and merge into `main`.
+
+### 2026-10-16 — Unifyd Focus, Phase 5: Poof companion, optional reflection, rule-based suggestions (branch `ui-revamp`)
+
+**Requirements implemented:**
+- SRS-FR-1018 to SRS-FR-1022 (new). SRS-FR-1021 (database rule for reflections) waits for migration 002 to be applied.
+
+**Phase 4 final verification (before Phase 5 changes):** full Playwright suite **110/110**; no blockers.
+
+**Owner decisions (2026-10-16, asked before building):**
+- Poof sits in a compact row under the timer card.
+- Poof holds still during focus rounds and pauses, floats only when ready and on breaks, and celebrates once per completed round.
+- The greeting is text only; `PoofMascot` is unchanged.
+- Suggestions appear only on Focus screens; Poof chat and its server contract are unchanged.
+
+**Changed files:**
+- New: `supabase/migrations/20261016_002_focus_session_reflections.sql`, `mobile/components/focus/FocusCompanion.tsx`, `mobile/e2e/focusCompanion.spec.ts`, `mobile/tests/focusI18n.test.mjs`.
+- Changed:
+  - `mobile/lib/focusTimer.ts` (`companionState`), `mobile/lib/focusInsights.ts` (`focusSuggestions`), `mobile/lib/focusSyncCore.ts` (`runReflectionSync`).
+  - `mobile/lib/focusSync.ts` (reflection sync; `saveFocusReflection`; reflections included in the retry), `mobile/lib/focusStorage.ts` (reflection outbox; re-ID carries reflections), `mobile/lib/focusHistory.ts` (Poof hidden preference).
+  - `mobile/hooks/useFocusSession.ts` (`lastCompleted` from live transitions only).
+  - `mobile/app/focus.tsx` (Poof row, reflection card, ready suggestion), `mobile/app/focus-insights.tsx` (suggestions card; loads open tasks and semester subjects).
+  - `mobile/constants/i18n.ts` (29 keys in English and Malay).
+  - Tests: `mobile/tests/focusTimer.test.mjs`, `mobile/tests/focusInsights.test.mjs`, `mobile/tests/focusSync.test.mjs`, `mobile/e2e/focusInsights.spec.ts`, `mobile/e2e/focusLive.spec.ts` (reflection test).
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`, `DEVELOPMENT_HANDOVER.md`, `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, `UNIFYD_PRD.md`, `UNIFYD_DESIGN_SYSTEM.md`.
+
+**What changed:**
+- **Poof:** the official image and the shared `PoofMascot` animations, with no new animation code and no change to the mascot.
+  - Still poses reuse the bundled image on its disc. Messages cover ready, the next round, focusing, paused, break, long break, and completed.
+  - Hiding is remembered per student on the device. Reduce Motion keeps Poof still.
+- **Reflection:**
+  - After a round completes on screen: Great, Okay, Struggled, Tired, or Skip. It is never blocking, and there is one answer per round.
+  - Kept on the device while offline, then sent after its round with an update that only sets an empty reflection, so the first answer wins and retries cannot change it.
+  - The migration adds the column (completed rounds only), an update grant on that column only, and an owner/empty/completed update policy. Existing policies are unchanged.
+- **Suggestions:**
+  - Rules, in order: a task due later today or tomorrow, a reached or half-way goal, an hour or more today, a semester subject not yet studied this week (only after some study this week), and a starter tip.
+  - Computed on the device with no Groq. No predictions, no invented numbers, no guilt or streak wording; rules are skipped when their data cannot load.
+  - Shown as 1 on Focus (Poof's ready message, with "Focus on this task" for a due task) and up to 3 on Focus insights.
+  - AI suggestions remain a future enhancement (aggregate-only).
+
+**Tests performed:**
+- Mobile typecheck and lint clean.
+- Unit **167/167**, 8 new:
+  - Poof poses (1);
+  - suggestions (3);
+  - reflection sync (3): once only, waiting for its round, offline, before the column exists, deleted rounds, wrong account;
+  - English/Malay parity for all `focus.*` keys (1).
+- Playwright:
+  - `focusCompanion` **5/5**: Poof through ready, focus, pause, celebrate, and break, with the timer still exact; the long-break message; an offline reflection kept and then sent once after its round; a due-tomorrow suggestion and its action; hide kept after reload; Reduce Motion still.
+  - `focusInsights` **6/6** (+1: suggestions card), `focus` **9/9**.
+  - `focusLive` **2/2** with the reflection test excluded.
+- Screenshots at 390 and 320 pt (ready, focusing, celebration and reflection) checked by eye. One fix: Poof's completion line no longer repeats the notice.
+- **Not run yet:** the live reflection test (needs migration 002) and the full regression suite (after the migration).
+- **Not run:** any native device test (iPhone or Android).
+
+**Issues or decisions:**
+- A round found finished on load (restart, or returning to Focus) does not celebrate or ask for a reflection; only rounds completed while Focus is open do.
+- Until migration 002 is applied, a submitted reflection waits on the device and is retried each minute; nothing is lost.
+
+**Next action:**
+- Owner applies `20261016_002_focus_session_reflections.sql`; then run `npx playwright test e2e/focusLive.spec.ts` and the full suite, and record both here.
+
+### 2026-10-16 — Unifyd Focus, Phase 3 live verification and Phase 4: Focus insights (branch `ui-revamp`)
+
+**Requirements implemented:**
+- Phase 3 complete: SRS-FR-1010 to 1012 verified live. Phase 4: SRS-FR-1013 to 1017 (new).
+
+**Phase 3 verification (real database, test account only):**
+- The owner applied `20261016_001_focus_sessions.sql` in the SQL Editor on 2026-10-16 and confirmed RLS and 14 columns.
+- `e2e/focusLive.spec.ts` **2/2**. It covers:
+  - owner insert, read, and delete;
+  - a duplicate ID refused with `23505`;
+  - another user's ID, a task or subject the account does not own, edits, and a client-set `created_at` all refused;
+  - 15 check violations rejected;
+  - deleting the linked task and subject keeps the round with null links and its title and label;
+  - a signed-out client sees and writes nothing;
+  - a real round finished in the app saved once, cleared from the outbox, and read back by Focus insights.
+- A read-only count afterwards found 0 `focus_sessions` rows and no leftover test tasks or subjects for the test account.
+- **Not executable:** a true cross-account RLS test (no second test account; the spec uses IDs the account does not own). Policies and grants were checked by behaviour, not by querying `pg_policies` (the project never runs SQL from the app side).
+
+**Changed files (Phase 4):**
+- New: `mobile/lib/focusInsights.ts`, `mobile/lib/focusHistory.ts`, `mobile/app/focus-insights.tsx`, `mobile/components/focus/FocusInsightCards.tsx`, `mobile/tests/focusInsights.test.mjs`, `mobile/e2e/focusInsights.spec.ts`.
+- Changed: `mobile/app/focus.tsx` (Focus insights row), `mobile/app/_layout.tsx` (`focus-insights` route), `mobile/constants/i18n.ts` (44 keys in English and Malay), `mobile/e2e/focusLive.spec.ts` (reads the round back in insights).
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`, `DEVELOPMENT_HANDOVER.md`, `UNIFYD_SRS.md`, `UNIFYD_SDD.md`, `UNIFYD_PRD.md`, `UNIFYD_DESIGN_SYSTEM.md`.
+- No database change in Phase 4.
+
+**What changed:**
+- **Focus insights:** Today and This week tiles; rounds this week (completed and partial); an optional goal; a Monday–Sunday SVG chart; subjects over the last 30 days with whole percentages adding up to 100; history newest first, 20 per page with "Load more".
+- **Counting rule:** only `focus_seconds` counts (planned time, breaks, and pauses never do). A round counts on the **local day it ended**. Midnight-crossing rounds are not split, because the table stores one total per round. Splitting exactly would need per-interval data (a schema change), which was not proposed.
+- **Sources:** synced rows and device-outbox rounds are merged by ID, so a round is never counted twice. Device rounds carry "On this device". If synced history fails to load, device rounds still show, with a retry. Figures reload quietly when a sync finishes.
+- **Subjects:** grouped by the saved label, so deleted subjects keep their name; null shows as General study.
+- **Goal:** optional, daily 15–480 min or weekly 60–3000 min, saved on the device (`unifyd:focus-goal:<userId>`), like other per-student preferences. There are no streaks.
+
+**Tests performed:**
+- Mobile typecheck and lint clean. Unit **159/159** (8 new in `focusInsights.test.mjs`): Monday–Sunday local weeks, local versus UTC days, recorded time only and partial rounds, rounds crossing midnight (and Sunday→Monday), merge without double counting, subjects with deleted labels, General study and the 100% total, the empty state, durations rounded down, and goal limits and progress.
+- Playwright: `focusInsights` **5/5** (figures with device and synced rounds and a fixed KL clock; the empty state; a failed read with device rounds; history paging 20 + 5; the goal set, changed, kept after reload, and turned off). `focus` **9/9**, `focusLive` **2/2**, `studies` **6/6**.
+- Full Playwright suite: **110/110** (the intermittent Wallet test passed this run).
+- Screenshots at 390 and 320 pt (top, chart and subjects, history, goal editor) checked by eye.
+- Not run: phone checks (alerts, lock screen, Expo Go restart, insights on a device).
+
+**Issues or decisions:**
+- One fix during testing: on equal time, named subjects now sort before General study.
+- The history loader uses offset paging. A round synced while paging could shift a page; rows are de-duplicated by ID, so nothing repeats.
+
+**Next action:**
+- Owner reviews Phase 4 and decides on Phase 5 (Poof companion, optional reflection, rule-based study suggestions; any Groq use aggregate-only).
+
+### 2026-10-16 — Unifyd Focus, Phase 3: Supabase persistence and sync (branch `ui-revamp`)
+
+**Requirements implemented:**
+- SRS-FR-1010 to SRS-FR-1012 (new). The app side is done and tested with mocks. The migration is **written, not applied**; live verification waits for the owner.
+
+**Changed files:**
+- New: `supabase/migrations/20261016_001_focus_sessions.sql`, `mobile/lib/focusSyncCore.ts`, `mobile/lib/focusSync.ts`, `mobile/tests/focusSync.test.mjs`, `mobile/e2e/focusLive.spec.ts`.
+- Changed: `mobile/lib/focusTimer.ts` (rounds keep `taskTitle`), `mobile/lib/focusStorage.ts` (outbox remove/re-ID; unreadable entries and lists are kept, never overwritten), `mobile/hooks/useFocusSession.ts` (sync after a kept round), `mobile/app/focus.tsx` (sync on focus; status line), `mobile/app/_layout.tsx` (sync on sign-in and foreground; 60 s retry while rounds wait), `mobile/constants/i18n.ts` (6 `focus.sync*` keys, English and Malay), `mobile/tests/focusTimer.test.mjs`, `mobile/e2e/focus.spec.ts` (`focus_sessions` mocked; 3 new sync tests).
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`, `DEVELOPMENT_HANDOVER.md`, `UNIFYD_SRS.md` (§5.11, data table, traceability), `UNIFYD_SDD.md` (§6.2, §6.3, §7.10), `UNIFYD_PRD.md` (FR-09).
+
+**What changed:**
+- **Table `focus_sessions`:** one row per kept round, keyed by the app's UUID.
+  - Owner-only select, insert, and delete; no update.
+  - The insert policy allows only the student's own task and semester subject (`exists` checks).
+  - Links are set to null on delete, and the copied `task_title` / `subject_label` remain.
+  - Checks: planned 300–7200 s; focus ≤ planned and ≤ the start–end span; completed = planned; partial ≥ 60 s and < planned.
+- **Sync:**
+  - The outbox → database rules are in `focusSyncCore.ts`.
+  - A round is removed only after the database confirms it, or confirms that the same ID is already the student's own row.
+  - A deleted or foreign link: saved without the link. A refused row: kept and counted. No network, a timeout, or a missing table: wait.
+  - The signed-in user is checked before every insert, and each student's outbox is separate. Sign-out never clears it.
+- **Status line** under the stats: "N rounds are saved on this device and will sync when you’re online", "Saving…", "couldn’t be synced. They stay saved on this device", or "Your focus rounds are synced to your account."
+- The timer, the Phase 2 UI, task completion, and subject/task filtering are unchanged.
+
+**Tests performed:**
+- Mobile typecheck and lint clean. Unit **151/151** (12 new in `focusSync.test.mjs`): row mapping and checks, error classes, sync and repeat runs, a duplicate the student owns, a duplicate owned by someone else (new ID), a failed duplicate check, partial network loss then recovery, a missing table, deleted or foreign links, refused rows, the wrong account, and sign-out mid-run.
+- Playwright `focus.spec.ts` **9/9**, with `focus_sessions` mocked: the Phase 2 timer tests now also check the saved rows. New: offline → kept on the device → survives sign-out → syncs once after sign-in; rounds left from an earlier session sync and another account's outbox is never sent; a lost confirmation does not duplicate, and a taken ID is saved under a new one.
+- `studies.spec.ts` and `unifyd.spec.ts` (sign-in, profile, sign-out): **13/13**.
+- **Not run yet:** `e2e/focusLive.spec.ts` (RLS, grants, checks, linked-row deletion, a real round from the app). It needs the migration applied.
+- Not run: phone checks (alerts, lock screen, Expo Go restart).
+
+**Issues or decisions:**
+- No reflection column yet (Phase 5 is not approved); it would need a small later migration.
+- A real cross-account RLS test still needs a second test account; `focusLive` uses IDs the test account does not own.
+- Before the migration is applied, rounds stay on the device and the line says they will sync later (`PGRST205` is treated as temporary).
+
+**Next action:**
+- Owner applies `20261016_001_focus_sessions.sql` in the Supabase SQL Editor and reports back; then run `npx playwright test e2e/focusLive.spec.ts` and record the result here and in `CLAUDE.md` §6.
+
+### 2026-10-16 — Unifyd Focus, Phase 2: timer engine and Focus screen (branch `ui-revamp`)
+
+**Requirements implemented:**
+- SRS-FR-1001 to SRS-FR-1009 (new §5.11). Owner-approved scope addition on 2026-10-16, part of Planner; the eight-module classification is unchanged. SRS-FR-1010 (database sync) is Phase 3.
+
+**Owner decisions (Phase 1 review, 2026-10-16):**
+- Option B: shared grid, Ionicons `timer-outline`, balanced 3 + 2 (no Lucide, no horizontal scroll).
+- Completed = reached the planned length; partial = ended early with ≥ 1 minute of focus; discarded = reset or ended with less, after confirmation. Breaks and paused time never count. After a break, the next round waits for Start. Reset affects only the current round.
+- Study insights: rule-based first. Any later Groq use gets aggregate data only (no subject names, task titles, or academic details).
+
+**Changed files:**
+- New: `mobile/lib/focusTimer.ts`, `mobile/lib/focusStorage.ts`, `mobile/lib/focusNotifications.ts`, `mobile/hooks/useFocusSession.ts`, `mobile/app/focus.tsx`, `mobile/components/focus/FocusDial.tsx`, `mobile/components/focus/FocusSetup.tsx`, `mobile/components/focus/FocusPickerSheet.tsx`, `mobile/tests/focusTimer.test.mjs`, `mobile/e2e/focus.spec.ts`.
+- Changed: `mobile/app/(tabs)/planner.tsx` (Focus mode tile, 3 columns), `mobile/components/IconQuickActions.tsx` (optional `columns`, default 4), `mobile/app/_layout.tsx` (`focus` route; alerts refreshed on sign-in and language change; alert taps open Focus; sign-out clears alerts and pauses the timer), `mobile/constants/i18n.ts` (76 `focus.*` keys in English and Malay), `mobile/e2e/studies.spec.ts` (five shortcuts, 3 + 2 layout).
+- Docs: `CLAUDE.md`, `PROJECT_PROGRESS.md`, `DEVELOPMENT_HANDOVER.md`, `UNIFYD_SRS.md` (§5.11, traceability), `UNIFYD_SDD.md` (§4.1, §7.10, traceability), `UNIFYD_PRD.md` (FR-09), `UNIFYD_PROJECT_BRIEF.md` (one line), `UNIFYD_DESIGN_SYSTEM.md` (Planner shortcuts, Unifyd Focus).
+
+**What changed:**
+- Timer: remaining time comes from stored timestamps (`runStartedAt`, `bankedMs`); ticks only redraw. Catching up runs on screen focus, on return to the foreground, at zero, and before each action, so locked phones, backgrounding, and restarts keep the right time. A clock moved backwards counts as no time.
+- Presets: Classic 25/5, Deep 50/10, Quick 15/3, and Custom (focus 5–120 in steps of 5, short break 1–30, long break 5–60 in steps of 5). The long break (default 15) follows every 4th completed round.
+- Kept rounds (completed or partial) are stored on the device under `unifyd:focus-blocks:<userId>`, each with a random UUID, and added only once. They are never cleared by sign-out. The timer state lives under `unifyd:focus-session:<userId>`.
+- Alerts: channel `unifyd-focus`, for the end of focus and the end of the following break; permission asked only on Start or Resume; the web shows "Round alerts aren’t available on the web". Alert text never names a subject or task.
+- Subject and task links are read-only: semester subjects (`taskSubject` labels) or General study, and open tasks filtered by exact subject text with "Show all open tasks". Choosing a task links its own subject. Links and settings are locked while a round or break runs.
+- No database change, no new dependency, no Poof changes (deferred to Phase 5).
+
+**Tests performed:**
+- Mobile typecheck and lint clean. Unit **139/139** (15 new in `focusTimer.test.mjs`: presets, custom limits, pause/resume, focus→break, waiting for Start, long break after 4 rounds, reset, partial/discarded, double taps, backwards clock, alerts, restore, clock text, UUIDs).
+- Playwright `focus.spec.ts` 6/6 (fake clock: full round with pause, presets and custom, end/reset with confirmation, restart while running and paused, a round finished while closed, subject/task links) and `studies.spec.ts` 6/6.
+- Full Playwright suite: 99/100 passed; the 1 failure is the known intermittent Wallet test "no budget and no expenses" (deck keeps its place), which also failed 1 of 2 runs on clean `main` (and 1 of 2 on `ui-revamp`).
+- Screenshots at 390 and 320 pt (Planner 3 + 2 grid, Focus idle, running, custom) checked by eye; one fix made (shorter long-break stepper label, plus a note).
+- Not executed: native alerts, a locked iPhone/Android phone, and Expo Go restart (owner to check on a phone).
+
+**Issues or decisions:**
+- RN Web needs `aria-checked` alongside `accessibilityState.checked` for radio rows (added, as in other screens).
+- The timer uses 52/44 pt bold tabular numerals, larger than the Display style; recorded as an intentional difference in the design system.
+- `tasks.subject` is free text, so subject→task filtering is by exact label; tasks typed by hand appear under "Show all open tasks".
+
+**Next action:**
+- Owner reviews Phase 2 (and checks alerts and lock-screen behaviour on a phone), then approves Phase 3: the `focus_sessions` migration (owner applies it) and sync of the kept rounds.
 
 ### 2026-10-14 — Receipt scan speed: no-risk fixes (warm-up, parallel sign-in check, single-pass photo)
 
@@ -2057,6 +2534,7 @@ Do not implement an item here unless its scope is formally approved later.
 | UMPSA portal/LMS/timetable integration | Requires external access and expands integration complexity | Out of scope |
 | Spending/grade/mood prediction | Would require a justified predictive model and evaluation dataset | Out of scope |
 | Social or shared-account features | Not needed for the individual student MVP | Out of scope |
+| Optional Focus alert sound (a shared notification handler so only Focus alerts play a sound in the foreground; an explicit `sound` on Focus alerts; a silent Android Focus channel; an on/off switch stored on the phone; Task and Subscription reminders unchanged) | Owner approved the approach on 2026-10-16 but postponed it until the iPhone sound tests are done (locked, Silent Mode off, Focus/DND off, Expo Go sounds on; foreground and background recorded separately). If background alerts stay silent with those settings, investigate further before any fix. | Pending enhancement |
 
 ## Update template for future sessions
 

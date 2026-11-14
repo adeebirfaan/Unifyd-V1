@@ -194,6 +194,13 @@ test('the centre button opens quick actions, and the avatar opens Profile', asyn
   const tabs = page.getByRole('tab');
   await expect(tabs).toHaveCount(4);
   await expect(page.getByRole('tab', { name: 'Home' })).toBeVisible();
+  // The hidden Profile item takes no slot, so Wallet and Planner sit evenly either side of the centre button.
+  const fab = (await page.getByTestId('quick-fab').boundingBox())!;
+  const wallet = (await page.getByRole('tab', { name: 'Wallet' }).boundingBox())!;
+  const planner = (await page.getByRole('tab', { name: 'Planner' }).boundingBox())!;
+  const fabCentre = fab.x + fab.width / 2;
+  expect(Math.abs((planner.x + planner.width / 2 - fabCentre) - (fabCentre - (wallet.x + wallet.width / 2)))).toBeLessThan(4);
+  expect(planner.x).toBeGreaterThanOrEqual(fab.x + fab.width - 1);
 
   const sheet = page.getByTestId('quick-actions-sheet');
   const open = page.getByRole('button', { name: 'Open quick actions' });

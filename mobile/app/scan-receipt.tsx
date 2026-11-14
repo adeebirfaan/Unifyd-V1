@@ -207,7 +207,7 @@ export default function ScanReceiptScreen() {
       onBack={() => router.back()} onCamera={() => { void pick('camera'); }} onLibrary={() => { void pick('library'); }}
       onManual={() => router.push({ pathname: '/add-expense', params: { budgetPeriod: period } })} onRetry={retry} />}
     {step === 'reading' && <ScanReading phase={phase} slow={slow} reduceMotion={reduceMotion} onCancel={cancelReading} onRetry={retry} onManual={enterManually} />}
-    {step === 'review' && result && image && <ScanReview imageUri={image.uri} result={result} onSave={saveExpense} onBack={() => setDiscardOpen(true)} />}
+    {step === 'review' && result && image && <ScanReview imageUri={image.uri} result={result} onSave={saveExpense} onBack={() => setDiscardOpen(true)} onRetake={discard} />}
     <ConfirmDialog visible={discardOpen} title={t('scan.discardTitle')} body={t('scan.discardBody')} confirmLabel={t('scan.discard')} cancelLabel={t('scan.keepReviewing')}
       busy={false} destructive onConfirm={discard} onCancel={() => setDiscardOpen(false)} testID="scan-discard" />
   </View>;

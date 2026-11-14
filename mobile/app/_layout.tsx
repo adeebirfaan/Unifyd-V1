@@ -1,11 +1,14 @@
 import { DarkTheme, Stack, ThemeProvider, router } from 'expo-router';
 import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '@/components/auth/PrimaryButton';
 import { colors, fonts, spacing, typography } from '@/constants/theme';
+import { clearFocusAlerts, observeFocusAlertTaps, refreshFocusAlerts } from '@/lib/focusNotifications';
+import { suspendFocusSession } from '@/lib/focusStorage';
+import { hasPendingFocusRounds, syncFocusRounds } from '@/lib/focusSync';
 import { clearSubscriptionReminders, observeSubscriptionReminderTaps, syncSubscriptionReminders } from '@/lib/subscriptionReminders';
 import { clearTaskReminders, observeTaskReminderTaps, syncTaskReminders } from '@/lib/taskReminders';
 import { AppearanceProvider, useAppearance } from '@/providers/AppearanceProvider';
@@ -70,6 +73,8 @@ function RootNavigator() {
         <Stack.Screen name="timetable-entry" />
         <Stack.Screen name="timetable-import" />
         <Stack.Screen name="reminders" />
+        <Stack.Screen name="focus" />
+        <Stack.Screen name="focus-insights" />
         <Stack.Screen name="subscriptions" />
         <Stack.Screen name="subscription-entry" />
         <Stack.Screen name="split-bills" />
@@ -109,14 +114,26 @@ function TaskReminderCoordinator() {
   const { gate, session } = useAuth();
   const { language } = useI18n();
   const userId = session?.user.id;
+  // The last signed-in student, so sign-out can pause their focus timer (its finished blocks stay on the device).
+  const lastUserId = useRef<string | null>(null);
 
   useEffect(() => {
-    if (gate === 'signedOut') { void clearTaskReminders(); void clearSubscriptionReminders(); return; }
+    if (gate === 'signedOut') {
+      void clearTaskReminders(); void clearSubscriptionReminders(); void clearFocusAlerts();
+      if (lastUserId.current) void suspendFocusSession(lastUserId.current).catch(() => undefined);
+      lastUserId.current = null;
+      return;
+    }
     if (gate !== 'ready' || !userId) return;
+    lastUserId.current = userId;
     void syncTaskReminders(userId, language);
     void syncSubscriptionReminders(userId, language);
+    void refreshFocusAlerts(userId, language);
+    void syncFocusRounds(userId);
+    // Kept focus rounds still waiting (no network earlier) are retried every minute while the app is open.
+    const focusRetry = setInterval(() => { if (hasPendingFocusRounds(userId)) void syncFocusRounds(userId); }, 60_000);
     const appState = AppState.addEventListener('change', (state) => {
-      if (state === 'active') { void syncTaskReminders(userId, language); void syncSubscriptionReminders(userId, language); }
+      if (state === 'active') { void syncTaskReminders(userId, language); void syncSubscriptionReminders(userId, language); void syncFocusRounds(userId); }
     });
     let active = true;
     let stopObserving: () => void = () => undefined;
@@ -127,7 +144,11 @@ function TaskReminderCoordinator() {
     void observeSubscriptionReminderTaps(userId, () => router.push('/subscriptions'))
       .then((stop) => { if (active) stopSubscriptionObserving = stop; else stop(); })
       .catch(() => undefined);
-    return () => { active = false; appState.remove(); stopObserving(); stopSubscriptionObserving(); };
+    let stopFocusObserving: () => void = () => undefined;
+    void observeFocusAlertTaps(userId, () => router.push('/focus'))
+      .then((stop) => { if (active) stopFocusObserving = stop; else stop(); })
+      .catch(() => undefined);
+    return () => { active = false; appState.remove(); clearInterval(focusRetry); stopObserving(); stopSubscriptionObserving(); stopFocusObserving(); };
   }, [gate, userId, language]);
 
   return null;

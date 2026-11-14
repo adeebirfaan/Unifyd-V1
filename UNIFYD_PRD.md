@@ -203,6 +203,31 @@ The user has regular expenses, assignments or quizzes with deadlines, and may wa
 - A successful Groq response is relevant to the structured facts supplied by the backend.
 - When the Groq request fails, dashboard facts remain visible and the app does not crash.
 
+### FR-09: Unifyd Focus (owner-approved addition, 2026-10-16)
+
+**Student benefit:** a calm way to study in focused rounds with planned breaks, inside Planner, using the student's own subjects and tasks.
+
+**Flow:** Planner → Focus mode → (optional) subject and task → choose a preset or custom times → Start → focus round → break starts by itself → Start the next round when ready → End session.
+
+**Requirements:**
+- Presets: Classic Pomodoro 25/5, Deep focus 50/10, Quick study 15/3, plus Custom within limits; a 15-minute long break after every fourth round by default.
+- General study works with no subject or task. Subjects come from My semester; tasks are the student's open tasks.
+- Pause, resume, reset (current round only), skip break, and end session, with confirmation before anything is discarded.
+- Only real focus time counts: never breaks or paused time. Completed and partial rounds (at least one minute) are kept; discarded rounds are not.
+- The timer survives leaving the screen, a locked phone, and an app restart.
+- The timer never completes a task, and it makes no claims about productivity or wellbeing.
+
+**Saving:** every kept round is saved to the student's account. Without a connection it waits safely on the phone and is sent later, never twice and never under another account. A quiet line shows whether rounds are on the phone only or synced. Deleting a task or subject later keeps the study record, with its name.
+
+**Insights:** Focus → Focus insights shows today and this week, rounds this week, a Monday–Sunday chart, time per subject over the last 30 days, and the history of rounds. Only real focus time counts, and each round counts on the day it ended. The student may set an optional daily or weekly goal; there are no streaks or guilt-based messages.
+
+**Poof, reflection, and suggestions (Phase 5):**
+- Poof keeps the student company in a small row under the timer: still while they focus, relaxed on breaks, and briefly celebrating a finished round. The student can hide it.
+- After a completed round the student may say how it went (Great, Okay, Struggled, or Tired) or skip. The answer is private and never interpreted.
+- Poof offers at most one gentle suggestion when ready (for example, a task due tomorrow), and Focus insights shows up to three. All are worked out on the phone from the student's own data, with no AI and no guilt messages.
+
+**Phasing:** timer and screen (Phase 2), saving to the database (Phase 3), insights (Phase 4), and Poof, reflection, and suggestions (Phase 5) are implemented and passed final QA (Phase 6). A round that finishes while Focus is closed is saved, but gets no celebration or reflection (accepted for this release). The SRS has the detailed requirements (§5.11).
+
 ## 7. Non-functional requirements
 
 | Area | Requirement |

@@ -123,6 +123,36 @@ test('uncertain fields are marked from the server warnings, and a mark clears on
   await expect(page.getByTestId('scan-flag-date')).toBeVisible();
 });
 
+test('a hard-to-read photo offers Retake until a field is edited; one uncertain field does not', async ({ page }) => {
+  let reply: Record<string, unknown> = { ...RESULT, purchaseDate: null, totalAmount: null, warnings: ['Purchase date needs review.', 'Total amount needs review.'] };
+  const posts = await mockOcr(page, (route) => ok(reply)(route));
+  await openScan(page);
+  await choosePhoto(page);
+  await expect(page.getByTestId('scan-review-notice')).toContainText('Parts of this photo were hard to read. It may be blurry, dark, or sideways.');
+  // Retake returns to Start without a discard question (nothing was edited), ready for a new photo.
+  await page.getByRole('button', { name: 'Retake photo' }).click();
+  await expect(page.getByTestId('scan-start')).toBeVisible();
+  await expect(page.getByText('Discard this scan?')).toHaveCount(0);
+  reply = { ...RESULT, warnings: ['Purchase date needs review.'] };
+  await choosePhoto(page);
+  await expect(page.getByTestId('scan-review')).toBeVisible();
+  expect(posts).toHaveLength(2);
+  await expect(page.getByTestId('scan-flag-date')).toBeVisible();
+  await expect(page.getByTestId('scan-review-notice')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Retake photo' })).toHaveCount(0);
+});
+
+test('the Retake hint disappears once the student starts fixing the fields', async ({ page }) => {
+  await mockOcr(page, ok({ ...RESULT, warnings: ['Merchant name needs review.', 'Total amount needs review.'] }));
+  await openScan(page);
+  await choosePhoto(page);
+  await expect(page.getByRole('button', { name: 'Retake photo' })).toBeVisible();
+  await page.getByRole('textbox', { name: 'Total, needs review' }).fill('13.50');
+  await expect(page.getByRole('button', { name: 'Retake photo' })).toHaveCount(0);
+  await expect(page.getByTestId('scan-review-notice')).toHaveCount(0);
+  await expect(page.getByTestId('scan-flag-merchant')).toBeVisible();
+});
+
 test('no readable text shows one notice and every field asks to be filled in', async ({ page }) => {
   await mockOcr(page, ok({ merchantName: null, purchaseDate: null, totalAmount: null, rawText: '',
     warnings: ['No readable text was detected.', 'Merchant name needs review.', 'Purchase date needs review.', 'Total amount needs review.'] }));

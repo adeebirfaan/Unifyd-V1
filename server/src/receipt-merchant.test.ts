@@ -45,3 +45,18 @@ test('no printed shop name gives nothing, flagged, rather than a code or a date 
 test('handwritten "M/S" bills keep the name on the following lines', () => {
   assert.deepEqual(merchant('No\n1\nM/S\nPERNIAGAAN MAJU JAYA\n(0011-K)'), { value: 'M/S PERNIAGAAN MAJU JAYA', review: false });
 });
+
+test('a name with its company registration beats a slogan, a logo fragment, or OCR noise printed above it', () => {
+  // A long registration number is part of the header, not a barcode that ends it.
+  assert.deepEqual(merchant('Since 1998\nCASH SALES\nKEDAI IKAN EMAS (001234567-K)\n12, Jalan Contoh, Kuala Lumpur\nDate: 05/06/2026'), { value: 'KEDAI IKAN EMAS', review: false });
+  assert.deepEqual(merchant('LENSA\nCERAH\nLENSA CERAH (Co. No. 001234567-P)\nNo.: 1234'), { value: 'LENSA CERAH', review: false });
+  // A garbled first line gives way to a business line further down the header.
+  assert.deepEqual(merchant('QXZ(FOO) BAR (IN-INS ZA\nCONTOH HALAL MART SDN BHD\nOUTLET BANDAR CONTOH\nTotal 9.00'), { value: 'CONTOH HALAL MART SDN BHD', review: false });
+});
+
+test('labels, continuation lines, and long sentences are never promoted to the shop name', () => {
+  assert.deepEqual(merchant('CONTOH SHOPPING CENTRE\n(B.C.TOWN) SDN.BHD.\nInvoice No: 123'), { value: 'CONTOH SHOPPING CENTRE', review: true });
+  assert.deepEqual(merchant('THE CONTOH CUP\n& SAUCER (M) SDN. BHD.\nStore Code: 1234\n01/02/2026 10:00'), { value: 'THE CONTOH CUP', review: true });
+  assert.deepEqual(merchant('CONTOH AUTO PARTS\nNo. Pendaftaran: (001234567-T)\nTarikh 01/02/2026'), { value: 'CONTOH AUTO PARTS', review: true });
+  assert.equal(merchant('Download our app from the Play Store or the App Store today\nTotal 5.00').review, true);
+});

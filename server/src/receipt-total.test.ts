@@ -72,3 +72,35 @@ test('the endpoint parser uses word boxes when given and still works from text a
   assert.equal(parseReceiptText(text).totalAmount, null);
   assert.equal(parseReceiptText('Shop\nTOTAL RM 7.00').totalAmount, 7);
 });
+
+test('a receipt photographed sideways still pairs each label with the amount on its printed row', () => {
+  const rows = [['KEDAI CONTOH ENTERPRISE', ''], ['Subtotal', 'RM 18.40'], ['Rounding', 'RM 0.00'], ['Grand Total', 'RM 18.40'], ['Cash Given', 'RM 20.00']];
+  const upright = page(rows, 0, false)[0]!.words;
+  // Turned clockwise, text reads down the image; turned anticlockwise, it reads up. Words become tall and narrow.
+  const clockwise = upright.map((word) => ({ ...word, x0: 1000 - word.y1, x1: 1000 - word.y0, y0: word.x0, y1: word.x1 }));
+  const anticlockwise = upright.map((word) => ({ ...word, x0: word.y0, x1: word.y1, y0: 2000 - word.x1, y1: 2000 - word.x0 }));
+  const expected = ['KEDAI CONTOH ENTERPRISE', 'Subtotal RM 18.40', 'Rounding RM 0.00', 'Grand Total RM 18.40', 'Cash Given RM 20.00'];
+  assert.deepEqual(receiptRows([{ text: '', words: clockwise }]), expected);
+  assert.deepEqual(receiptRows([{ text: '', words: anticlockwise }]), expected);
+  assert.deepEqual(receiptRows(page(rows)), expected);
+});
+
+test('"Total Payment", a total including tax, and an OCR slip in "Total" are read as the paid total', () => {
+  assert.deepEqual(total([['Subtotal', 'RM 30.18'], ['Rounding Adjustment', 'RM 0.02'], ['Total Payment (Rounding)', 'RM 30.20']]), { value: 30.2, review: false });
+  // The amount before an app discount is printed as plain "TOTAL"; the paid amount includes tax.
+  assert.deepEqual(total([['TOTAL', '15.00'], ['App Deals', '-3.00'], ['Takeaway Tctal (incl Tax)', '12.00'], ['Visa', '12.00']]), { value: 12, review: false });
+});
+
+test('without a total label, a card or e-wallet charge (or cash minus change) is used, always for review', () => {
+  assert.deepEqual(total([['Sub Total', '43.77'], ['Disc : 0.00', 'RM 43.75'], ['DUITNOW :', '43.75']]), { value: 43.75, review: true });
+  assert.deepEqual(total([['Item one', '5.00'], ['Payment detail', ''], ['1.Touch n Go', '5.00']]), { value: 5, review: true });
+  assert.deepEqual(total([['Rounding Adjustment', '0.00'], ['CASH', '104.50'], ['CHANGE', '50.00']]), { value: 54.5, review: true });
+  // Card numbers, approvals, and points are never amounts; cash alone (it includes change) is never used.
+  assert.equal(total([['Sub Total', '30.00'], ['VISA Card No. 4000******1234', ''], ['Points Earned', '30.00']]).value, null);
+  assert.equal(total([['CASH', '50.00']]).value, null);
+});
+
+test('a labelled total that disagrees with the card or e-wallet charge is flagged, not trusted', () => {
+  assert.deepEqual(total([['Total', 'RM20.00'], ['Touch n Go', 'RM20 90']]), { value: 20, review: true });
+  assert.deepEqual(total([['Total', 'RM 12.50'], ['Visa', 'RM 12.50']]), { value: 12.5, review: false });
+});

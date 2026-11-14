@@ -59,14 +59,24 @@ const NUMERIC_DATE = /\b\d{1,2}[-/.]\d{1,2}[-/.]\d{2,4}\b|\b20\d{2}[-/.]\d{1,2}[
 // The header ends where the purchase details begin: a date, an amount, a barcode, or a column/field label.
 const HEADER_END = /\b(date|tarikh|cashier|kasir|table|order\s*(?:no|#|details)|qty|item|invoice\s*no|receipt\s*no|bill\s*no)\b/i;
 const NOT_A_NAME = [
-  /^(tax\s*)?(invoice|receipt|resit|bill|cash\s*bill|official\s*receipt|checked|copy|reprint|duplicate|welcome|thank)\b/i,
-  /\b(tel|fax|phone|h\/?p|reg|gst|sst|co\.?\s*no|company\s*no|ssm|brn|registration|lot|jalan|jln|lorong|taman|tmn|level|floor|plaza|kompleks|complex|mall|mukim|kg|kampung)\b/i,
+  /^(tax\s*)?(invoice|receipt|resit|bill|cash\s*bill|cash\s*sales?|official\s*receipt|checked|copy|reprint|duplicate|welcome|thank)\b/i,
+  /^(since|sejak|est\.?|established)\b/i,
+  /\b(tel|fax|phone|h\/?p|reg|gst|sst|co\.?\s*no|company\s*no|ssm|brn|registration|pendaftaran|no\.?\s*syarikat|(?:store|outlet|branch|shop)\s*(?:code|id|no)|lot|jalan|jln|lorong|taman|tmn|level|floor|plaza|kompleks|complex|mall|mukim|kg|kampung)\b/i,
   /www\.|https?:|\.com\b|\.my\b|@/i,
   /\*{2,}|\brm\s?\d|%|\b(promo|promotion|sale|offer|discount|voucher|free|deal)\b/i,
   /\b\d{5}\b|\d{1,2}:\d{2}/,
-  /^[^(]*\)\s*$|^\(.*\)$/, // a bracketed fragment such as a cashier name "RAFIQAH)" or a company number
+  /^[^(]*\)\s*$|^[(&]/, // a fragment such as a cashier name "RAFIQAH)", "(BRANCH) SDN BHD", or "& TEA LEAF SDN BHD"
 ];
-const BUSINESS_WORD = /\b(sdn\.?\s*bhd|bhd|berhad|enterprise|trading|plt|restoran|restaurant|kedai|pasaraya|supermarket|hypermarket|mart|store|stores|cafe|bakery|pharmacy|farmasi|hardware|perniagaan|koperasi|station|bookstore|bookshop|kopitiam|bistro)\b/i;
+const BUSINESS_WORD = /\b(sdn\.?\s*bhd|bhd|berhad|enterprise|trading|plt|restoran|restaurant|kedai|pasaraya|supermarket|hypermarket|mart|store|stores|shop|cafe|bakery|pharmacy|farmasi|hardware|perniagaan|koperasi|station|bookstore|bookshop|kopitiam|bistro)\b/i;
+// A company registration printed after the name: "(001234567-K)", "(Co. No. 001234567-P)", "(1234567-D)".
+const REGISTRATION = /\(\s*(?:co(?:mpany)?\.?\s*(?:reg\.?\s*)?no\.?\s*:?\s*)?\d{5,}[\s-]*[A-Z]\s*\)/i;
+/** The name before a company registration on the same line ("LENSA CERAH (Co. No. 001234567-P)"), or null. */
+function registeredName(line: string): string | null {
+  const match = REGISTRATION.exec(line);
+  if (!match) return null;
+  const name = cleanName(withoutRegistration(line.slice(0, match.index)));
+  return looksLikeName(name) && isShort(name) ? name : null;
+}
 const FOOTER_NAME = /\b(?:shopping|shop|visiting|dining|belanja|membeli-belah)\s+(?:at|with|di)\b[\s:-]*(.*)$|\b(?:welcome\s+to|selamat\s+datang\s+ke)\b[\s:-]*(.*)$/i;
 
 const letterCount = (line: string) => (line.match(/\p{L}/gu) ?? []).length;
@@ -74,6 +84,8 @@ const digitCount = (line: string) => (line.match(/\d/g) ?? []).length;
 const looksLikeName = (line: string) => letterCount(line) >= 3 && digitCount(line) < letterCount(line) && !AMOUNT.test(line) && !NOT_A_NAME.some((pattern) => pattern.test(line));
 /** Removes company registration numbers: long digit runs and bracketed forms such as "(805614-T)" or "(1425272-D)". */
 const withoutRegistration = (line: string) => line.replace(/\(\s*\d[\d\s-]*[A-Z]?\s*\)|\b\d{6,}\b/g, ' ').replace(/\s+/g, ' ').trim();
+// At most six words, not counting company words ("Sdn Bhd", "(M)", "&").
+const isShort = (name: string) => name.replace(/\b(?:sdn|bhd|berhad)\b\.?|\(m\)|&/gi, ' ').split(/\s+/).filter(Boolean).length <= 6;
 const cleanName = (name: string) => name.replace(/^[\s:*.,!-]+|[\s:*.,!-]+$/g, '');
 
 /** Do two names start with the same word, allowing one misread letter in words of five or more letters? */
@@ -95,7 +107,8 @@ function sameFirstWord(a: string, b: string): boolean {
  * 7. the first header line that merely looks like a name (review), otherwise nothing.
  */
 export function extractMerchant(lines: readonly string[]): Extracted<string> {
-  const headerEnd = lines.findIndex((line, index) => index > 0 && (NUMERIC_DATE.test(line) || AMOUNT.test(line) || BARCODE.test(line) || HEADER_END.test(line)));
+  // A company registration number is long, but it belongs to the header, not to a barcode.
+  const headerEnd = lines.findIndex((line, index) => index > 0 && (NUMERIC_DATE.test(line) || AMOUNT.test(line) || BARCODE.test(line.replace(REGISTRATION, ' ')) || HEADER_END.test(line)));
   const header = lines.slice(0, Math.min(headerEnd < 0 ? lines.length : headerEnd, 8));
   // Logos are often split over two lines ("UNI" / "QLO"), so neighbouring lines are also read together.
   const headerTexts = [...header, ...header.slice(1).map((line, index) => `${header[index]}${line}`)];
@@ -106,8 +119,16 @@ export function extractMerchant(lines: readonly string[]): Extracted<string> {
 
   let candidate: string | null = null;
   let confident = false;
-  for (let index = 0; index < header.length && !candidate; index += 1) {
+  // The first plausible line is kept, but a later header line that is better supported (a business word, a company
+  // line below it, or a registration on the line itself) replaces it: logos, slogans, and OCR noise often come first.
+  for (let index = 0; index < header.length && !confident; index += 1) {
     const line = header[index]!;
+    const registered = registeredName(line);
+    if (registered) {
+      candidate = registered;
+      confident = true;
+      continue;
+    }
     if (/^M\/S\.?$/i.test(line)) {
       // Handwritten bills: "M/S" followed by the shop name, sometimes with "BT."/"BIN" on the next line.
       const name = lines[index + 1];
@@ -121,8 +142,12 @@ export function extractMerchant(lines: readonly string[]): Extracted<string> {
     // Company registration numbers are often printed on the name line ("NINSO GLOBAL SDN BHD 200801004330 (805614-T)").
     const name = withoutRegistration(line);
     if (!looksLikeName(name)) continue;
-    candidate = name;
-    confident = BUSINESS_WORD.test(name) || header.slice(index + 1, index + 4).some((next) => BUSINESS_WORD.test(next) && sameFirstWord(name, next));
+    // A trading name is short; a long sentence ("…download from the Play Store…") is never promoted.
+    const supported = isShort(name) && BUSINESS_WORD.test(name) || header.slice(index + 1, index + 4).some((next) => BUSINESS_WORD.test(next) && sameFirstWord(name, next));
+    if (supported || !candidate) {
+      candidate = name;
+      confident = supported;
+    }
   }
 
   for (let index = 0; index < lines.length; index += 1) {

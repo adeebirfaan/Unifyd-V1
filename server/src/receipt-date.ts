@@ -12,7 +12,8 @@ const LETTER_FOR_DIGIT: Record<string, string> = { '0': 'o', '1': 'i', '5': 's',
 // A date beside one of these is the purchase date; beside a due, payment-deadline, or expiry label it never is.
 const DATE_LABEL = /\b(date|tarikh|dated|issued|transaction|trans)\b/i;
 const NOT_PURCHASE = /\b(due|bayar\s+sebelum|pay\s+before|sebelum|expiry|expires?|exp|valid|luput|tamat|until|hingga|period|tempoh)\b/i;
-const TIME = /\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?\b/i;
+// A time; OCR may turn the first colon into a dash or add spaces, so a time with seconds is accepted loosely.
+const TIME = /\b\d{1,2}:\d{2}(?::\d{2})?\s*(?:[ap]\.?m\.?)?\b|\b\d{1,2}\s*[:.-]\s*\d{2}\s*:\s*\d{2}\b/i;
 
 function validDate(year: number, month: number, day: number): string | null {
   const date = new Date(Date.UTC(year, month - 1, day));
@@ -22,17 +23,22 @@ function validDate(year: number, month: number, day: number): string | null {
 
 type Found = { iso: string; fullYear: boolean; corrected: boolean };
 
+// A four-digit year with its 0 misread as 9 ("2926"), corrected to 20xx and always flagged.
+const fullYearOf = (value: string) => ({ year: value.startsWith('29') ? 2000 + Number(value.slice(2)) : Number(value), corrected: value.startsWith('29') });
+
 /** Every date written in the line: ISO, day/month/year (Malaysian order), or day with a month name. */
 function datesIn(line: string): Found[] {
   const found: Found[] = [];
   const year = (value: string) => (value.length === 2 ? 2000 + Number(value) : Number(value));
-  for (const match of line.matchAll(/\b(20\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b/g)) {
-    const iso = validDate(Number(match[1]), Number(match[2]), Number(match[3]));
-    if (iso) found.push({ iso, fullYear: true, corrected: false });
+  for (const match of line.matchAll(/\b(2[09]\d{2})[-/.](0?[1-9]|1[0-2])[-/.](0?[1-9]|[12]\d|3[01])\b/g)) {
+    const full = fullYearOf(match[1]!);
+    const iso = validDate(full.year, Number(match[2]), Number(match[3]));
+    if (iso) found.push({ iso, fullYear: true, corrected: full.corrected });
   }
-  for (const match of line.matchAll(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](20\d{2}|\d{2})\b/g)) {
-    const iso = validDate(year(match[3]!), Number(match[2]), Number(match[1]));
-    if (iso) found.push({ iso, fullYear: match[3]!.length === 4, corrected: false });
+  for (const match of line.matchAll(/\b(0?[1-9]|[12]\d|3[01])[-/.](0?[1-9]|1[0-2])[-/.](2[09]\d{2}|\d{2})\b/g)) {
+    const full = match[3]!.length === 4 ? fullYearOf(match[3]!) : { year: year(match[3]!), corrected: false };
+    const iso = validDate(full.year, Number(match[2]), Number(match[1]));
+    if (iso) found.push({ iso, fullYear: match[3]!.length === 4, corrected: full.corrected });
   }
   // "04/Aug/2025", "14 Oct 2025", "05 JUN 2025", "17 Jun 2026", or the misread "100CT2026".
   for (const match of line.matchAll(/(?<!\d)(0?[1-9]|[12]\d|3[01])\s*[-/. ]?\s*([A-Za-z0-9][A-Za-z]{2})[A-Za-z]*\.?\s*[-/., ']?\s*(20\d{2}|\d{2})(?!\d)/g)) {
@@ -73,5 +79,7 @@ export function extractDate(lines: readonly string[], rows: readonly string[]): 
   const all = [...candidates(rows), ...candidates(lines)];
   if (!all.length) return { value: null, review: true };
   const best = all.reduce((top, candidate) => (candidate.score > top.score ? candidate : top));
-  return { value: best.found.iso, review: best.score === 0 || !best.found.fullYear || best.found.corrected };
+  // Two different dates with the same support: the earliest is kept, but it is not certain.
+  const contested = all.some((candidate) => candidate.score === best.score && candidate.found.iso !== best.found.iso);
+  return { value: best.found.iso, review: best.score === 0 || !best.found.fullYear || best.found.corrected || contested };
 }

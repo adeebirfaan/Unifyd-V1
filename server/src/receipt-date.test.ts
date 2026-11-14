@@ -40,3 +40,15 @@ test('the parser reports date review through the existing warning text', () => {
   assert.ok(result.warnings.includes('Purchase date needs review.'));
   assert.ok(!parseReceiptText('SHOP SDN BHD\nDate: 13/10/2025 12:55\nTOTAL RM 5.00').warnings.includes('Purchase date needs review.'));
 });
+
+test('a year with its 0 misread as 9 is corrected and flagged; other years are untouched', () => {
+  assert.deepEqual(date('Sales Invoice\n21/03/2926 10:15'), { value: '2026-03-21', review: true });
+  assert.deepEqual(date('2926-03-21 10:15'), { value: '2026-03-21', review: true });
+  assert.deepEqual(date('Date: 21/03/2026 10:15'), { value: '2026-03-21', review: false });
+});
+
+test('a time with an OCR dash or spaces still supports its date; two equally supported dates are flagged', () => {
+  // The labelled date has a damaged time; a footer line repeats the date misread, with a clean time.
+  assert.deepEqual(date('Datc 08/04/2026 17-50 : 28 PM\nTotal 9.00\nMon 08/01/2026 12:50 PM'), { value: '2026-04-08', review: true });
+  assert.deepEqual(date('Date: 08/04/2026 17:50:28\nPrinted 08/04/2026 17:51:02'), { value: '2026-04-08', review: false });
+});

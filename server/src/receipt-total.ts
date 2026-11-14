@@ -3,12 +3,19 @@
 import type { Extracted } from './receipt-merchant.js';
 
 // Labels, strongest first. A final label (after rounding, discounts, or subsidies) beats a plain "Total".
-const FINAL_TOTAL = /\b(grand\s*total|nett?\s*total|total\s*net|rounded\s*total|total\s*(?:after|selepas)\s*round\w*|total\s*payable|amount\s*(?:due|payable)|total\s*due|j[ua][mn]lah\s*(?:bayaran\s*)?(?:akhir|besar|keseluruhan)|anda\s*bayar|you\s*pay)\b/i;
+const FINAL_TOTAL = /\b(grand\s*total|nett?\s*total|total\s*net|rounded\s*total|total\s*(?:after|selepas)\s*round\w*|total\s*payable|total\s*payment|total\s*\(?\s*incl\w*\.?\s*(?:of\s*)?(?:tax|sst|gst)|amount\s*(?:due|payable)|total\s*due|j[ua][mn]lah\s*(?:bayaran\s*)?(?:akhir|besar|keseluruhan)|anda\s*bayar|you\s*pay)\b/i;
 const NAMED_TOTAL = /\b(total\s*amount|total\s*\(?\s*(?:rm|myr)\s*\)?|j[ua][mn]lah(?:\s*bayaran)?)\b/i;
 const PLAIN_TOTAL = /\btotal\b/i;
 // Never the paid total: subtotals, item counts, savings, taxes, tendered cash, change, and rounding lines.
 const NOT_TOTAL = /\b(sub\s*-?\s*total|subtotal|item\s*total|gross\s*total|total\s*(?:items?|qty|quantity|savings?|saved|discount|disc|tax|sst|gst|received|tendered|points?|weight)|j[ua][mn]lah\s*(?:item|kuantiti|barang)|tax|sst|gst|change|baki|cash|tunai|tendered|received|rounding|service\s*charge|qty)\b/i;
 const DECIMAL = /(?:RM\s*)?(\d{1,3}(?:,\d{3})+|\d+)[.,](\d{2})(?!\d)/gi;
+// Non-cash payments (card, QR, e-wallet) are charged exactly the amount paid; cash is not (it includes change).
+const NON_CASH = /\b(duit\s*now|touch\s*['’]?\s*n\s*go|tng|e-?wallet|grab\s*pay|shopee\s*pay|boost|visa|master\s*card|master|amex|maybank\s*(?:qr|or)|qr\s*pay|debit\s*card|credit\s*card|mpay|online\s*banking)\b/i;
+const NOT_PAYMENT = /\b(card\s*(?:no|num|number|type|desc|exp)|points?|balance|approv|app\s*id|aid|rewards?)\b/i;
+const CASH = /^\s*(?:cash|tunai)\b/i;
+const CHANGE = /^\s*(?:change|baki)\b/i;
+// Common OCR slips inside the word "total" ("Tctal", "T0tal").
+const repairOcr = (line: string) => line.replace(/\bt[c0]tal\b/gi, 'Total');
 const AMOUNT_ONLY = /^(?:RM\s*)?\d[\d,]*(?:[.,]\d{2})?(?:\s*\/[=-]?)?\s*$/i;
 
 // Not a completed purchase: an unpaid order slip or an outstanding bill, so no amount has been paid.
@@ -49,7 +56,8 @@ function amountAfterLabel(rest: string): Extracted<number> {
  * a different printed line (for example the cash tendered on a tilted photo). It is 'review' when word positions
  * exist but did not confirm the pairing, so such a value is never presented as certain.
  */
-function labelledTotal(rows: readonly string[], nextLine: false | 'confident' | 'review'): Extracted<number> {
+function labelledTotal(source: readonly string[], nextLine: false | 'confident' | 'review'): Extracted<number> {
+  const rows = source.map(repairOcr);
   let best: { rank: number; index: number; amount: Extracted<number> } | null = null;
   rows.forEach((row, index) => {
     const strength = rank(row);
@@ -76,6 +84,42 @@ function labelledTotal(rows: readonly string[], nextLine: false | 'confident' | 
 export function extractTotal(lines: readonly string[], rows: readonly string[], text: string): Extracted<number> {
   if (isUnpaidDocument(text)) return { value: null, review: true };
   const fromRows = rows.length ? labelledTotal(rows, false) : { value: null, review: true };
-  if (fromRows.value !== null) return fromRows;
-  return labelledTotal(lines, rows.length ? 'review' : 'confident');
+  const labelled = fromRows.value !== null ? fromRows : labelledTotal(lines, rows.length ? 'review' : 'confident');
+  const sources = rows.length ? [rows, lines] : [lines];
+  const charged = sources.map(nonCashPayment).find((value) => value !== null) ?? null;
+  if (labelled.value !== null) {
+    // A card or e-wallet charge that disagrees with the labelled total means one of them was misread.
+    return charged !== null && Math.abs(charged - labelled.value) > 0.05 ? { ...labelled, review: true } : labelled;
+  }
+  // No labelled total: the non-cash charge, or cash minus change. Never presented as certain.
+  const fallback = charged ?? sources.map(cashMinusChange).find((value) => value !== null) ?? null;
+  return { value: fallback, review: true };
+}
+
+/** A decimal amount printed on the row (the last one), or null. Integers are not trusted here. */
+function decimalOn(row: string): number | null {
+  const match = [...row.matchAll(DECIMAL)].at(-1);
+  // "RM20 90": the point was lost after a currency mark, so the last two digits are still the cents.
+  const split = match ? null : row.match(/RM\s*(\d{1,4})\s+(\d{2})\s*$/i);
+  const value = match ? Number(`${match[1]!.replaceAll(',', '')}.${match[2]}`) : split ? Number(`${split[1]}.${split[2]}`) : 0;
+  return value > 0 ? value : null;
+}
+
+/** The amount on the lowest card, QR, or e-wallet payment row; card numbers, approvals, and points are skipped. */
+function nonCashPayment(rows: readonly string[]): number | null {
+  for (const row of [...rows].reverse()) {
+    if (!NON_CASH.test(row) || NOT_PAYMENT.test(row) || rank(row)) continue;
+    const value = decimalOn(row);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+/** Cash tendered minus change given, when both rows carry an amount and the result is positive. */
+function cashMinusChange(rows: readonly string[]): number | null {
+  const cashRow = rows.find((row) => CASH.test(row) && decimalOn(row) !== null);
+  const changeRow = rows.find((row) => CHANGE.test(row) && decimalOn(row) !== null);
+  if (!cashRow || !changeRow) return null;
+  const cents = Math.round(decimalOn(cashRow)! * 100) - Math.round(decimalOn(changeRow)! * 100);
+  return cents > 0 ? cents / 100 : null;
 }

@@ -6,3 +6,8 @@
 # Claude Code local session files and the owner's private receipt notes; never committed.
 /.claude/
 /completed receipt data.md
+# Project documents and working notes are kept on the owner's PC only (owner decision 2026-11-14).
+/docs/*.md
+/CLAUDE.md
+/PROJECT_PROGRESS.md
+/DEVELOPMENT_HANDOVER.md

@@ -3,3 +3,6 @@
 /local-data/
 # Local design references (e.g. the Poof storyboard); never committed or bundled.
 /local-assets/
+# Claude Code local session files and the owner's private receipt notes; never committed.
+/.claude/
+/completed receipt data.md

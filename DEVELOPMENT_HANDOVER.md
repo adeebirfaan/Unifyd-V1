@@ -14,8 +14,8 @@ Short, practical state for resuming work. Details: `PROJECT_PROGRESS.md` (handov
 **Read this first.** Sections further down headed 2026-10-14 (Current focus, Next recommended task, Git status, Continuation prompt) are older and superseded by this one.
 
 - **State:**
-  - Branch `ui-revamp`. Unifyd Focus is committed as **`ca7ebb3`** on top of `f9e1718` (= `main`; hashes changed in the 2026-11-14 history rewrite): 38 files, owner-approved 2026-10-16.
-  - **Not merged, pushed, or deployed.** Still uncommitted: the owner's Rule 4 line in `CLAUDE.md` (left out of the commit pending owner approval), later status edits to these docs, and the untracked `completed receipt data.md`. The untracked `completed receipt data.md` and the receipt evaluation are untouched; nothing under `server/` changed.
+  - Branch `ui-revamp`. Unifyd Focus is committed as **`1884cc8`** on top of `09c5832` (= `main`; hashes changed in the 2026-11-14 history rewrite): 38 files, owner-approved 2026-10-16.
+  - **Merged into `main` 2026-11-14 (owner-approved); not deployed.** Still uncommitted: the owner's Rule 4 line in `CLAUDE.md` (left out of the commit pending owner approval), later status edits to these docs, and the untracked `completed receipt data.md`. The untracked `completed receipt data.md` and the receipt evaluation are untouched; nothing under `server/` changed.
 - **Implemented:** Unifyd Focus Phases 1–6. The details are in the section below; the design is in SDD §7.10 and SRS §5.11 (SRS-FR-1001 to 1022).
 - **Focus status:** **development-complete; pending final device validation and UAT.** It is not user-accepted or production-ready.
 - **UAT paused (owner decision, 2026-10-16):** iPhone UAT and full user acceptance testing are postponed until all planned features are built. Do not resume them until the owner asks. The remaining checklist items are marked **Deferred — Pending Full Application UAT** below. Unit, integration, and e2e tests still run after every change.
@@ -38,7 +38,7 @@ Short, practical state for resuming work. Details: `PROJECT_PROGRESS.md` (handov
   2. The rest of the iPhone checklist below (**Deferred — Pending Full Application UAT**).
   3. A true cross-account RLS test (needs a second test account).
   4. User acceptance testing (deferred with the checklist).
-  5. ~~Commit~~ (done, `ca7ebb3`); owner approval to merge into `main` and push.
+  5. ~~Commit~~ (done, `1884cc8`); owner approval to merge into `main` and push.
   6. Pending enhancement: an optional Focus alert sound (`PROJECT_PROGRESS.md` "Deferred ideas").
 - **Resuming safely:**
   1. Run `git status --short` and confirm `ui-revamp` and the files above.

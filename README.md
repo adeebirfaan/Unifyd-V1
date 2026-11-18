@@ -60,7 +60,7 @@ AI is used where it saves typing, never to make decisions:
 ## Project structure
 
 ```text
-Unifyd-V1/
+unifyd/
 ├── mobile/        Expo app: screens (app/), components, logic (lib/), translations (constants/i18n.ts)
 ├── server/        Express service: receipt OCR, timetable import, AI summaries, Poof chat
 ├── supabase/      SQL migrations and the course catalogue seed
@@ -82,8 +82,8 @@ The app reads and writes Supabase directly. The server only handles work that ne
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/adeebirfaan/Unifyd-V1.git
-cd Unifyd-V1
+git clone https://github.com/adeebirfaan/unifyd.git
+cd unifyd
 ```
 
 ### 2. Set up the database
